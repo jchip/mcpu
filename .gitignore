@@ -3,3 +3,5 @@ node_modules
 .temp
 .tmp
 _w
+dist*
+.mcpu.local.json

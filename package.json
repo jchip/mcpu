@@ -1,0 +1,26 @@
+{
+  "name": "mcpu-monorepo",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "homepage": "",
+  "license": "UNLICENSED",
+  "scripts": {
+    "bootstrap": "fynpo"
+  },
+  "author": "",
+  "files": [
+    "src",
+    "lib",
+    "dist"
+  ],
+  "keywords": [],
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "dependencies": {
+    "@xarc/run": "^2.2.0",
+    "fynpo": "^1.1.49"
+  }
+}

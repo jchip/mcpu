@@ -1,0 +1,64 @@
+{
+  "name": "@mcpu/cli",
+  "version": "0.1.0",
+  "description": "Unified CLI to manage MCP servers for efficient AI code assistant usage",
+  "author": "Joel Chen <joel123@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jchip/mcpu.git",
+    "directory": "packages/mcpu-cli"
+  },
+  "homepage": "https://github.com/jchip/mcpu/tree/main/packages/mcpu-cli#readme",
+  "bugs": {
+    "url": "https://github.com/jchip/mcpu/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "cli",
+    "proxy",
+    "claude",
+    "ai",
+    "tool-schema",
+    "coding",
+    "assistant",
+    "vibe"
+  ],
+  "type": "module",
+  "main": "./src/cli.ts",
+  "bin": {
+    "mcpu": "./bin/mcpu"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "start": "tsx src/cli.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "nix-clap": "^2.4.1",
+    "chalk": "^5.3.0",
+    "zod": "^3.23.0",
+    "tsx": "^4.19.0",
+    "undici": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}
