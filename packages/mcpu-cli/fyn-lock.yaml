@@ -4,12 +4,14 @@ $fyn:
 $pkg:
  dep:
   '@modelcontextprotocol/sdk': ^1.0.4
-  nix-clap: ^2.4.1
   chalk: ^5.3.0
-  zod: ^3.23.0
+  express: ^5.1.0
+  nix-clap: ^2.4.1
   tsx: ^4.19.0
   undici: ^6.0.0
+  zod: ^3.23.0
  dev:
+  '@types/express': ^5.0.5
   '@types/node': ^22.0.0
   typescript: ^5.7.0
   vitest: ^2.0.0
@@ -74,6 +76,25 @@ $pkg:
    - darwin
   cpu:
    - arm64
+'@types/body-parser':
+ _latest: 1.19.6
+ _:
+  '*': 1.19.6
+ 1.19.6:
+  $: sha512-HLFeCYgz89uk22N5Qg3dvGvsv46B8GLvKKo1zKG4NybA8U2DiEO3w9lqGg29t/tfLRJpJ6iQxnVw4OnB7MoM9g==
+  _: 'https://registry.npmjs.org/@types/body-parser/-/body-parser-1.19.6.tgz'
+  dependencies:
+   '@types/connect': '*'
+   '@types/node': '*'
+'@types/connect':
+ _latest: 3.4.38
+ _:
+  '*': 3.4.38
+ 3.4.38:
+  $: sha512-K6uROf1LD88uDQqJCktA4yzL1YYAK6NgfsI0v/mTgyPKWsX1CnJ0XPSDhViejru1GcRkLWb8RlzFYJRqGUbaug==
+  _: 'https://registry.npmjs.org/@types/connect/-/connect-3.4.38.tgz'
+  dependencies:
+   '@types/node': '*'
 '@types/estree':
  _latest: 1.0.8
  _:
@@ -81,16 +102,89 @@ $pkg:
  1.0.8:
   $: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==
   _: 'https://registry.npmjs.org/@types/estree/-/estree-1.0.8.tgz'
+'@types/express':
+ _latest: 5.0.5
+ _:
+  ^5.0.5: 5.0.5
+ 5.0.5:
+  top: 1
+  $: sha512-LuIQOcb6UmnF7C1PCFmEU1u2hmiHL43fgFQX67sN3H4Z+0Yk0Neo++mFsBjhOAuLzvlQeqAAkeDOZrJs9rzumQ==
+  _: 'https://registry.npmjs.org/@types/express/-/express-5.0.5.tgz'
+  dependencies:
+   '@types/body-parser': '*'
+   '@types/express-serve-static-core': ^5.0.0
+   '@types/serve-static': ^1
+'@types/express-serve-static-core':
+ _latest: 5.1.0
+ _:
+  ^5.0.0: 5.1.0
+ 5.1.0:
+  $: sha512-jnHMsrd0Mwa9Cf4IdOzbz543y4XJepXrbia2T4b6+spXC2We3t1y6K44D3mR8XMFSXMCf3/l7rCgddfx7UNVBA==
+  _: 'https://registry.npmjs.org/@types/express-serve-static-core/-/express-serve-static-core-5.1.0.tgz'
+  dependencies:
+   '@types/node': '*'
+   '@types/qs': '*'
+   '@types/range-parser': '*'
+   '@types/send': '*'
+'@types/http-errors':
+ _latest: 2.0.5
+ _:
+  '*': 2.0.5
+ 2.0.5:
+  $: sha512-r8Tayk8HJnX0FztbZN7oVqGccWgw98T/0neJphO91KkmOzug1KkofZURD4UaD5uH8AqcFLfdPErnBod0u71/qg==
+  _: 'https://registry.npmjs.org/@types/http-errors/-/http-errors-2.0.5.tgz'
+'@types/mime':
+ _latest: 4.0.0
+ _:
+  ^1: 1.3.5
+ 1.3.5:
+  $: sha512-/pyBZWSLD2n0dcHE3hq8s8ZvcETHtEuF+3E7XVt0Ig2nvsVQXdghHVcEkIWjy9A0wKfTn97a/PSDYohKIlnP/w==
+  _: 'https://registry.npmjs.org/@types/mime/-/mime-1.3.5.tgz'
 '@types/node':
  _latest: 24.10.1
  _:
-  ^22.0.0: 22.19.1
+  '*,^22.0.0': 22.19.1
  22.19.1:
   top: 1
   $: sha512-LCCV0HdSZZZb34qifBsyWlUmok6W7ouER+oQIGBScS8EsZsQbrtFTUrDX4hOl+CS6p7cnNC4td+qrSVGSCTUfQ==
   _: 'https://registry.npmjs.org/@types/node/-/node-22.19.1.tgz'
   dependencies:
    undici-types: ~6.21.0
+'@types/qs':
+ _latest: 6.14.0
+ _:
+  '*': 6.14.0
+ 6.14.0:
+  $: sha512-eOunJqu0K1923aExK6y8p6fsihYEn/BYuQ4g0CxAAgFc4b/ZLN4CrsRZ55srTdqoiLzU2B2evC+apEIxprEzkQ==
+  _: 'https://registry.npmjs.org/@types/qs/-/qs-6.14.0.tgz'
+'@types/range-parser':
+ _latest: 1.2.7
+ _:
+  '*': 1.2.7
+ 1.2.7:
+  $: sha512-hKormJbkJqzQGhziax5PItDUTMAM9uE2XXQmM37dyd4hVM+5aVl7oVxMVUiVQn2oCQFN/LKCZdvSM0pFRqbSmQ==
+  _: 'https://registry.npmjs.org/@types/range-parser/-/range-parser-1.2.7.tgz'
+'@types/send':
+ _latest: 1.2.1
+ _:
+  '*,<1': 0.17.6
+ 0.17.6:
+  $: sha512-Uqt8rPBE8SY0RK8JB1EzVOIZ32uqy8HwdxCnoCOsYrvnswqmFZ/k+9Ikidlk/ImhsdvBsloHbAlewb2IEBV/Og==
+  _: 'https://registry.npmjs.org/@types/send/-/send-0.17.6.tgz'
+  dependencies:
+   '@types/mime': ^1
+   '@types/node': '*'
+'@types/serve-static':
+ _latest: 2.2.0
+ _:
+  ^1: 1.15.10
+ 1.15.10:
+  $: sha512-tRs1dB+g8Itk72rlSI2ZrW6vZg0YrLI81iQSTkMmOqnqCaNr/8Ek4VwWcN5vZgCYWbg/JJSGBlUaYGAOP73qBw==
+  _: 'https://registry.npmjs.org/@types/serve-static/-/serve-static-1.15.10.tgz'
+  dependencies:
+   '@types/http-errors': '*'
+   '@types/node': '*'
+   '@types/send': '<1'
 '@vitest/expect':
  _latest: 4.0.9
  _:
@@ -528,8 +622,9 @@ expect-type:
 express:
  _latest: 5.1.0
  _:
-  ^5.0.1: 5.1.0
+  '^5.0.1,^5.1.0': 5.1.0
  5.1.0:
+  top: 1
   $: sha512-DT9ck5YIRU+8GYzzU5kT3eHGA5iL+1Zd0EutOmTE9Dtk+Tvuzd23VBU+ec7HPNSTxXYO55gPV/hq4pSBJDjFpA==
   _: 'https://registry.npmjs.org/express/-/express-5.1.0.tgz'
   dependencies:

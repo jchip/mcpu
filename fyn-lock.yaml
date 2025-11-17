@@ -3,8 +3,9 @@ $fyn:
  flattenTop: true
 $pkg:
  dep:
-  '@xarc/run': ^2.2.0
-  fynpo: ^1.1.49
+  '@xarc/run': ^2.3.0
+  fyn: ^2.0.0
+  fynpo: ^2.0.0
 '@babel/code-frame':
  _latest: 7.27.1
  _:
@@ -52,20 +53,20 @@ $pkg:
   $: sha512-37i+OaWTh9qeK4LSHPsyRC7NahnGotNuZvjLSgcPzblpHB3rrCJxAOgI5gCdKm7coonsaX1Of0ILiTcnZjbfxA==
   _: 'https://registry.npmjs.org/@types/normalize-package-data/-/normalize-package-data-2.4.4.tgz'
 '@xarc/run':
- _latest: 2.2.0
+ _latest: 2.3.0
  _:
-  ^2.2.0: 2.2.0
- 2.2.0:
+  ^2.3.0: 2.3.0
+ 2.3.0:
   top: 1
-  $: sha512-1HxYiqPgEDDWi3wj7pUG4ht27DU/zsYnPcMzSoJijRwr7KfJhGygcd0oMfV/EMUMAIrBEc5UcsNBJbUK39XWwA==
-  _: 'https://registry.npmjs.org/@xarc/run/-/run-2.2.0.tgz'
+  $: sha512-PLR1Z/3oCiTqWQhhEXNGCtSt+XgnaT68DgDtGGZwrTkkkg7m9tyn8ZVYl1/w8RLx7IaVvjAjLzhYAlmH8sNSKg==
+  _: 'https://registry.npmjs.org/@xarc/run/-/run-2.3.0.tgz'
   dependencies:
    chalk: ^4.1.2
    chalker: ^1.2.0
    insync: ^2.1.1
    jaro-winkler: ^0.2.8
    lodash.foreach: ^4.5.0
-   nix-clap: ^2.2.3
+   nix-clap: ^2.4.0
    optional-require: ^2.1.0
    path-is-inside: ^1.0.2
    read-pkg-up: ^7.0.1
@@ -223,20 +224,21 @@ function-bind:
 fyn:
  _latest: 1.1.46
  _:
-  ^1.1.46: 1.1.46
- 1.1.46:
-  $: sha512-wF+Mdj0vaYXegn6C3b1TdzKmIXQAzv9HxvECzG/WNBtUVpcz79ts4K5tuEYSB4xopLPQ/DSwxMUPOrp/P4Z1IA==
-  _: 'https://registry.npmjs.org/fyn/-/fyn-1.1.46.tgz'
+  ^2.0.0: 2.0.0
+ 2.0.0:
+  top: 1
+  $: sha512-snqTGRAHZ+KJ/mNzYb6Z3/6gawiilRXLomLoJ0nC4MbM5coJoue0pRQ50/fmnoCJkSiNzTXoG5BTePnpFqKGkw==
+  _: 'https://registry.npmjs.org/fyn/-/fyn-2.0.0.tgz'
 fynpo:
  _latest: 1.1.49
  _:
-  ^1.1.49: 1.1.49
- 1.1.49:
+  ^2.0.0: 2.0.0
+ 2.0.0:
   top: 1
-  $: sha512-h2Z6XSpXgtA5BChmRrCCXMM8YLilJisIv5vDQ72wD2qH2w2nf0v8JBs+YDmc0olePDFBlY2dzBtXGW+Wg5AS6Q==
-  _: 'https://registry.npmjs.org/fynpo/-/fynpo-1.1.49.tgz'
+  $: sha512-vNOFRFh75W3y2tM2MwZy4fkivpg57wWUUiMzeqr8uiL4n86AqfV7FqYxjY+XSDpQ+cGMmw/Gy0JBOS97e/Aqgw==
+  _: 'https://registry.npmjs.org/fynpo/-/fynpo-2.0.0.tgz'
   dependencies:
-   fyn: ^1.1.46
+   fyn: ^2.0.0
    import-fresh: 3.3.0
    resolve-global: 1.0.0
    prettier: 2.4.1
@@ -421,12 +423,11 @@ minipass:
 nix-clap:
  _latest: 1.3.13
  _:
-  ^2.2.3: 2.3.0
- 2.3.0:
-  $: sha512-UEcaZcxbgwesdYddLIBiVQOGLJ4Vvwq5NuqSXVWJGlfvTTX7V2hvCqbQa5Y5z4TB8bzX88xjstCUBhX4fy/B6A==
-  _: 'https://registry.npmjs.org/nix-clap/-/nix-clap-2.3.0.tgz'
+  ^2.4.0: 2.4.1
+ 2.4.1:
+  $: sha512-mpZlm1o4epfkdhyydrv582nIcq1YErOH7qwmVQ8EXsNOnKrtCHXaGjLr6BPMqcfZDHAI7aIrNPmgCaf3F6oeiw==
+  _: 'https://registry.npmjs.org/nix-clap/-/nix-clap-2.4.1.tgz'
   dependencies:
-   strip-ansi: '>= 4.0.0'
    tslib: ^2.6.2
 normalize-package-data:
  _latest: 8.0.0
@@ -723,8 +724,8 @@ string-width-cjs:
 strip-ansi:
  _latest: 7.1.2
  _:
-  '>= 4.0.0,^7.0.1': 7.1.2
   '^6.0.0,^6.0.1': 6.0.1
+  ^7.0.1: 7.1.2
  7.1.2:
   $: sha512-gmBGslpoQJtgnMAvOVqGZpEz9dyoKTCzy2nfz/n8aIFhN/jCE/rCmcxabB6jOOHV+0WNnylOxaxBQPSvcWklhA==
   _: 'https://registry.npmjs.org/strip-ansi/-/strip-ansi-7.1.2.tgz'

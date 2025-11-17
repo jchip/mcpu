@@ -23,6 +23,7 @@ When using multiple MCP servers with Claude Code, the initial tool schema discov
 2. **Info** - Fetch full schema only when Claude needs to use a specific tool
 3. **Call** - Execute tools through the proxy
 4. **Cache** - Remember schemas locally to avoid repeated discovery overhead
+5. **Daemon Mode** - Keep MCP server connections alive for faster repeated calls
 
 **Token Reduction:** 14,000+ tokens → ~500 tokens (97% reduction)
 
@@ -60,7 +61,6 @@ Create `.config/mcpu/config.local.json` in your project directory:
 }
 ```
 
-
 ### 2. List available servers
 
 ```bash
@@ -96,6 +96,86 @@ mcpu call filesystem read_file --path=/etc/hosts
 
 # With JSON from stdin
 echo '{"path": "/etc/hosts"}' | mcpu call filesystem read_file --stdin
+```
+
+## 🚀 Daemon Mode (Persistent Connections)
+
+For faster repeated tool calls, use daemon mode to keep MCP server connections alive:
+
+### Start the daemon
+
+```bash
+# Start with OS-assigned port
+mcpu-daemon
+
+# Start on specific port
+mcpu-daemon --port=7839
+
+# Run in background
+mcpu-daemon &
+```
+
+The daemon will print its port and PID on startup:
+
+```
+Daemon started on port 59322 (PID: 27097)
+```
+
+### Use the remote client
+
+Once the daemon is running, use `mcpu-remote` to execute commands through it:
+
+```bash
+# Auto-discovery (finds most recent daemon)
+mcpu-remote -- servers
+mcpu-remote -- tools
+mcpu-remote -- call playwright browser_navigate --url=https://example.com
+
+# Connect to specific port
+mcpu-remote --port=59322 -- servers
+
+# Connect to specific daemon PID
+mcpu-remote --pid=27097 -- tools
+```
+
+### JSON mode for complex parameters
+
+Use JSON mode when passing complex parameters like objects or arrays:
+
+```bash
+# Using JSON from stdin with params
+mcpu-remote --json <<'EOF'
+{
+  "argv": ["call", "playwright", "browser_navigate"],
+  "params": {
+    "url": "https://example.com",
+    "snapshotFile": ".temp/snapshot.yaml"
+  }
+}
+EOF
+
+# Fill multiple form fields at once
+mcpu-remote --json <<'EOF'
+{
+  "argv": ["call", "playwright", "browser_fill_form"],
+  "params": {
+    "fields": [
+      {
+        "name": "Email",
+        "ref": "e11",
+        "type": "textbox",
+        "value": "user@example.com"
+      },
+      {
+        "name": "Password",
+        "ref": "e13",
+        "type": "textbox",
+        "value": "SecurePass123"
+      }
+    ]
+  }
+}
+EOF
 ```
 
 ## 📚 Commands
@@ -256,7 +336,6 @@ MCPU searches for configuration in this order:
 }
 ```
 
-
 ## 🎛️ Global Options
 
 - `--json` - Output in JSON format (for programmatic use)
@@ -291,10 +370,14 @@ mcpu tools --no-cache
 
 ## 🤖 Using with Claude Code
 
+### Direct mode
+
 Add to your `.claude/CLAUDE.md`:
 
 ```markdown
 ## MCP Tools
+
+### MCPU CLI
 
 Use `mcpu` CLI to access MCP tools:
 
@@ -302,6 +385,27 @@ Use `mcpu` CLI to access MCP tools:
 - `mcpu tools [servers...]` - List tools from servers, e.g. `mcpu tools filesystem`
 - `mcpu info <server> <tools...>` - Show tool schema, e.g. `mcpu info filesystem read_file`
 - `mcpu call <server> <tool> [args]` - Execute tool, e.g. `mcpu call filesystem read_file --path=/etc/hosts`
+- `mcpu call <server> <tool> --stdin` - Execute tool with JSON params from stdin as heredoc, e.g. `mcpu call filesystem read_file --stdin <<< '{"path": "/etc/hosts"}'`
+
+### MCPU CLI Daemon mode (**Recommended**)
+
+First start the daemon in the background:
+
+- `mcpu-daemon &` - options: `--port=<port-number>` else automatic OS assigned port
+- It will log port number and PID to console
+- It will save port number to `$XDG_DATA_HOME/mcpu/daemon.<pid>.json`
+
+Once MCPU daemon is running. Use `mcpu-remote` to access MCP tools:
+
+- `mcpu-remote -- servers` - List all configured MCP servers
+- `mcpu-remote -- tools [servers...]` - List tools from servers
+- `mcpu-remote -- info <server> <tools...>` - Show tool schema
+- `mcpu-remote -- call <server> <tool> [args]` - Execute tool
+- It discovers port number automatically, but can control it with `--port=<port-number>` or `--pid=<pid>`
+
+For complex parameters, use JSON mode:
+
+- `mcpu-remote --json -- [CLI args to prepend to JSON argv]` and provide `{"argv": [...], "params": {...}}` via stdin as heredoc
 ```
 
 ## 🔧 Development

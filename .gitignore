@@ -4,4 +4,4 @@ node_modules
 .tmp
 _w
 dist*
-.mcpu.local.json
+.fynpo

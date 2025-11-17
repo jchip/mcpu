@@ -1,6 +1,6 @@
 {
   "name": "@mcpu/cli",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "Unified CLI to manage MCP servers for efficient AI code assistant usage",
   "author": "Joel Chen <joel123@gmail.com>",
   "repository": {
@@ -27,7 +27,9 @@
   "type": "module",
   "main": "./src/cli.ts",
   "bin": {
-    "mcpu": "./bin/mcpu"
+    "mcpu": "./bin/mcpu",
+    "mcpu-daemon": "./bin/mcpu-daemon",
+    "mcpu-remote": "./bin/mcpu-remote"
   },
   "files": [
     "bin",
@@ -46,13 +48,15 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
-    "nix-clap": "^2.4.1",
     "chalk": "^5.3.0",
-    "zod": "^3.23.0",
+    "express": "^5.1.0",
+    "nix-clap": "^2.4.1",
     "tsx": "^4.19.0",
-    "undici": "^6.0.0"
+    "undici": "^6.0.0",
+    "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@types/express": "^5.0.5",
     "@types/node": "^22.0.0",
     "typescript": "^5.7.0",
     "vitest": "^2.0.0"
