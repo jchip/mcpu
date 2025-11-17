@@ -7,13 +7,13 @@ $pkg:
   chalk: ^5.3.0
   express: ^5.1.0
   nix-clap: ^2.4.1
-  tsx: ^4.19.0
   undici: ^6.0.0
   zod: ^3.23.0
  dev:
   '@types/express': ^5.0.5
   '@types/node': ^22.0.0
   esbuild: ^0.27.0
+  tsx: ^4.19.0
   typescript: ^5.7.0
   vitest: ^2.0.0
 '@esbuild/darwin-arm64':
