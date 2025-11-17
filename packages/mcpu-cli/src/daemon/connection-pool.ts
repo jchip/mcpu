@@ -1,5 +1,5 @@
-import { MCPClient, type MCPConnection } from '../client.js';
-import type { MCPServerConfig } from '../types.js';
+import { MCPClient, type MCPConnection } from '../client.ts';
+import type { MCPServerConfig } from '../types.ts';
 
 /**
  * Manages persistent MCP server connections for the daemon

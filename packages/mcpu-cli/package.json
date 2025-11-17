@@ -25,15 +25,15 @@
     "vibe"
   ],
   "type": "module",
-  "main": "./src/cli.ts",
+  "main": "./dist/cli.js",
   "bin": {
-    "mcpu": "./bin/mcpu",
-    "mcpu-daemon": "./bin/mcpu-daemon",
-    "mcpu-remote": "./bin/mcpu-remote"
+    "mcpu": "./bin/mcpu.mjs",
+    "mcpu-daemon": "./bin/mcpu-daemon.mjs",
+    "mcpu-remote": "./bin/mcpu-remote.mjs"
   },
   "files": [
     "bin",
-    "src",
+    "dist",
     "README.md",
     "LICENSE"
   ],
@@ -41,6 +41,7 @@
     "access": "public"
   },
   "scripts": {
+    "build": "node scripts/build.mjs",
     "dev": "tsx src/cli.ts",
     "start": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
@@ -58,6 +59,7 @@
   "devDependencies": {
     "@types/express": "^5.0.5",
     "@types/node": "^22.0.0",
+    "esbuild": "^0.27.0",
     "typescript": "^5.7.0",
     "vitest": "^2.0.0"
   },

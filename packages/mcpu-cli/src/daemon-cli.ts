@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { NixClap } from 'nix-clap';
-import { daemonCommand } from './commands/daemon.js';
+import { daemonCommand } from './commands/daemon.ts';
 
 const VERSION = '0.1.0';
 

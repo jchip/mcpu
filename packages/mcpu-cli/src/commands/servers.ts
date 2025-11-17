@@ -1,6 +1,6 @@
 import chalk from 'chalk';
-import { ConfigDiscovery } from '../config.js';
-import { MCPClient } from '../client.js';
+import { ConfigDiscovery } from '../config.ts';
+import { MCPClient } from '../client.ts';
 
 export interface ServersOptions {
   json?: boolean;

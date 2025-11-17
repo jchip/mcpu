@@ -2,10 +2,10 @@
 
 import { NixClap } from 'nix-clap';
 import chalk from 'chalk';
-import { serversCommand } from './commands/servers.js';
-import { listCommand } from './commands/list.js';
-import { showCommand } from './commands/info.js';
-import { callCommand } from './commands/call.js';
+import { serversCommand } from './commands/servers.ts';
+import { listCommand } from './commands/list.ts';
+import { showCommand } from './commands/info.ts';
+import { callCommand } from './commands/call.ts';
 
 const VERSION = '0.1.0';
 

@@ -2,7 +2,7 @@ import { readFile } from 'fs/promises';
 import { homedir } from 'os';
 import { join, resolve } from 'path';
 import { existsSync } from 'fs';
-import { ProjectMCPConfigSchema, type MCPServerConfig } from './types.js';
+import { ProjectMCPConfigSchema, type MCPServerConfig } from './types.ts';
 
 /**
  * Discovers MCP server configurations from multiple sources:
@@ -14,11 +14,17 @@ import { ProjectMCPConfigSchema, type MCPServerConfig } from './types.js';
  */
 export class ConfigDiscovery {
   private configs: Map<string, MCPServerConfig> = new Map();
-
-  constructor(private options: {
+  private options: {
     configFile?: string;
     verbose?: boolean;
-  } = {}) {}
+  };
+
+  constructor(options: {
+    configFile?: string;
+    verbose?: boolean;
+  } = {}) {
+    this.options = options;
+  }
 
   async loadConfigs(): Promise<Map<string, MCPServerConfig>> {
     // Get XDG_CONFIG_HOME or fall back to ~/.config

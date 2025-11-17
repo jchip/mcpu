@@ -2,7 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
-import type { MCPServerConfig } from './types.js';
+import type { MCPServerConfig } from './types.ts';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 
 export interface MCPConnection {

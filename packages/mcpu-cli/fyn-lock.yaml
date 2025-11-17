@@ -13,6 +13,7 @@ $pkg:
  dev:
   '@types/express': ^5.0.5
   '@types/node': ^22.0.0
+  esbuild: ^0.27.0
   typescript: ^5.7.0
   vitest: ^2.0.0
 '@esbuild/darwin-arm64':
@@ -20,6 +21,14 @@ $pkg:
  _:
   0.21.5: 0.21.5
   0.25.12: 0.25.12
+  0.27.0: 0.27.0
+ 0.27.0:
+  $: sha512-uJOQKYCcHhg07DL7i8MzjvS2LaP7W7Pn/7uA0B5S1EnqAirJtbyw4yC5jQ5qcFjHK9l6o/MX9QisBg12kNkdHg==
+  _: 'https://registry.npmjs.org/@esbuild/darwin-arm64/-/darwin-arm64-0.27.0.tgz'
+  os:
+   - darwin
+  cpu:
+   - arm64
  0.25.12:
   $: sha512-N3zl+lxHCifgIlcMUP5016ESkeQjLj/959RxxNYIthIg+CQHInujFuXeWbWMgnTo4cp5XVHqFPmpyu9J65C1Yg==
   _: 'https://registry.npmjs.org/@esbuild/darwin-arm64/-/darwin-arm64-0.25.12.tgz'
@@ -513,7 +522,40 @@ esbuild:
  _latest: 0.27.0
  _:
   ^0.21.3: 0.21.5
+  ^0.27.0: 0.27.0
   ~0.25.0: 0.25.12
+ 0.27.0:
+  top: 1
+  hasI: 1
+  $: sha512-jd0f4NHbD6cALCyGElNpGAOtWxSq46l9X/sWB0Nzd5er4Kz2YTm+Vl0qKFT9KUJvD8+fiO8AvoHhFvEatfVixA==
+  _: 'https://registry.npmjs.org/esbuild/-/esbuild-0.27.0.tgz'
+  optionalDependencies:
+   '@esbuild/aix-ppc64': 0.27.0
+   '@esbuild/android-arm': 0.27.0
+   '@esbuild/android-arm64': 0.27.0
+   '@esbuild/android-x64': 0.27.0
+   '@esbuild/darwin-arm64': 0.27.0
+   '@esbuild/darwin-x64': 0.27.0
+   '@esbuild/freebsd-arm64': 0.27.0
+   '@esbuild/freebsd-x64': 0.27.0
+   '@esbuild/linux-arm': 0.27.0
+   '@esbuild/linux-arm64': 0.27.0
+   '@esbuild/linux-ia32': 0.27.0
+   '@esbuild/linux-loong64': 0.27.0
+   '@esbuild/linux-mips64el': 0.27.0
+   '@esbuild/linux-ppc64': 0.27.0
+   '@esbuild/linux-riscv64': 0.27.0
+   '@esbuild/linux-s390x': 0.27.0
+   '@esbuild/linux-x64': 0.27.0
+   '@esbuild/netbsd-arm64': 0.27.0
+   '@esbuild/netbsd-x64': 0.27.0
+   '@esbuild/openbsd-arm64': 0.27.0
+   '@esbuild/openbsd-x64': 0.27.0
+   '@esbuild/openharmony-arm64': 0.27.0
+   '@esbuild/sunos-x64': 0.27.0
+   '@esbuild/win32-arm64': 0.27.0
+   '@esbuild/win32-ia32': 0.27.0
+   '@esbuild/win32-x64': 0.27.0
  0.25.12:
   hasI: 1
   $: sha512-bbPBYYrtZbkt6Os6FiTLCTFxvq4tt3JKall1vRwshA3fdVztsLAatFaZobhkBC8/BrPetoa0oksYoKXoG4ryJg==

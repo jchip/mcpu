@@ -1,9 +1,9 @@
-import { ConfigDiscovery } from '../config.js';
-import { MCPClient, type MCPConnection } from '../client.js';
-import { SchemaCache } from '../cache.js';
-import type { CommandResult } from '../types/result.js';
+import { ConfigDiscovery } from '../config.ts';
+import { MCPClient, type MCPConnection } from '../client.ts';
+import { SchemaCache } from '../cache.ts';
+import type { CommandResult } from '../types/result.ts';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
-import type { ConnectionPool } from '../daemon/connection-pool.js';
+import type { ConnectionPool } from '../daemon/connection-pool.ts';
 
 /**
  * Core command executor - shared logic for CLI and daemon

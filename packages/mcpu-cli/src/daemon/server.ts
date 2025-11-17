@@ -1,10 +1,10 @@
 import express, { type Request, type Response } from 'express';
-import { ConnectionPool } from './connection-pool.js';
-import { PidManager } from './pid-manager.js';
-import { ConfigDiscovery } from '../config.js';
-import { executeCommand, type ExecuteOptions } from '../core/executor.js';
-import { parseCommandArgs } from '../core/parser.js';
-import type { MCPServerConfig } from '../types.js';
+import { ConnectionPool } from './connection-pool.ts';
+import { PidManager } from './pid-manager.ts';
+import { ConfigDiscovery } from '../config.ts';
+import { executeCommand, type ExecuteOptions } from '../core/executor.ts';
+import { parseCommandArgs } from '../core/parser.ts';
+import type { MCPServerConfig } from '../types.ts';
 
 /**
  * HTTP daemon server for persistent MCP connections
@@ -17,8 +17,10 @@ export class DaemonServer {
   private configs = new Map<string, MCPServerConfig>();
   private server: any = null;
   private port: number = 0;
+  private options: { port?: number; verbose?: boolean; config?: string };
 
-  constructor(private options: { port?: number; verbose?: boolean; config?: string } = {}) {
+  constructor(options: { port?: number; verbose?: boolean; config?: string } = {}) {
+    this.options = options;
     this.configDiscovery = new ConfigDiscovery({
       configFile: options.config,
       verbose: options.verbose,

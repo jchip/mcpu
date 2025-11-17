@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 
 import { NixClap, type ParseResult } from 'nix-clap';
-import type { CommandNode } from 'nix-clap/command-node';
-import { PidManager } from './daemon/pid-manager.js';
+import { PidManager } from './daemon/pid-manager.ts';
 import { request } from 'undici';
 
 const VERSION = '0.1.0';

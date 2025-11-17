@@ -3,7 +3,7 @@ import { homedir } from 'os';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
-import type { CacheEntry } from './types.js';
+import type { CacheEntry } from './types.ts';
 
 const CACHE_DIR = process.env.XDG_CACHE_HOME
   ? join(process.env.XDG_CACHE_HOME, 'mcpu')

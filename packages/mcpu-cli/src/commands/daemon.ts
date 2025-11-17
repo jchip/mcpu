@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { DaemonServer } from '../daemon/server.js';
+import { DaemonServer } from '../daemon/server.ts';
 
 export interface DaemonOptions {
   port?: number;

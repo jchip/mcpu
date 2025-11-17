@@ -1,7 +1,7 @@
 import chalk from 'chalk';
-import { ConfigDiscovery } from '../config.js';
-import { MCPClient } from '../client.js';
-import { SchemaCache } from '../cache.js';
+import { ConfigDiscovery } from '../config.ts';
+import { MCPClient } from '../client.ts';
+import { SchemaCache } from '../cache.ts';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 
 export interface CallOptions {
