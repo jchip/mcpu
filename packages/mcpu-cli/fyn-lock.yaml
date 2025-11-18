@@ -7,7 +7,6 @@ $pkg:
   chalk: ^5.3.0
   express: ^5.1.0
   nix-clap: ^2.4.2
-  undici: ^6.0.0
   zod: ^3.23.0
  dev:
   '@types/express': ^5.0.5
@@ -1397,14 +1396,6 @@ typescript:
   top: 1
   $: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==
   _: 'https://registry.npmjs.org/typescript/-/typescript-5.9.3.tgz'
-undici:
- _latest: 7.16.0
- _:
-  ^6.0.0: 6.22.0
- 6.22.0:
-  top: 1
-  $: sha512-hU/10obOIu62MGYjdskASR3CUAiYaFTtC9Pa6vHyf//mAipSvSQg6od2CnJswq7fvzNS3zJhxoRkgNVaHurWKw==
-  _: 'https://registry.npmjs.org/undici/-/undici-6.22.0.tgz'
 undici-types:
  _latest: 7.16.0
  _:

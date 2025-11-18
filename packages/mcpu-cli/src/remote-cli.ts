@@ -2,7 +2,6 @@
 
 import { NixClap, type ParseResult } from 'nix-clap';
 import { PidManager } from './daemon/pid-manager.ts';
-import { request } from 'undici';
 
 const VERSION = '0.1.0';
 
@@ -63,7 +62,7 @@ async function sendCommand(port: number, argv: string[], params?: any): Promise<
       body.params = params;
     }
 
-    const response = await request(url, {
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -71,7 +70,7 @@ async function sendCommand(port: number, argv: string[], params?: any): Promise<
       body: JSON.stringify(body),
     });
 
-    const result = await response.body.json() as any;
+    const result = await response.json() as any;
 
     if (result.success) {
       if (result.output) {
