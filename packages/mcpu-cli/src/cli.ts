@@ -2,10 +2,7 @@
 
 import { NixClap } from 'nix-clap';
 import chalk from 'chalk';
-import { serversCommand } from './commands/servers.ts';
-import { listCommand } from './commands/list.ts';
-import { showCommand } from './commands/info.ts';
-import { callCommand } from './commands/call.ts';
+import { coreExecute } from './core/core.ts';
 
 const VERSION = '0.1.0';
 
@@ -25,6 +22,12 @@ const nc = new NixClap({ name: 'mcpu' })
       json: {
         desc: 'Output in JSON format',
       },
+      yaml: {
+        desc: 'Output in YAML format',
+      },
+      raw: {
+        desc: 'Output raw/unprocessed schema (for info command)',
+      },
       noCache: {
         desc: 'Skip cache, force fresh discovery',
       },
@@ -33,6 +36,9 @@ const nc = new NixClap({ name: 'mcpu' })
       servers: {
         desc: 'List all configured MCP servers',
         options: {
+          detailed: {
+            desc: 'Show detailed multi-line format',
+          },
           tools: {
             desc: 'List tool names',
           },
@@ -40,53 +46,43 @@ const nc = new NixClap({ name: 'mcpu' })
             desc: 'List tools with descriptions',
           },
         },
-        exec: (cmd) => {
-          const opts = cmd.rootCmd.jsonMeta.opts;
-          const localOpts = cmd.jsonMeta.opts;
-
-          // Determine tools mode based on flags
-          let toolsMode: 'names' | 'desc' | undefined;
-          if (localOpts['tools-desc']) {
-            toolsMode = 'desc';
-          } else if (localOpts.tools) {
-            toolsMode = 'names';
+        exec: async () => {
+          const result = await coreExecute({ argv: process.argv.slice(2) });
+          if (result.output) {
+            console.log(result.output);
           }
-
-          serversCommand({
-            json: opts.json as boolean | undefined,
-            config: opts.config as string | undefined,
-            verbose: opts.verbose as boolean | undefined,
-            tools: toolsMode,
-          });
+          if (!result.success && result.error) {
+            console.error(result.error);
+          }
+          process.exit(result.exitCode || 0);
         },
       },
       tools: {
         desc: 'List tools from all servers or specific servers',
         args: '[servers string..]',
-        exec: (cmd) => {
-          const opts = cmd.rootCmd.jsonMeta.opts;
-          const args = cmd.jsonMeta.args;
-          listCommand({
-            servers: args.servers as string[] | undefined,
-            json: opts.json as boolean | undefined,
-            config: opts.config as string | undefined,
-            verbose: opts.verbose as boolean | undefined,
-            noCache: opts.noCache as boolean | undefined,
-          });
+        exec: async () => {
+          const result = await coreExecute({ argv: process.argv.slice(2) });
+          if (result.output) {
+            console.log(result.output);
+          }
+          if (!result.success && result.error) {
+            console.error(result.error);
+          }
+          process.exit(result.exitCode || 0);
         },
       },
       info: {
         desc: 'Show detailed information about one or more tools',
         args: '<server string> <tools string..>',
-        exec: (cmd) => {
-          const opts = cmd.rootCmd.jsonMeta.opts;
-          const args = cmd.jsonMeta.args;
-          showCommand(args.server as string, args.tools as string[], {
-            json: opts.json as boolean | undefined,
-            config: opts.config as string | undefined,
-            verbose: opts.verbose as boolean | undefined,
-            noCache: opts.noCache as boolean | undefined,
-          });
+        exec: async () => {
+          const result = await coreExecute({ argv: process.argv.slice(2) });
+          if (result.output) {
+            console.log(result.output);
+          }
+          if (!result.success && result.error) {
+            console.error(result.error);
+          }
+          process.exit(result.exitCode || 0);
         },
       },
       call: {
@@ -95,30 +91,18 @@ const nc = new NixClap({ name: 'mcpu' })
         allowUnknownOption: true,
         options: {
           stdin: {
-            desc: 'Read arguments from stdin as JSON',
+            desc: 'Read arguments from stdin as YAML',
           },
         },
-        exec: (cmd) => {
-          const opts = cmd.rootCmd.jsonMeta.opts;
-          const localOpts = cmd.jsonMeta.opts;
-          const args = cmd.jsonMeta.args;
-
-          // Collect all arguments including those from args and unknown options
-          const allArgs: string[] = (args.args as string[] | undefined) || [];
-
-          // Add unknown options as --key=value arguments
-          for (const [key, value] of Object.entries(localOpts)) {
-            if (key !== 'stdin' && value !== undefined) {
-              allArgs.push(`--${key}=${value}`);
-            }
+        exec: async () => {
+          const result = await coreExecute({ argv: process.argv.slice(2) });
+          if (result.output) {
+            console.log(result.output);
           }
-
-          callCommand(args.server as string, args.tool as string, allArgs, {
-            json: opts.json as boolean | undefined,
-            config: opts.config as string | undefined,
-            verbose: opts.verbose as boolean | undefined,
-            stdin: localOpts.stdin as boolean | undefined,
-          });
+          if (!result.success && result.error) {
+            console.error(result.error);
+          }
+          process.exit(result.exitCode || 0);
         },
       },
     },
@@ -127,7 +111,7 @@ const nc = new NixClap({ name: 'mcpu' })
 // Custom help message
 nc.on('pre-help', () => {
   console.log();
-  console.log(chalk.bold('MCPU - Unify MCP servers and reduce schema size'));
+  console.log(chalk.bold('MCPU - Universal MCP gateway for any AI agent'));
   console.log();
 });
 
@@ -152,8 +136,8 @@ nc.on('post-help', () => {
   console.log('  # Call a tool with arguments');
   console.log('  $ mcpu call filesystem read_file --path=/etc/hosts');
   console.log();
-  console.log('  # Call a tool with JSON from stdin');
-  console.log('  $ echo \'{"path": "/etc/hosts"}\' | mcpu call filesystem read_file --stdin');
+  console.log('  # Call a tool with YAML from stdin');
+  console.log('  $ mcpu call filesystem read_file --stdin <<< \'path: /etc/hosts\'');
   console.log();
   console.log(chalk.bold('Config Sources (priority order):'));
   console.log('  1. --config flag');
@@ -163,4 +147,4 @@ nc.on('post-help', () => {
 });
 
 // Parse and execute
-nc.parse();
+await nc.parseAsync();

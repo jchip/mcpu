@@ -1,6 +1,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { WebSocketClientTransport } from '@modelcontextprotocol/sdk/client/websocket.js';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { MCPServerConfig } from './types.ts';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
@@ -26,15 +27,24 @@ export class MCPClient {
 
     // Determine transport type based on config
     if ('url' in config) {
-      // HTTP/SSE transport
       const url = new URL(config.url);
-      transport = new StreamableHTTPClientTransport(url, {
-        requestInit: config.headers ? {
-          headers: config.headers,
-        } : undefined,
-      });
+
+      if (config.type === 'websocket' || url.protocol === 'ws:' || url.protocol === 'wss:') {
+        // WebSocket transport
+        transport = new WebSocketClientTransport(url);
+      } else {
+        // HTTP/SSE transport
+        transport = new StreamableHTTPClientTransport(url, {
+          requestInit: 'headers' in config && config.headers ? {
+            headers: config.headers,
+          } : undefined,
+        });
+      }
     } else {
       // stdio transport
+      if (!('command' in config)) {
+        throw new Error('Invalid stdio config: missing command');
+      }
       transport = new StdioClientTransport({
         command: config.command,
         args: config.args,

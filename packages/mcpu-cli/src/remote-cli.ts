@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { NixClap, type ParseResult } from 'nix-clap';
+import { parse as parseYaml } from 'yaml';
 import { PidManager } from './daemon/pid-manager.ts';
 
 const VERSION = '0.1.0';
@@ -8,7 +9,7 @@ const VERSION = '0.1.0';
 export interface RemoteOptions {
   port?: number;
   pid?: number;
-  json?: boolean;
+  stdin?: boolean;
 }
 
 /**
@@ -78,7 +79,12 @@ async function sendCommand(port: number, argv: string[], params?: any): Promise<
       }
       process.exit(result.exitCode || 0);
     } else {
-      if (result.error) {
+      // Print output first (may contain help text)
+      if (result.output) {
+        console.error(result.output);
+      }
+      // Then print error if different from output
+      if (result.error && result.error !== result.output) {
         console.error(result.error);
       }
       process.exit(result.exitCode || 1);
@@ -90,9 +96,120 @@ async function sendCommand(port: number, argv: string[], params?: any): Promise<
   }
 }
 
+/**
+ * Send control command to daemon
+ */
+async function sendControlCommand(port: number, action: string, server?: string): Promise<void> {
+  try {
+    const url = `http://localhost:${port}/control`;
+
+    const body: any = { action };
+    if (server) {
+      body.server = server;
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    const result = await response.json() as any;
+
+    if (result.success) {
+      if (result.message) {
+        console.log(result.message);
+      }
+      if (result.connections) {
+        if (result.connections.length === 0) {
+          console.log('No active connections');
+        } else {
+          console.log('\nActive connections:');
+          for (const conn of result.connections) {
+            const lastUsedDate = new Date(conn.lastUsed).toLocaleString();
+            console.log(`  ${conn.server} (last used: ${lastUsedDate})`);
+          }
+        }
+      }
+      process.exit(0);
+    } else {
+      if (result.error) {
+        console.error('Error:', result.error);
+      }
+      process.exit(1);
+    }
+  } catch (error: any) {
+    console.error('Failed to connect to daemon:', error.message || error);
+    console.error('\nIs the daemon running? Start it with: mcpu-daemon');
+    process.exit(1);
+  }
+}
+
+/**
+ * Send shutdown command to daemon
+ */
+async function sendShutdown(port: number): Promise<void> {
+  try {
+    const url = `http://localhost:${port}/exit`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const result = await response.json() as any;
+
+    if (result.success && result.message) {
+      console.log(result.message);
+    }
+    process.exit(0);
+  } catch (error: any) {
+    // Connection errors are expected when daemon shuts down
+    if (error.message?.includes('ECONNRESET') || error.message?.includes('socket hang up')) {
+      console.log('Daemon shut down successfully');
+      process.exit(0);
+    }
+    console.error('Failed to shutdown daemon:', error.message || error);
+    process.exit(1);
+  }
+}
+
+/**
+ * Start a server
+ */
+async function startServer(port: number, serverName: string): Promise<void> {
+  try {
+    const url = `http://localhost:${port}/api/servers/${serverName}/start`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const result = await response.json() as any;
+
+    if (result.success) {
+      console.log(result.message || `Server "${serverName}" started`);
+      process.exit(0);
+    } else {
+      console.error('Error:', result.message || result.error);
+      process.exit(1);
+    }
+  } catch (error: any) {
+    console.error('Failed to start server:', error.message || error);
+    process.exit(1);
+  }
+}
+
 const nc = new NixClap({ name: 'mcpu-remote' })
   .version(VERSION)
-  .usage('$0 [--port=N | --pid=N] [--json] -- <command> [args...]')
+  .usage('$0 [--port=N | --pid=N] [--stdin] -- <command> [args...]')
   .init2({
     desc: 'Connect to MCPU daemon and execute commands',
     options: {
@@ -104,8 +221,8 @@ const nc = new NixClap({ name: 'mcpu-remote' })
         desc: 'Connect to daemon with specific PID',
         args: '<pid number>',
       },
-      json: {
-        desc: 'Read JSON { argv?: [...], params?: {...} } from stdin',
+      stdin: {
+        desc: 'Read JSON or YAML { argv?: [...], params?: {...} } from stdin',
       },
     },
   });
@@ -118,6 +235,19 @@ nc.on('pre-help', () => {
 
 nc.on('post-help', () => {
   console.log();
+  console.log('MCP Commands (same as mcpu CLI):');
+  console.log('  servers                     - List configured MCP servers');
+  console.log('  tools [servers...]          - List available tools');
+  console.log('  info <server> <tool>        - Show tool details (supports --raw --json/--yaml)');
+  console.log('  call <server> <tool> [args] - Execute a tool');
+  console.log();
+  console.log('Daemon Control Commands:');
+  console.log('  stop, shutdown              - Gracefully shutdown the daemon');
+  console.log('  list-connections            - List active MCP server connections');
+  console.log('  start <server>              - Start a configured MCP server connection');
+  console.log('  disconnect <server>         - Disconnect from a specific server');
+  console.log('  reconnect <server>          - Reconnect to a specific server');
+  console.log();
   console.log('Connection Discovery (priority order):');
   console.log('  1. --port=<port>  - Connect to specific port');
   console.log('  2. --pid=<pid>    - Find port from daemon PID');
@@ -129,39 +259,46 @@ nc.on('post-help', () => {
   console.log('  $ mcpu-remote -- tools');
   console.log('  $ mcpu-remote -- call playwright browser_navigate --url=https://example.com');
   console.log();
-  console.log('  # Connect to specific port');
+  console.log('  # Control commands');
+  console.log('  $ mcpu-remote -- start playwright');
+  console.log('  $ mcpu-remote -- stop');
+  console.log('  $ mcpu-remote -- list-connections');
+  console.log('  $ mcpu-remote -- disconnect playwright');
+  console.log('  $ mcpu-remote -- reconnect playwright');
+  console.log();
+  console.log('  # Connect to specific port or PID');
   console.log('  $ mcpu-remote --port=7839 -- tools');
+  console.log('  $ mcpu-remote --pid=12345 -- stop');
   console.log();
-  console.log('  # Connect to specific PID');
-  console.log('  $ mcpu-remote --pid=12345 -- tools');
-  console.log();
-  console.log('  # Use JSON with argv (command arguments)');
-  console.log('  $ mcpu-remote --json <<EOF');
-  console.log('  { "argv": ["call", "playwright", "browser_navigate", "--url=https://example.com"] }');
+  console.log('  # Use stdin with YAML');
+  console.log('  $ mcpu-remote --stdin <<EOF');
+  console.log('  argv: [call, playwright, browser_navigate]');
+  console.log('  params:');
+  console.log('    url: https://example.com');
   console.log('  EOF');
   console.log();
-  console.log('  # Use JSON with params (MCP tool parameters)');
-  console.log('  $ mcpu-remote --json -- call playwright browser_navigate <<EOF');
-  console.log('  { "params": { "url": "https://example.com" } }');
+  console.log('  # Use stdin with YAML (cleaner for complex structures)');
+  console.log('  $ mcpu-remote --stdin <<EOF');
+  console.log('  argv:');
+  console.log('    - call');
+  console.log('    - playwright');
+  console.log('    - browser_navigate');
+  console.log('  params:');
+  console.log('    url: https://example.com');
+  console.log('    snapshotFile: .temp/snapshot.yaml');
   console.log('  EOF');
   console.log();
-  console.log('  # Use JSON with both argv and params');
-  console.log('  $ mcpu-remote --json <<EOF');
-  console.log('  {');
-  console.log('    "argv": ["call", "playwright", "browser_type"],');
-  console.log('    "params": { "element": "...", "text": "..." }');
-  console.log('  }');
-  console.log('  EOF');
-  console.log();
-  console.log('  # CLI args are prepended to JSON argv');
-  console.log('  $ mcpu-remote --json -- call playwright <<EOF');
-  console.log('  { "argv": ["browser_navigate"], "params": { "url": "https://example.com" } }');
+  console.log('  # CLI args are prepended to stdin argv');
+  console.log('  $ mcpu-remote --stdin -- call playwright <<EOF');
+  console.log('  argv: [browser_navigate]');
+  console.log('  params:');
+  console.log('    url: https://example.com');
   console.log('  EOF');
   console.log();
 });
 
 /**
- * Read JSON from stdin
+ * Read data from stdin
  */
 async function readStdin(): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -186,7 +323,7 @@ if (parsed && parsed.command) {
   const options: RemoteOptions = {
     port: opts.port ? parseInt(opts.port as string, 10) : undefined,
     pid: opts.pid ? parseInt(opts.pid as string, 10) : undefined,
-    json: opts.json === true,
+    stdin: opts.stdin === true,
   };
 
   // Execute
@@ -195,25 +332,26 @@ if (parsed && parsed.command) {
       let commandArgs: string[];
       let params: any = undefined;
 
-      if (options.json) {
-        // Read JSON from stdin
+      if (options.stdin) {
+        // Read data from stdin and parse as YAML (which handles both JSON and YAML)
         const stdinData = await readStdin();
         try {
-          const jsonData = JSON.parse(stdinData);
+          // YAML parser handles both JSON and YAML formats
+          const parsedData = parseYaml(stdinData);
 
-          // Get argv from JSON or CLI
+          // Get argv from parsed data or CLI
           let argv: string[] = [];
-          if (jsonData.argv && Array.isArray(jsonData.argv)) {
-            argv = jsonData.argv;
+          if (parsedData.argv && Array.isArray(parsedData.argv)) {
+            argv = parsedData.argv;
           }
 
-          // Prepend command-line args (after --) to JSON argv
+          // Prepend command-line args (after --) to parsed argv
           const cliArgs = (parsed._ && parsed._.length > 0) ? parsed._ : [];
           commandArgs = [...cliArgs, ...argv];
 
-          // Get params from JSON
-          if (jsonData.params && typeof jsonData.params === 'object') {
-            params = jsonData.params;
+          // Get params from parsed data
+          if (parsedData.params && typeof parsedData.params === 'object') {
+            params = parsedData.params;
           }
 
           // Validate we have either args or params
@@ -221,12 +359,12 @@ if (parsed && parsed.command) {
             console.error('Error: No command provided');
             console.error('Provide either:');
             console.error('  - CLI args after --');
-            console.error('  - JSON with "argv" array');
-            console.error('Example: { "argv": ["call", "server", "tool"] }');
+            console.error('  - YAML with "argv" array');
+            console.error('Example: argv: [call, server, tool]');
             process.exit(1);
           }
         } catch (error: any) {
-          console.error('Error: Failed to parse JSON from stdin');
+          console.error('Error: Failed to parse stdin (expected YAML or JSON)');
           console.error(error.message);
           process.exit(1);
         }
@@ -235,7 +373,7 @@ if (parsed && parsed.command) {
         if (!parsed._ || parsed._.length === 0) {
           console.error('Error: No command provided after --');
           console.error('Usage: mcpu-remote [--port=N | --pid=N] -- <command> [args...]');
-          console.error('   or: mcpu-remote --json <<EOF');
+          console.error('   or: mcpu-remote --stdin <<EOF');
           console.error();
           console.error('Examples:');
           console.error('  mcpu-remote -- tools');
@@ -246,7 +384,38 @@ if (parsed && parsed.command) {
       }
 
       const port = await findDaemonPort(options);
-      await sendCommand(port, commandArgs, params);
+
+      // Handle control commands
+      const firstArg = commandArgs[0];
+      if (firstArg === 'stop' || firstArg === 'shutdown') {
+        await sendShutdown(port);
+      } else if (firstArg === 'start') {
+        if (commandArgs.length < 2) {
+          console.error('Error: start requires a server name');
+          console.error('Usage: mcpu-remote -- start <server>');
+          process.exit(1);
+        }
+        await startServer(port, commandArgs[1]);
+      } else if (firstArg === 'list-connections') {
+        await sendControlCommand(port, 'list');
+      } else if (firstArg === 'disconnect') {
+        if (commandArgs.length < 2) {
+          console.error('Error: disconnect requires a server name');
+          console.error('Usage: mcpu-remote -- disconnect <server>');
+          process.exit(1);
+        }
+        await sendControlCommand(port, 'disconnect', commandArgs[1]);
+      } else if (firstArg === 'reconnect') {
+        if (commandArgs.length < 2) {
+          console.error('Error: reconnect requires a server name');
+          console.error('Usage: mcpu-remote -- reconnect <server>');
+          process.exit(1);
+        }
+        await sendControlCommand(port, 'reconnect', commandArgs[1]);
+      } else {
+        // Regular CLI command
+        await sendCommand(port, commandArgs, params);
+      }
     } catch (error: any) {
       console.error('Error:', error.message || error);
       process.exit(1);

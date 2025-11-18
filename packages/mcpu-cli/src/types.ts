@@ -15,10 +15,17 @@ const HttpConfigSchema = z.object({
   headers: z.record(z.string()).optional(),
 });
 
+// MCP Server Configuration Schema (WebSocket)
+const WebSocketConfigSchema = z.object({
+  type: z.literal('websocket'),
+  url: z.string(),
+});
+
 // Union of transport types
 export const MCPServerConfigSchema = z.union([
   StdioConfigSchema,
   HttpConfigSchema,
+  WebSocketConfigSchema,
 ]);
 
 export type MCPServerConfig = z.infer<typeof MCPServerConfigSchema>;

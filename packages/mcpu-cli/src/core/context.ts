@@ -22,6 +22,16 @@ export class ExecutionContext {
   readonly json: boolean;
 
   /**
+   * YAML output mode
+   */
+  readonly yaml: boolean;
+
+  /**
+   * Raw output mode (no processing/formatting)
+   */
+  readonly raw: boolean;
+
+  /**
    * Explicit config file path
    */
   readonly configFile?: string;
@@ -35,12 +45,16 @@ export class ExecutionContext {
     cwd?: string;
     verbose?: boolean;
     json?: boolean;
+    yaml?: boolean;
+    raw?: boolean;
     configFile?: string;
     noCache?: boolean;
   } = {}) {
     this.cwd = options.cwd || process.cwd();
     this.verbose = options.verbose ?? false;
     this.json = options.json ?? false;
+    this.yaml = options.yaml ?? false;
+    this.raw = options.raw ?? false;
     this.configFile = options.configFile;
     this.noCache = options.noCache ?? false;
   }

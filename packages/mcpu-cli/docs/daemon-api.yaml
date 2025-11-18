@@ -1,0 +1,1029 @@
+openapi: 3.0.3
+info:
+  title: MCPU Daemon API
+  description: RESTful API for managing MCP server connections and executing tools
+  version: 1.0.0
+  contact:
+    name: MCPU Project
+    url: https://github.com/jc/mcpu
+
+servers:
+  - url: http://localhost:{port}
+    description: Local daemon instance
+    variables:
+      port:
+        default: '0'
+        description: Dynamically assigned port (0 = OS assigns)
+
+tags:
+  - name: Daemon
+    description: Daemon lifecycle management
+  - name: Servers
+    description: Server configuration management
+  - name: Connections
+    description: Connection pool management
+  - name: Tools
+    description: MCP tool discovery and execution
+  - name: Legacy
+    description: Backward compatibility endpoints (deprecated)
+
+paths:
+  # ===== Daemon Management =====
+  /api/daemon:
+    get:
+      summary: Get daemon status
+      description: Returns information about the running daemon instance
+      operationId: getDaemonStatus
+      tags:
+        - Daemon
+      responses:
+        '200':
+          description: Daemon status
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/DaemonStatus'
+              example:
+                success: true
+                data:
+                  pid: 12345
+                  port: 7839
+                  uptime: 3600.5
+                error: null
+                meta:
+                  timestamp: 1700000000000
+
+  /api/daemon/_shutdown:
+    post:
+      summary: Shutdown daemon
+      description: Gracefully shutdown the daemon, closing all connections
+      operationId: shutdownDaemon
+      tags:
+        - Daemon
+      responses:
+        '200':
+          description: Shutdown initiated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          pid:
+                            type: integer
+                          port:
+                            type: integer
+                          uptime:
+                            type: number
+                          status:
+                            type: string
+                          shutdownAt:
+                            type: integer
+              example:
+                success: true
+                data:
+                  pid: 12345
+                  port: 7839
+                  uptime: 3600.5
+                  status: "shutting_down"
+                  shutdownAt: 1700000000000
+                error: null
+
+  # ===== Server Management =====
+  /api/servers:
+    get:
+      summary: List configured servers
+      description: Returns all MCP servers defined in the configuration file
+      operationId: listServers
+      tags:
+        - Servers
+      responses:
+        '200':
+          description: List of configured servers
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ServerConfig'
+              example:
+                success: true
+                data:
+                  - name: playwright
+                    type: stdio
+                    command: node
+                    args: ["/path/to/playwright/index.js"]
+                error: null
+                meta:
+                  count: 1
+
+  /api/servers/{server}:
+    get:
+      summary: Get server configuration
+      description: Returns configuration details for a specific server
+      operationId: getServer
+      tags:
+        - Servers
+      parameters:
+        - name: server
+          in: path
+          required: true
+          description: Server name
+          schema:
+            type: string
+            example: playwright
+      responses:
+        '200':
+          description: Server configuration
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ServerConfig'
+              example:
+                success: true
+                data:
+                  name: playwright
+                  type: stdio
+                  command: node
+                  args: ["/path/to/playwright/index.js"]
+                error: null
+        '404':
+          description: Server not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                data: null
+                error:
+                  code: SERVER_NOT_FOUND
+                  message: "Server 'invalid' not found in configuration"
+                  details:
+                    server: invalid
+
+  # ===== Connection Management (Server-scoped) =====
+  /api/servers/{server}/connections:
+    get:
+      summary: List server connections
+      description: Returns all connections for a specific server
+      operationId: listServerConnections
+      tags:
+        - Connections
+      parameters:
+        - name: server
+          in: path
+          required: true
+          description: Server name
+          schema:
+            type: string
+            example: playwright
+      responses:
+        '200':
+          description: List of connections for this server
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Connection'
+              example:
+                success: true
+                data:
+                  - id: 1
+                    server: playwright
+                    status: connected
+                    connectedAt: 1700000000000
+                    lastUsed: 1700000000000
+                    closedAt: null
+                error: null
+                meta:
+                  count: 1
+
+    post:
+      summary: Create connection
+      description: Create a connection to the server (idempotent - returns existing if present)
+      operationId: createConnection
+      tags:
+        - Connections
+      parameters:
+        - name: server
+          in: path
+          required: true
+          description: Server name
+          schema:
+            type: string
+            example: playwright
+      responses:
+        '200':
+          description: Existing connection returned
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Connection'
+              example:
+                success: true
+                data:
+                  id: 1
+                  server: playwright
+                  status: connected
+                  connectedAt: 1700000000000
+                  lastUsed: 1700000000000
+                  closedAt: null
+                error: null
+        '201':
+          description: New connection created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Connection'
+              example:
+                success: true
+                data:
+                  id: 1
+                  server: playwright
+                  status: connected
+                  connectedAt: 1700000000000
+                  lastUsed: 1700000000000
+                  closedAt: null
+                error: null
+        '404':
+          description: Server not found in configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                data: null
+                error:
+                  code: SERVER_NOT_FOUND
+                  message: "Server not found in configuration"
+        '500':
+          description: Connection failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                data: null
+                error:
+                  code: CONNECTION_FAILED
+                  message: "Failed to establish connection"
+
+  /api/servers/{server}/connections/{id}:
+    get:
+      summary: Get connection details
+      description: Returns details about a specific connection
+      operationId: getServerConnection
+      tags:
+        - Connections
+      parameters:
+        - name: server
+          in: path
+          required: true
+          description: Server name
+          schema:
+            type: string
+            example: playwright
+        - name: id
+          in: path
+          required: true
+          description: Connection ID
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Connection details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Connection'
+        '404':
+          description: Connection not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      summary: Close connection
+      description: Close a specific connection
+      operationId: deleteServerConnection
+      tags:
+        - Connections
+      parameters:
+        - name: server
+          in: path
+          required: true
+          description: Server name
+          schema:
+            type: string
+            example: playwright
+        - name: id
+          in: path
+          required: true
+          description: Connection ID
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Connection closed
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Connection'
+              example:
+                success: true
+                data:
+                  id: 1
+                  server: playwright
+                  status: disconnected
+                  connectedAt: 1700000000000
+                  lastUsed: 1700000000000
+                  closedAt: 1700000001000
+                error: null
+        '404':
+          description: Connection not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                data: null
+                error:
+                  code: CONNECTION_NOT_FOUND
+                  message: "Connection not found"
+
+  # ===== Tool Management =====
+  /api/servers/{server}/tools:
+    get:
+      summary: List available tools
+      description: Returns all tools available from a connected server
+      operationId: listTools
+      tags:
+        - Tools
+      parameters:
+        - name: server
+          in: path
+          required: true
+          description: Server name
+          schema:
+            type: string
+            example: playwright
+      responses:
+        '200':
+          description: List of available tools
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Tool'
+        '404':
+          description: Server not found or not connected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Server not connected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/servers/{server}/tools/{tool}:
+    get:
+      summary: Get tool schema
+      description: Returns detailed information and schema for a specific tool
+      operationId: getTool
+      tags:
+        - Tools
+      parameters:
+        - name: server
+          in: path
+          required: true
+          description: Server name
+          schema:
+            type: string
+            example: playwright
+        - name: tool
+          in: path
+          required: true
+          description: Tool name
+          schema:
+            type: string
+            example: browser_navigate
+      responses:
+        '200':
+          description: Tool details and schema
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Tool'
+        '404':
+          description: Server or tool not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Server not connected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/servers/{server}/tools/{tool}/_execute:
+    post:
+      summary: Execute a tool
+      description: Execute a specific tool on the server
+      operationId: executeTool
+      tags:
+        - Tools
+      parameters:
+        - name: server
+          in: path
+          required: true
+          description: Server name
+          schema:
+            type: string
+            example: playwright
+        - name: tool
+          in: path
+          required: true
+          description: Tool name
+          schema:
+            type: string
+            example: browser_navigate
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                params:
+                  type: object
+                  description: Tool-specific parameters
+                  additionalProperties: true
+                  example:
+                    url: "https://example.com"
+                    snapshotFile: ".temp/snapshot.yaml"
+      responses:
+        '200':
+          description: Tool executed successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          tool:
+                            type: string
+                          server:
+                            type: string
+                          executedAt:
+                            type: integer
+                          result:
+                            type: object
+                            additionalProperties: true
+        '400':
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Server or tool not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Tool execution failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Server not connected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ===== Connection Management (Global) =====
+  /api/connections:
+    get:
+      summary: List all connections
+      description: Returns all active connections across all servers
+      operationId: listAllConnections
+      tags:
+        - Connections
+      responses:
+        '200':
+          description: List of all active connections
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Connection'
+
+  /api/connections/{id}:
+    get:
+      summary: Get connection by ID
+      description: Returns details about a specific connection by its ID
+      operationId: getConnection
+      tags:
+        - Connections
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Connection ID
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Connection details
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Connection'
+        '404':
+          description: Connection not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Close connection by ID
+      description: Close a connection by its ID (global)
+      operationId: deleteConnection
+      tags:
+        - Connections
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Connection ID
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Connection closed
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Connection'
+        '404':
+          description: Connection not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ===== Legacy Endpoints =====
+  /cli:
+    post:
+      summary: Execute CLI command (legacy)
+      description: |
+        Execute a CLI command through the daemon.
+        **Deprecated**: Use RESTful endpoints instead.
+      operationId: executeCli
+      tags:
+        - Legacy
+      deprecated: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - argv
+              properties:
+                argv:
+                  type: array
+                  items:
+                    type: string
+                  description: Command arguments
+                  example: ["tools", "playwright"]
+                params:
+                  type: object
+                  description: Additional parameters
+                  additionalProperties: true
+                cwd:
+                  type: string
+                  description: Working directory
+                  example: "/path/to/project"
+      responses:
+        '200':
+          description: Command executed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  output:
+                    type: string
+                  exitCode:
+                    type: integer
+                  error:
+                    type: string
+
+  /health:
+    get:
+      summary: Health check (legacy)
+      description: |
+        Check if daemon is running.
+        **Deprecated**: Use GET /api/daemon instead.
+      operationId: healthCheck
+      tags:
+        - Legacy
+      deprecated: true
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  pid:
+                    type: integer
+                    example: 12345
+
+  /exit:
+    post:
+      summary: Shutdown daemon (legacy)
+      description: |
+        Shutdown the daemon.
+        **Deprecated**: Use POST /api/daemon/_shutdown instead.
+      operationId: exitDaemon
+      tags:
+        - Legacy
+      deprecated: true
+      responses:
+        '200':
+          description: Shutdown initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Daemon shutting down..."
+
+  /control:
+    post:
+      summary: Connection control (legacy)
+      description: |
+        Control connections using action-based API.
+        **Deprecated**: Use RESTful connection endpoints instead.
+      operationId: controlConnection
+      tags:
+        - Legacy
+      deprecated: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - action
+              properties:
+                action:
+                  type: string
+                  enum: [list, disconnect, reconnect]
+                  description: Action to perform
+                server:
+                  type: string
+                  description: Server name (required for disconnect/reconnect)
+      responses:
+        '200':
+          description: Action performed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  connections:
+                    type: array
+                    items:
+                      type: object
+                  error:
+                    type: string
+
+components:
+  schemas:
+    # ===== Standard Response Envelopes =====
+    SuccessResponse:
+      type: object
+      required:
+        - success
+        - data
+        - error
+      properties:
+        success:
+          type: boolean
+          description: Always true for successful responses
+          example: true
+        data:
+          description: Response data (resource or array of resources)
+        error:
+          type: null
+          description: Always null for successful responses
+        meta:
+          type: object
+          description: Optional metadata
+          properties:
+            timestamp:
+              type: integer
+              format: int64
+              description: Unix timestamp (ms)
+              example: 1700000000000
+            requestId:
+              type: string
+              description: Unique request identifier
+              example: req_abc123
+            count:
+              type: integer
+              description: Total count for list responses
+              example: 10
+
+    ErrorResponse:
+      type: object
+      required:
+        - success
+        - data
+        - error
+      properties:
+        success:
+          type: boolean
+          description: Always false for error responses
+          example: false
+        data:
+          type: null
+          description: Always null for error responses
+        error:
+          $ref: '#/components/schemas/ErrorDetail'
+        meta:
+          type: object
+          description: Optional metadata
+          properties:
+            timestamp:
+              type: integer
+              format: int64
+              description: Unix timestamp (ms)
+              example: 1700000000000
+            requestId:
+              type: string
+              description: Unique request identifier
+              example: req_abc123
+
+    ErrorDetail:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code
+          example: SERVER_NOT_FOUND
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Server 'invalid' not found in configuration"
+        details:
+          type: object
+          description: Additional error context
+          additionalProperties: true
+          example:
+            server: invalid
+            availableServers: ["playwright", "browserbase"]
+
+    # ===== Resource Schemas =====
+    DaemonStatus:
+      type: object
+      required:
+        - pid
+        - port
+        - uptime
+      properties:
+        pid:
+          type: integer
+          description: Process ID of the daemon
+          example: 12345
+        port:
+          type: integer
+          description: Port the daemon is listening on
+          example: 7839
+        uptime:
+          type: number
+          format: float
+          description: Daemon uptime in seconds
+          example: 3600.5
+
+    ServerConfig:
+      type: object
+      required:
+        - name
+        - type
+        - command
+      properties:
+        name:
+          type: string
+          description: Server name
+          example: playwright
+        type:
+          type: string
+          description: Server type
+          enum: [stdio, sse]
+          example: stdio
+        command:
+          type: string
+          description: Command to execute
+          example: node
+        args:
+          type: array
+          items:
+            type: string
+          description: Command arguments
+          example: ["/path/to/playwright/index.js"]
+        env:
+          type: object
+          additionalProperties:
+            type: string
+          description: Environment variables
+          example:
+            NODE_ENV: production
+
+    Connection:
+      type: object
+      required:
+        - id
+        - server
+        - status
+        - connectedAt
+        - lastUsed
+      properties:
+        id:
+          type: integer
+          description: Connection ID (globally unique)
+          example: 1
+        server:
+          type: string
+          description: Server name
+          example: playwright
+        status:
+          type: string
+          description: Connection status
+          enum: [connected, disconnected, error]
+          example: connected
+        connectedAt:
+          type: integer
+          format: int64
+          description: Unix timestamp (ms) when connection was established
+          example: 1700000000000
+        lastUsed:
+          type: integer
+          format: int64
+          description: Unix timestamp (ms) when connection was last used
+          example: 1700000000000
+        closedAt:
+          type: integer
+          format: int64
+          description: Unix timestamp (ms) when connection was closed
+          nullable: true
+          example: null
+
+    Tool:
+      type: object
+      required:
+        - name
+        - description
+      properties:
+        name:
+          type: string
+          description: Tool name
+          example: browser_navigate
+        description:
+          type: string
+          description: Tool description
+          example: Navigate browser to a URL
+        inputSchema:
+          type: object
+          description: JSON Schema for tool parameters
+          additionalProperties: true
+          example:
+            type: object
+            properties:
+              url:
+                type: string
+                description: URL to navigate to
+            required:
+              - url
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error message
+          example: "Server \"foo\" not found in configuration"

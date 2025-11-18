@@ -1,10 +1,87 @@
 import express, { type Request, type Response } from 'express';
-import { ConnectionPool } from './connection-pool.ts';
+import { ConnectionPool, type ConnectionInfo } from './connection-pool.ts';
 import { PidManager } from './pid-manager.ts';
 import { ConfigDiscovery } from '../config.ts';
-import { executeCommand, type ExecuteOptions } from '../core/executor.ts';
-import { parseCommandArgs } from '../core/parser.ts';
+import { coreExecute } from '../core/core.ts';
 import type { MCPServerConfig } from '../types.ts';
+
+/**
+ * Standard response envelope for success
+ */
+interface SuccessResponse<T = any> {
+  success: true;
+  data: T;
+  error: null;
+  meta?: {
+    timestamp?: number;
+    count?: number;
+    requestId?: string;
+  };
+}
+
+/**
+ * Standard response envelope for errors
+ */
+interface ErrorResponse {
+  success: false;
+  data: null;
+  error: {
+    code: string;
+    message: string;
+    details?: any;
+  };
+  meta?: {
+    timestamp?: number;
+    requestId?: string;
+  };
+}
+
+/**
+ * Helper to create success response
+ */
+function successResponse<T>(data: T, meta?: any): SuccessResponse<T> {
+  return {
+    success: true,
+    data,
+    error: null,
+    meta: {
+      timestamp: Date.now(),
+      ...meta,
+    },
+  };
+}
+
+/**
+ * Helper to create error response
+ */
+function errorResponse(code: string, message: string, details?: any): ErrorResponse {
+  return {
+    success: false,
+    data: null,
+    error: {
+      code,
+      message,
+      details,
+    },
+    meta: {
+      timestamp: Date.now(),
+    },
+  };
+}
+
+/**
+ * Convert ConnectionInfo to API format (without internal connection object)
+ */
+function toConnectionResponse(info: ConnectionInfo) {
+  return {
+    id: info.id,
+    server: info.server,
+    status: info.status,
+    connectedAt: info.connectedAt,
+    lastUsed: info.lastUsed,
+    closedAt: info.closedAt,
+  };
+}
 
 /**
  * HTTP daemon server for persistent MCP connections
@@ -31,6 +108,20 @@ export class DaemonServer {
   }
 
   /**
+   * Get Express app for testing
+   */
+  getApp(): express.Express {
+    return this.app;
+  }
+
+  /**
+   * Get ConnectionPool for testing
+   */
+  getPool(): ConnectionPool {
+    return this.pool;
+  }
+
+  /**
    * Setup Express middleware
    */
   private setupMiddleware(): void {
@@ -49,15 +140,385 @@ export class DaemonServer {
    * Setup API routes
    */
   private setupRoutes(): void {
-    // Health check
+    // Health check (legacy)
     this.app.get('/health', (_req: Request, res: Response) => {
       res.json({ status: 'ok', pid: process.pid });
     });
 
-    // Execute CLI command
+    // ===== Daemon Management =====
+    this.app.get('/api/daemon', (_req: Request, res: Response) => {
+      res.json(successResponse({
+        pid: process.pid,
+        port: this.port,
+        uptime: process.uptime(),
+      }));
+    });
+
+    this.app.post('/api/daemon/_shutdown', async (_req: Request, res: Response) => {
+      res.json(successResponse({
+        pid: process.pid,
+        port: this.port,
+        uptime: process.uptime(),
+        status: 'shutting_down',
+        shutdownAt: Date.now(),
+      }));
+
+      // Shutdown after sending response
+      setTimeout(() => {
+        this.shutdown().catch(err => {
+          console.error('Error during shutdown:', err);
+          process.exit(1);
+        });
+      }, 100);
+    });
+
+    // ===== Server Management (Configured Servers) =====
+    this.app.get('/api/servers', (_req: Request, res: Response) => {
+      const servers = Array.from(this.configs.entries()).map(([name, config]) => ({
+        name,
+        type: config.type,
+        command: config.command,
+        args: config.args,
+        env: config.env,
+      }));
+      res.json(successResponse(servers, { count: servers.length }));
+    });
+
+    this.app.get('/api/servers/:server', (req: Request, res: Response) => {
+      const serverName = req.params.server;
+      const config = this.configs.get(serverName);
+
+      if (!config) {
+        res.status(404).json(errorResponse(
+          'SERVER_NOT_FOUND',
+          `Server '${serverName}' not found in configuration`,
+          { server: serverName }
+        ));
+        return;
+      }
+
+      res.json(successResponse({
+        name: serverName,
+        type: config.type,
+        command: config.command,
+        args: config.args,
+        env: config.env,
+      }));
+    });
+
+    // ===== Connection Management (Server-scoped) =====
+    this.app.get('/api/servers/:server/connections', (req: Request, res: Response) => {
+      const serverName = req.params.server;
+      const config = this.configs.get(serverName);
+
+      if (!config) {
+        res.status(404).json(errorResponse(
+          'SERVER_NOT_FOUND',
+          `Server '${serverName}' not found in configuration`,
+          { server: serverName }
+        ));
+        return;
+      }
+
+      const connections = this.pool.listServerConnections(serverName);
+      const responseData = connections.map(toConnectionResponse);
+      res.json(successResponse(responseData, { count: responseData.length }));
+    });
+
+    this.app.post('/api/servers/:server/connections', async (req: Request, res: Response) => {
+      try {
+        const serverName = req.params.server;
+        const config = this.configs.get(serverName);
+
+        if (!config) {
+          res.status(404).json(errorResponse(
+            'SERVER_NOT_FOUND',
+            `Server '${serverName}' not found in configuration`,
+            { server: serverName }
+          ));
+          return;
+        }
+
+        // Check if connection already exists
+        const existing = this.pool.getConnectionByServer(serverName);
+        if (existing && existing.status === 'connected') {
+          // Return existing connection (idempotent)
+          res.status(200).json(successResponse(toConnectionResponse(existing)));
+          return;
+        }
+
+        // Create new connection
+        const info = await this.pool.getConnection(serverName, config);
+        res.status(201).json(successResponse(toConnectionResponse(info)));
+      } catch (error: any) {
+        res.status(500).json(errorResponse(
+          'CONNECTION_FAILED',
+          error.message || String(error)
+        ));
+      }
+    });
+
+    this.app.get('/api/servers/:server/connections/:id', (req: Request, res: Response) => {
+      const serverName = req.params.server;
+      const id = parseInt(req.params.id, 10);
+
+      if (isNaN(id)) {
+        res.status(400).json(errorResponse(
+          'INVALID_FORMAT',
+          'Connection ID must be an integer',
+          { id: req.params.id }
+        ));
+        return;
+      }
+
+      const info = this.pool.getConnectionById(id);
+      if (!info || info.server !== serverName) {
+        res.status(404).json(errorResponse(
+          'CONNECTION_NOT_FOUND',
+          `Connection ${id} not found for server '${serverName}'`,
+          { id, server: serverName }
+        ));
+        return;
+      }
+
+      res.json(successResponse(toConnectionResponse(info)));
+    });
+
+    this.app.delete('/api/servers/:server/connections/:id', async (req: Request, res: Response) => {
+      try {
+        const serverName = req.params.server;
+        const id = parseInt(req.params.id, 10);
+
+        if (isNaN(id)) {
+          res.status(400).json(errorResponse(
+            'INVALID_FORMAT',
+            'Connection ID must be an integer',
+            { id: req.params.id }
+          ));
+          return;
+        }
+
+        const info = this.pool.getConnectionById(id);
+        if (!info || info.server !== serverName) {
+          res.status(404).json(errorResponse(
+            'CONNECTION_NOT_FOUND',
+            `Connection ${id} not found for server '${serverName}'`,
+            { id, server: serverName }
+          ));
+          return;
+        }
+
+        const closed = await this.pool.disconnect(serverName);
+        if (closed) {
+          res.json(successResponse(toConnectionResponse(closed)));
+        } else {
+          res.status(500).json(errorResponse(
+            'DAEMON_ERROR',
+            'Failed to close connection'
+          ));
+        }
+      } catch (error: any) {
+        res.status(500).json(errorResponse(
+          'DAEMON_ERROR',
+          error.message || String(error)
+        ));
+      }
+    });
+
+    // ===== Connection Management (Global) =====
+    this.app.get('/api/connections', (_req: Request, res: Response) => {
+      const connections = this.pool.listConnections();
+      const responseData = connections.map(toConnectionResponse);
+      res.json(successResponse(responseData, { count: responseData.length }));
+    });
+
+    this.app.get('/api/connections/:id', (req: Request, res: Response) => {
+      const id = parseInt(req.params.id, 10);
+
+      if (isNaN(id)) {
+        res.status(400).json(errorResponse(
+          'INVALID_FORMAT',
+          'Connection ID must be an integer',
+          { id: req.params.id }
+        ));
+        return;
+      }
+
+      const info = this.pool.getConnectionById(id);
+      if (!info) {
+        res.status(404).json(errorResponse(
+          'CONNECTION_NOT_FOUND',
+          `Connection ${id} not found`,
+          { id }
+        ));
+        return;
+      }
+
+      res.json(successResponse(toConnectionResponse(info)));
+    });
+
+    this.app.delete('/api/connections/:id', async (req: Request, res: Response) => {
+      try {
+        const id = parseInt(req.params.id, 10);
+
+        if (isNaN(id)) {
+          res.status(400).json(errorResponse(
+            'INVALID_FORMAT',
+            'Connection ID must be an integer',
+            { id: req.params.id }
+          ));
+          return;
+        }
+
+        const closed = await this.pool.disconnectById(id);
+        if (closed) {
+          res.json(successResponse(toConnectionResponse(closed)));
+        } else {
+          res.status(404).json(errorResponse(
+            'CONNECTION_NOT_FOUND',
+            `Connection ${id} not found`,
+            { id }
+          ));
+        }
+      } catch (error: any) {
+        res.status(500).json(errorResponse(
+          'DAEMON_ERROR',
+          error.message || String(error)
+        ));
+      }
+    });
+
+    // ===== Tool Discovery & Execution =====
+    this.app.get('/api/servers/:server/tools', async (req: Request, res: Response) => {
+      try {
+        const serverName = req.params.server;
+        const config = this.configs.get(serverName);
+
+        if (!config) {
+          res.status(404).json(errorResponse(
+            'SERVER_NOT_FOUND',
+            `Server '${serverName}' not found in configuration`,
+            { server: serverName }
+          ));
+          return;
+        }
+
+        const connection = this.pool.getRawConnection(serverName);
+        if (!connection) {
+          res.status(503).json(errorResponse(
+            'NOT_CONNECTED',
+            `Server '${serverName}' is not connected`,
+            { server: serverName }
+          ));
+          return;
+        }
+
+        const response = await connection.client.listTools();
+        const tools = response.tools || [];
+        res.json(successResponse(tools, { count: tools.length }));
+      } catch (error: any) {
+        res.status(500).json(errorResponse(
+          'DAEMON_ERROR',
+          error.message || String(error)
+        ));
+      }
+    });
+
+    this.app.get('/api/servers/:server/tools/:tool', async (req: Request, res: Response) => {
+      try {
+        const serverName = req.params.server;
+        const toolName = req.params.tool;
+        const config = this.configs.get(serverName);
+
+        if (!config) {
+          res.status(404).json(errorResponse(
+            'SERVER_NOT_FOUND',
+            `Server '${serverName}' not found in configuration`,
+            { server: serverName }
+          ));
+          return;
+        }
+
+        const connection = this.pool.getRawConnection(serverName);
+        if (!connection) {
+          res.status(503).json(errorResponse(
+            'NOT_CONNECTED',
+            `Server '${serverName}' is not connected`,
+            { server: serverName }
+          ));
+          return;
+        }
+
+        const response = await connection.client.listTools();
+        const tools = response.tools || [];
+        const tool = tools.find(t => t.name === toolName);
+
+        if (!tool) {
+          res.status(404).json(errorResponse(
+            'TOOL_NOT_FOUND',
+            `Tool '${toolName}' not found on server '${serverName}'`,
+            { server: serverName, tool: toolName }
+          ));
+          return;
+        }
+
+        res.json(successResponse(tool));
+      } catch (error: any) {
+        res.status(500).json(errorResponse(
+          'DAEMON_ERROR',
+          error.message || String(error)
+        ));
+      }
+    });
+
+    this.app.post('/api/servers/:server/tools/:tool/_execute', async (req: Request, res: Response) => {
+      try {
+        const serverName = req.params.server;
+        const toolName = req.params.tool;
+        const { params = {} } = req.body;
+        const config = this.configs.get(serverName);
+
+        if (!config) {
+          res.status(404).json(errorResponse(
+            'SERVER_NOT_FOUND',
+            `Server '${serverName}' not found in configuration`,
+            { server: serverName }
+          ));
+          return;
+        }
+
+        const connection = this.pool.getRawConnection(serverName);
+        if (!connection) {
+          res.status(503).json(errorResponse(
+            'NOT_CONNECTED',
+            `Server '${serverName}' is not connected`,
+            { server: serverName }
+          ));
+          return;
+        }
+
+        const result = await connection.client.callTool({ name: toolName, arguments: params });
+        res.json(successResponse({
+          tool: toolName,
+          server: serverName,
+          executedAt: Date.now(),
+          result,
+        }));
+      } catch (error: any) {
+        res.status(500).json(errorResponse(
+          'TOOL_EXECUTION_FAILED',
+          error.message || String(error),
+          { server: req.params.server, tool: req.params.tool }
+        ));
+      }
+    });
+
+    // ===== Legacy/Backward Compatibility Endpoints =====
+
+    // Execute CLI command (backward compatibility)
     this.app.post('/cli', async (req: Request, res: Response) => {
       try {
-        const { argv, params, outputFile, cwd } = req.body;
+        const { argv, params, cwd } = req.body;
 
         if (!Array.isArray(argv)) {
           res.status(400).json({
@@ -68,27 +529,13 @@ export class DaemonServer {
           return;
         }
 
-        // Parse the command
-        const parsed = parseCommandArgs(argv);
-
-        // If params is provided, pass it to call command args
-        if (params && typeof params === 'object' && parsed.command === 'call') {
-          parsed.args.stdinData = JSON.stringify(params);
-        }
-
-        // Load configs if not already loaded (with client's cwd)
-        if (this.configs.size === 0) {
-          this.configs = await this.configDiscovery.loadConfigs(cwd);
-        }
-
-        // Execute command with persistent connections
-        const result = await this.executeWithPool(parsed.command, parsed.args, parsed.options, cwd);
-
-        // Optionally write to file
-        if (outputFile && result.output) {
-          const fs = await import('fs/promises');
-          await fs.writeFile(outputFile, result.output, 'utf-8');
-        }
+        // Execute using core module with connection pool
+        const result = await coreExecute({
+          argv,
+          params,
+          cwd,
+          connectionPool: this.pool,
+        });
 
         res.json(result);
       } catch (error: any) {
@@ -100,7 +547,22 @@ export class DaemonServer {
       }
     });
 
-    // Connection management
+    // Legacy /exit endpoint
+    this.app.post('/exit', async (_req: Request, res: Response) => {
+      res.json({
+        success: true,
+        message: 'Daemon shutting down...',
+      });
+
+      setTimeout(() => {
+        this.shutdown().catch(err => {
+          console.error('Error during shutdown:', err);
+          process.exit(1);
+        });
+      }, 100);
+    });
+
+    // Legacy /control endpoint
     this.app.post('/control', async (req: Request, res: Response) => {
       try {
         const { action, server } = req.body;
@@ -170,44 +632,6 @@ export class DaemonServer {
           error: error.message || String(error),
         });
       }
-    });
-
-    // Graceful shutdown
-    this.app.post('/exit', async (_req: Request, res: Response) => {
-      res.json({
-        success: true,
-        message: 'Daemon shutting down...',
-      });
-
-      // Shutdown after sending response
-      setTimeout(() => {
-        this.shutdown().catch(err => {
-          console.error('Error during shutdown:', err);
-          process.exit(1);
-        });
-      }, 100);
-    });
-  }
-
-  /**
-   * Execute command using connection pool
-   */
-  private async executeWithPool(
-    command: string,
-    args: any,
-    options: ExecuteOptions,
-    cwd?: string
-  ): Promise<any> {
-    // Load configs if needed
-    if (this.configs.size === 0) {
-      this.configs = await this.configDiscovery.loadConfigs(cwd);
-    }
-
-    // Execute the command with connection pool for persistent connections
-    return await executeCommand(command, args, {
-      ...options,
-      connectionPool: this.pool,
-      cwd,
     });
   }
 

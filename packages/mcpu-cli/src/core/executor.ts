@@ -1,3 +1,4 @@
+import { stringify as stringifyYaml } from 'yaml';
 import { ConfigDiscovery } from '../config.ts';
 import { MCPClient, type MCPConnection } from '../client.ts';
 import { SchemaCache } from '../cache.ts';
@@ -12,6 +13,8 @@ import { ExecutionContext } from './context.ts';
 
 export interface ExecuteOptions {
   json?: boolean;
+  yaml?: boolean;
+  raw?: boolean;  // Output raw/complete schema without processing
   config?: string;
   verbose?: boolean;
   noCache?: boolean;
@@ -23,6 +26,7 @@ export interface ExecuteOptions {
 
 export interface ServersCommandArgs {
   tools?: 'names' | 'desc';
+  detailed?: boolean;
 }
 
 export interface ToolsCommandArgs {
@@ -41,6 +45,25 @@ export interface CallCommandArgs {
   stdinData?: string;
 }
 
+export interface SchemaCommandArgs {
+  server: string;
+  tools: string[];
+}
+
+/**
+ * Format data as JSON or YAML based on context
+ */
+function formatOutput(data: any, ctx: ExecutionContext): string {
+  if (ctx.yaml) {
+    return stringifyYaml(data);
+  }
+  if (ctx.json) {
+    return JSON.stringify(data, null, 2);
+  }
+  // Fallback to JSON for structured data
+  return JSON.stringify(data, null, 2);
+}
+
 /**
  * Get or create execution context from options
  */
@@ -52,6 +75,8 @@ function getContext(options: ExecuteOptions): ExecutionContext {
     cwd: options.cwd,
     verbose: options.verbose,
     json: options.json,
+    yaml: options.yaml,
+    raw: options.raw,
     configFile: options.config,
     noCache: options.noCache,
   });
@@ -67,8 +92,8 @@ async function getConnection(
   pool?: ConnectionPool
 ): Promise<{ connection: MCPConnection; isPersistent: boolean }> {
   if (pool) {
-    const connection = await pool.getConnection(serverName, config);
-    return { connection, isPersistent: true };
+    const info = await pool.getConnection(serverName, config);
+    return { connection: info.connection, isPersistent: true };
   } else {
     const connection = await client.connect(serverName, config);
     return { connection, isPersistent: false };
@@ -115,32 +140,32 @@ export async function executeServersCommand(
       }
     }
 
-    if (ctx.json) {
+    if (ctx.json || ctx.yaml) {
       const servers = Array.from(configs.entries()).map(([name, config]) => ({
         name,
         ...config,
       }));
 
-      const output = JSON.stringify({
+      const output = formatOutput({
         servers,
         total: servers.length,
-      }, null, 2);
+      }, ctx);
 
       return {
         success: true,
         output,
         exitCode: 0,
       };
-    } else{
+    } else {
       let output = '';
 
       if (configs.size === 0) {
         output += 'No MCP servers configured.\n\n';
         output += 'Configure servers in one of these locations:\n';
-        output += '  - .mcpu.local.json (local project config, gitignored)\n';
-        output += '  - ~/.claude/settings.json (Claude user settings)\n';
-        output += '  - ~/.mcpu/config.json (MCPU user config)\n';
-      } else {
+        output += '  - .config/mcpu/config.local.json (local project config, gitignored)\n';
+        output += '  - ~/.config/mcpu/config.json (user config)\n';
+      } else if (args.detailed) {
+        // Detailed format - multi-line per server
         output += 'Configured MCP Servers:\n\n';
 
         for (const [name, config] of configs.entries()) {
@@ -149,17 +174,20 @@ export async function executeServersCommand(
           output += `${name}\n`;
 
           if (info?.description) {
-            output += `  ${info.description}\n`;
+            output += `  Server: ${info.description}\n`;
           }
 
           if (info?.toolCount !== undefined) {
-            output += `  ${info.toolCount} tool${info.toolCount === 1 ? '' : 's'}\n`;
+            output += `  Tools: ${info.toolCount}\n`;
           }
 
           if ('url' in config) {
-            output += `  Type: http\n`;
+            const url = new URL(config.url);
+            const isWebSocket = config.type === 'websocket' || url.protocol === 'ws:' || url.protocol === 'wss:';
+            output += `  Type: ${isWebSocket ? 'websocket' : 'http'}\n`;
             output += `  URL: ${config.url}\n`;
           } else {
+            output += `  Type: stdio\n`;
             output += `  Command: ${config.command}\n`;
             if (config.args && config.args.length > 0) {
               output += `  Args: ${config.args.join(' ')}\n`;
@@ -181,6 +209,34 @@ export async function executeServersCommand(
         }
 
         output += `Total: ${configs.size} server${configs.size === 1 ? '' : 's'}\n`;
+      } else {
+        // Concise format - one line per server
+        for (const [name, config] of configs.entries()) {
+          const info = serverInfos.get(name);
+          const parts = [`- ${name}`];
+
+          if ('url' in config) {
+            const url = new URL(config.url);
+            const isWebSocket = config.type === 'websocket' || url.protocol === 'ws:' || url.protocol === 'wss:';
+            parts.push(`Type: ${isWebSocket ? 'websocket' : 'http'}`);
+            parts.push(`URL: ${config.url}`);
+          } else {
+            parts.push(`Type: stdio`);
+            parts.push(`Command: ${config.command}`);
+          }
+
+          if (info?.description) {
+            parts.push(info.description);
+          }
+
+          if (info?.toolCount !== undefined) {
+            parts.push(`Tools: ${info.toolCount}`);
+          }
+
+          output += parts.join(' - ') + '\n';
+        }
+
+        output += `\nTotal: ${configs.size} server${configs.size === 1 ? '' : 's'}\n`;
       }
 
       return {
@@ -265,8 +321,10 @@ export async function executeToolsCommand(
       }
     }
 
-    if (options.json) {
-      const output = JSON.stringify({
+    const ctx = getContext(options);
+
+    if (ctx.json || ctx.yaml) {
+      const output = formatOutput({
         tools: allTools.map(({ server, tool }) => ({
           server,
           name: tool.name,
@@ -274,7 +332,7 @@ export async function executeToolsCommand(
         })),
         total: allTools.length,
         servers: serversToQuery.size,
-      }, null, 2);
+      }, ctx);
 
       return {
         success: true,
@@ -371,26 +429,35 @@ export async function executeInfoCommand(
         };
       }
 
-      if (options.json) {
-        const schema = tool.inputSchema as any;
-        const properties = schema?.properties || {};
-        const required = schema?.required || [];
+      const ctx = getContext(options);
 
-        const argsInfo = Object.entries(properties).map(([name, prop]: [string, any]) => ({
-          name,
-          type: prop.type || 'any',
-          required: required.includes(name),
-          description: prop.description,
-          default: prop.default,
-          enum: prop.enum,
-        }));
+      // --raw flag implies structured output (default to YAML)
+      if (ctx.json || ctx.yaml || options.raw) {
+        // If raw flag is set, output complete tool object without processing
+        if (options.raw) {
+          results.push(tool);
+        } else {
+          // Processed/simplified schema output
+          const schema = tool.inputSchema as any;
+          const properties = schema?.properties || {};
+          const required = schema?.required || [];
 
-        results.push({
-          server: args.server,
-          tool: toolName,
-          description: tool.description,
-          arguments: argsInfo,
-        });
+          const argsInfo = Object.entries(properties).map(([name, prop]: [string, any]) => ({
+            name,
+            type: prop.type || 'any',
+            required: required.includes(name),
+            description: prop.description,
+            default: prop.default,
+            enum: prop.enum,
+          }));
+
+          results.push({
+            server: args.server,
+            tool: toolName,
+            description: tool.description,
+            arguments: argsInfo,
+          });
+        }
       } else {
         let output = `\n${toolName}\n\n`;
 
@@ -437,10 +504,17 @@ export async function executeInfoCommand(
       }
     }
 
-    if (options.json) {
+    const ctx = getContext(options);
+
+    if (ctx.json || ctx.yaml || options.raw) {
+      // If --raw is used without explicit format, default to YAML
+      const outputCtx = options.raw && !ctx.json && !ctx.yaml
+        ? { ...ctx, yaml: true }
+        : ctx;
+
       return {
         success: true,
-        output: JSON.stringify(results.length === 1 ? results[0] : results, null, 2),
+        output: formatOutput(results.length === 1 ? results[0] : results, outputCtx),
         exitCode: 0,
       };
     } else {
@@ -582,9 +656,10 @@ export async function executeCallCommand(
       const result = await client.callTool(connection, args.tool, toolArgs);
 
       // Format output
+      const ctx = getContext(options);
       let output: string;
-      if (options.json) {
-        output = JSON.stringify({ result }, null, 2);
+      if (ctx.json || ctx.yaml) {
+        output = formatOutput({ result }, ctx);
       } else {
         if (typeof result === 'string') {
           output = result;

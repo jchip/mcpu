@@ -1,31 +1,10 @@
 # MCPU CLI
 
-> **Compression proxy for MCP tool schemas - Reduce token usage by 90%+**
+> **Universal MCP gateway for any AI agent - Zero upfront tokens, unlimited servers**
 
-MCPU CLI is a lightweight command-line tool that acts as a proxy between Claude Code and MCP servers, dramatically reducing the token overhead of tool schema discovery.
+MCPU enables ANY AI agent to use MCP servers, even without native MCP SDK integration. It compresses schemas by 97%* and provides on-demand discovery of unlimited MCP servers with zero upfront token cost.
 
-## 🎯 Problem
-
-When using multiple MCP servers with Claude Code, the initial tool schema discovery of one server can consume **14,000+ tokens**. This happens because:
-
-- Each MCP server exposes detailed JSON schemas for every tool
-- Claude Code must load all schemas upfront to understand available tools
-- With 3-4 servers, schemas alone can exceed context limits
-- This wastes tokens that could be used for actual work
-
-**Example:** With 3 MCP servers (filesystem, playwright, github), the tool schemas consume `>15k` tokens before any actual conversation begins.
-
-## 💡 Solution
-
-**MCPU** compresses tool schemas and provides them on-demand:
-
-1. **Tools** - Returns minimal tool listings (just names + short descriptions)
-2. **Info** - Fetch full schema only when Claude needs to use a specific tool
-3. **Call** - Execute tools through the proxy
-4. **Cache** - Remember schemas locally to avoid repeated discovery overhead
-5. **Daemon Mode** - Keep MCP server connections alive for faster repeated calls
-
-**Token Reduction:** 14,000+ tokens → ~500 tokens (97% reduction)
+*Example: The Playwright MCP server alone requires ~14,000 tokens upfront for its schema. MCPU reduces this to just a few hundred tokens of instructions.
 
 ## 📦 Installation
 
@@ -33,27 +12,63 @@ When using multiple MCP servers with Claude Code, the initial tool schema discov
 npm install -g @mcpu/cli
 ```
 
-## 🚀 Quick Start
+## 🤖 Using with Claude Code
 
-### 1. Configure your MCP servers
+Add this to your `.claude/CLAUDE.md` or project's `CLAUDE.md` to enable Claude Code to use MCPU:
 
-Create `.config/mcpu/config.local.json` in your project directory:
+````markdown
+## MCP Servers through MCPU Tools
 
-**stdio transport (process-based servers):**
+### MCPU CLI Daemon
+
+First start the daemon in the background, run it as background with Bash tool directly:
+
+- `mcpu-daemon &` - options: `--port=<port-number>` else automatic OS assigned port
+- It will log port number and PID to console and save port to `$XDG_DATA_HOME/mcpu/daemon.<pid>.json`
+
+Once MCPU daemon is running. Use `mcpu-remote` to access MCP tools:
+
+- `mcpuremote` discovers port number automatically, but can control it with `--port=<port-number>` or `--pid=<pid>`
+
+### `mcpu-remote` usage
+
+- `mcpu-remote -- servers` - List all configured MCP servers
+- `mcpu-remote -- tools [servers...]` - List tools from servers
+
+**DON'T GUESS, list tools from a mcp server first**
+
+- `mcpu-remote -- info <server> <tools...>` - Show tool info (human-readable)
+- `mcpu-remote -- info --raw <server> <tools...>` - Get complete raw schema in YAML
+- `mcpu-remote -- info --raw --json <server> <tools...>` - Get complete raw schema in JSON
+- `mcpu-remote -- call <server> <tool> [--<param>=<value>]` - Execute tool
+
+**When to use `--raw` flag:**
+- Use `--raw` to get the complete, unprocessed tool schema including `inputSchema` and `annotations`
+- Useful for understanding complex nested parameters, enums, and validation rules
+- Defaults to YAML format, add `--json` for JSON format
+
+### `mcpu-remote` YAML mode
+
+- `mcpu-remote --stdin -- [CLI args to prepend to YAML argv]` and provide YAML input as heredoc:
+
+```yaml
+argv: [...]
+params:
+  param1: value1
+  param2: value2
+```
+````
+
+## Configuration
+
+Create `.config/mcpu/config.local.json` in your project:
 
 ```json
 {
   "filesystem": {
     "command": "npx",
     "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
-  }
-}
-```
-
-**HTTP transport (SSE-based servers):**
-
-```json
-{
+  },
   "playwright": {
     "type": "http",
     "url": "http://localhost:9000/mcp"
@@ -61,428 +76,91 @@ Create `.config/mcpu/config.local.json` in your project directory:
 }
 ```
 
-### 2. List available servers
+## Daemon Mode
 
 ```bash
-mcpu servers
-```
-
-### 3. List all tools
-
-```bash
-# All tools from all servers
-mcpu tools
-
-# Tools from specific servers
-mcpu tools filesystem
-mcpu tools filesystem playwright
-```
-
-### 4. Show tool details
-
-```bash
-# Show info for one tool
-mcpu info filesystem read_file
-
-# Show info for multiple tools
-mcpu info filesystem read_file write_file
-```
-
-### 5. Execute a tool
-
-```bash
-# With CLI arguments
-mcpu call filesystem read_file --path=/etc/hosts
-
-# With JSON from stdin
-echo '{"path": "/etc/hosts"}' | mcpu call filesystem read_file --stdin
-```
-
-## 🚀 Daemon Mode (Persistent Connections)
-
-For faster repeated tool calls, use daemon mode to keep MCP server connections alive:
-
-### Start the daemon
-
-```bash
-# Start with OS-assigned port
-mcpu-daemon
-
-# Start on specific port
-mcpu-daemon --port=7839
-
-# Run in background
+# Start daemon
 mcpu-daemon &
-```
 
-The daemon will print its port and PID on startup:
-
-```
-Daemon started on port 59322 (PID: 27097)
-```
-
-### Use the remote client
-
-Once the daemon is running, use `mcpu-remote` to execute commands through it:
-
-```bash
-# Auto-discovery (finds most recent daemon)
+# Use remote client
 mcpu-remote -- servers
 mcpu-remote -- tools
 mcpu-remote -- call playwright browser_navigate --url=https://example.com
 
-# Connect to specific port
-mcpu-remote --port=59322 -- servers
-
-# Connect to specific daemon PID
-mcpu-remote --pid=27097 -- tools
-```
-
-### JSON mode for complex parameters
-
-Use JSON mode when passing complex parameters like objects or arrays:
-
-```bash
-# Using JSON from stdin with params
-mcpu-remote --json <<'EOF'
-{
-  "argv": ["call", "playwright", "browser_navigate"],
-  "params": {
-    "url": "https://example.com",
-    "snapshotFile": ".temp/snapshot.yaml"
-  }
-}
-EOF
-
-# Fill multiple form fields at once
-mcpu-remote --json <<'EOF'
-{
-  "argv": ["call", "playwright", "browser_fill_form"],
-  "params": {
-    "fields": [
-      {
-        "name": "Email",
-        "ref": "e11",
-        "type": "textbox",
-        "value": "user@example.com"
-      },
-      {
-        "name": "Password",
-        "ref": "e13",
-        "type": "textbox",
-        "value": "SecurePass123"
-      }
-    ]
-  }
-}
+# YAML mode for complex parameters
+mcpu-remote --stdin <<'EOF'
+argv: [call, playwright, browser_fill_form]
+params:
+  fields:
+    - name: Email
+      ref: e11
+      type: textbox
+      value: user@example.com
 EOF
 ```
 
-## 📚 Commands
+## Commands
 
 ### `mcpu servers`
-
-List all configured MCP servers.
-
-**Output:**
-
-```
-Configured MCP Servers:
-
-filesystem
-  Command: npx
-  Args: -y @modelcontextprotocol/server-filesystem /tmp
-
-Total: 1 server
-```
-
-**JSON:**
-
-```bash
-mcpu servers --json
-```
+Lists configured MCP servers.
 
 ### `mcpu tools [servers...]`
-
-List tools from all servers or specific servers.
-
-**Examples:**
+Lists available tools.
 
 ```bash
-# All tools (flat list)
-mcpu tools
-
-# Tools from specific server
-mcpu tools filesystem
-
-# Tools from multiple servers
-mcpu tools filesystem playwright
-
-# JSON output
-mcpu tools filesystem --json
-```
-
-**Output:**
-
-```
-Tools from filesystem:
-
-read_file - Read contents of a file
-write_file - Write contents to a file
-list_directory - List directory contents
-create_directory - Create a new directory
-
-Total: 4 tools
+mcpu tools                        # All tools
+mcpu tools filesystem             # Specific server
+mcpu tools filesystem playwright  # Multiple servers
 ```
 
 ### `mcpu info <server> <tools...>`
-
-Display detailed information about one or more tools.
-
-**Examples:**
+Shows tool details. Use `--raw` for complete schema.
 
 ```bash
-# Show info for one tool
-mcpu info filesystem read_file
-
-# Show info for multiple tools
-mcpu info filesystem read_file write_file
-```
-
-**Output:**
-
-```
-read_file
-
-Read the complete contents of a file as text
-
-Arguments:
-  path   string - Absolute path to the file
-  tail?  number - If provided, returns only the last N lines
-  head?  number - If provided, returns only the first N lines
-
-Example:
-  mcpu call filesystem read_file --path=<value>
+mcpu info filesystem read_file           # Human-readable
+mcpu info --raw filesystem read_file     # Complete schema (YAML)
+mcpu info --raw --json filesystem tool   # Complete schema (JSON)
 ```
 
 ### `mcpu call <server> <tool> [args]`
-
-Execute a tool and return the result.
-
-**Option 1: CLI-style arguments**
+Executes a tool.
 
 ```bash
-# String arguments
 mcpu call filesystem read_file --path=/etc/hosts
-
-# Number arguments (auto-detected)
-mcpu call api fetch --timeout=5000 --retries=3
-
-# Multiple arguments
-mcpu call filesystem read_file --path=/tmp/file.txt --head=10
+mcpu call filesystem read_file --stdin <<< '{"path": "/etc/hosts"}'
 ```
 
-**Option 2: JSON via stdin**
+## File Locations
 
-```bash
-# Using heredoc
-mcpu call filesystem read_file --stdin <<EOF
-{
-  "path": "/etc/hosts"
-}
-EOF
+MCPU follows the [XDG Base Directory](https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html) specification:
 
-# Or pipe
-echo '{"path": "/etc/hosts"}' | mcpu call filesystem read_file --stdin
-```
+### Configuration Files (searched in order):
+1. `--config <file>` - Explicit CLI flag
+2. `.config/mcpu/config.local.json` - Project-specific config (gitignored)
+3. `$XDG_CONFIG_HOME/mcpu/config.json` - User config (defaults to `~/.config/mcpu/config.json`)
 
-## ⚙️ Configuration
+### Cache Files:
+- `$XDG_CACHE_HOME/mcpu/` - Tool schema cache (defaults to `~/.cache/mcpu/`)
+- 24-hour TTL, use `--no-cache` to force refresh
 
-### Config Sources (Priority Order)
+### Daemon PID Files:
+- `$XDG_DATA_HOME/mcpu/daemon.<pid>.json` - Daemon port/PID info (defaults to `~/.local/share/mcpu/`)
+- Auto-cleaned when daemon stops
 
-MCPU searches for configuration in this order:
+## Global Options
 
-1. `--config <file>` CLI flag (highest priority)
-2. `.config/mcpu/config.local.json` in current directory (local project config, gitignored)
-3. `$XDG_CONFIG_HOME/mcpu/config.json` or `~/.config/mcpu/config.json` (user config, follows [XDG Base Directory spec](https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html))
-
-### Config Format
-
-**stdio transport (process-based servers):**
-
-```json
-{
-  "filesystem": {
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path"],
-    "env": {
-      "SOME_VAR": "value"
-    }
-  }
-}
-```
-
-**HTTP transport (SSE-based servers):**
-
-```json
-{
-  "playwright": {
-    "type": "http",
-    "url": "http://localhost:9000/mcp",
-    "headers": {
-      "Authorization": "Bearer token"
-    }
-  }
-}
-```
-
-## 🎛️ Global Options
-
-- `--json` - Output in JSON format (for programmatic use)
+- `--json` / `--yaml` - Output format
+- `--raw` - Complete unprocessed schema (for `info` command)
 - `--config <file>` - Use specific config file
-- `--verbose` - Show detailed logging
-- `--no-cache` - Skip cache, force fresh discovery
+- `--verbose` - Detailed logging
+- `--no-cache` - Skip cache
 
-**Example:**
+## Troubleshooting
 
-```bash
-mcpu tools --json --verbose --no-cache
-```
+- **No MCP servers configured**: Check `.config/mcpu/config.local.json` or `~/.config/mcpu/config.json`
+- **Failed to connect**: Verify MCP server is installed and command path is correct
+- **Unknown option**: Tool arguments must come after `mcpu call <server> <tool>`
 
-## 💾 Caching
-
-MCPU automatically caches tool schemas to `$XDG_CACHE_HOME/mcpu/` (or `~/.cache/mcpu/`) with a 24-hour TTL.
-
-**Benefits:**
-
-- Faster subsequent tool listings
-- Reduces connection overhead
-- Avoids repeated server spawns
-
-**Cache control:**
-
-```bash
-# Force fresh discovery (skip cache)
-mcpu tools --no-cache
-
-# Cache is automatically invalidated after 24 hours
-```
-
-## 🤖 Using with Claude Code
-
-### Direct mode
-
-Add to your `.claude/CLAUDE.md`:
-
-```markdown
-## MCP Tools
-
-### MCPU CLI
-
-Use `mcpu` CLI to access MCP tools:
-
-- `mcpu servers` - List all configured MCP servers
-- `mcpu tools [servers...]` - List tools from servers, e.g. `mcpu tools filesystem`
-- `mcpu info <server> <tools...>` - Show tool schema, e.g. `mcpu info filesystem read_file`
-- `mcpu call <server> <tool> [args]` - Execute tool, e.g. `mcpu call filesystem read_file --path=/etc/hosts`
-- `mcpu call <server> <tool> --stdin` - Execute tool with JSON params from stdin as heredoc, e.g. `mcpu call filesystem read_file --stdin <<< '{"path": "/etc/hosts"}'`
-
-### MCPU CLI Daemon mode (**Recommended**)
-
-First start the daemon in the background:
-
-- `mcpu-daemon &` - options: `--port=<port-number>` else automatic OS assigned port
-- It will log port number and PID to console
-- It will save port number to `$XDG_DATA_HOME/mcpu/daemon.<pid>.json`
-
-Once MCPU daemon is running. Use `mcpu-remote` to access MCP tools:
-
-- `mcpu-remote -- servers` - List all configured MCP servers
-- `mcpu-remote -- tools [servers...]` - List tools from servers
-- `mcpu-remote -- info <server> <tools...>` - Show tool schema
-- `mcpu-remote -- call <server> <tool> [args]` - Execute tool
-- It discovers port number automatically, but can control it with `--port=<port-number>` or `--pid=<pid>`
-
-For complex parameters, use JSON mode:
-
-- `mcpu-remote --json -- [CLI args to prepend to JSON argv]` and provide `{"argv": [...], "params": {...}}` via stdin as heredoc
-```
-
-## 🔧 Development
-
-```bash
-# Install dependencies
-fyn install
-
-# Run directly with tsx
-fyn dev
-
-# Type check
-fyn typecheck
-
-# Run tests
-fyn test
-```
-
-## 📝 Example Workflow
-
-```bash
-# 1. List all tools (compressed)
-mcpu tools
-# → filesystem/read_file - Read contents of a file
-# → filesystem/write_file - Write contents to a file
-# → playwright/navigate - Navigate browser to URL
-# ...
-
-# 2. When Claude needs details about a specific tool
-mcpu info filesystem read_file
-# → Returns detailed schema for just this tool
-
-# 3. Execute the tool
-mcpu call filesystem read_file --path=/etc/hosts
-# → 127.0.0.1 localhost
-# → ::1 localhost
-```
-
-## 🎯 Use Cases
-
-1. **Reduce context window usage** - Save tokens for actual work
-2. **Faster tool discovery** - Cached schemas mean instant lookups
-3. **Better error messages** - See exactly what arguments a tool expects
-4. **Testing MCP servers** - Quickly verify server functionality
-5. **CLI automation** - Script MCP tool calls programmatically
-
-## 🐛 Troubleshooting
-
-**"No MCP servers configured"**
-
-- Verify config file exists (`.config/mcpu/config.local.json` or `~/.config/mcpu/config.json`)
-- Use `--verbose` to see which config files are being checked
-
-**"Failed to connect to server"**
-
-- Check that the command path is correct
-- Verify the MCP server is installed
-- Use `--verbose` to see connection details
-
-**"Unknown option"**
-
-- Make sure tool arguments come after the server and tool name
-- Example: `mcpu call server tool --arg=value` not `mcpu call --arg=value server tool`
-
-## 📄 License
+## License
 
 MIT
-
-## 🤝 Contributing
-
-This is currently an internal project. For questions or issues, please contact the maintainer.
-
----
-
-**Built with:**
-
-- [nix-clap](https://github.com/jchip/nix-clap) - CLI argument parsing
-- [@modelcontextprotocol/sdk](https://github.com/modelcontextprotocol/typescript-sdk) - MCP protocol implementation
-- [chalk](https://github.com/chalk/chalk) - Terminal styling
-- [zod](https://github.com/colinhacks/zod) - Schema validation

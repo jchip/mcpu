@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import { parse as parseYaml } from 'yaml';
 import { ConfigDiscovery } from '../config.ts';
 import { MCPClient } from '../client.ts';
 import { SchemaCache } from '../cache.ts';
@@ -77,7 +78,7 @@ function parseArgs(args: string[], schema?: any): Record<string, any> {
 }
 
 /**
- * Read JSON from stdin
+ * Read YAML/JSON from stdin
  */
 async function readStdin(): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -148,12 +149,12 @@ export async function callCommand(
     let toolArgs: Record<string, any> = {};
 
     if (options.stdin) {
-      // Read JSON from stdin
-      const jsonStr = await readStdin();
+      // Read YAML/JSON from stdin
+      const inputStr = await readStdin();
       try {
-        toolArgs = JSON.parse(jsonStr);
+        toolArgs = parseYaml(inputStr);
       } catch (error) {
-        console.error(chalk.red('Failed to parse JSON from stdin:'), error);
+        console.error(chalk.red('Failed to parse YAML/JSON from stdin:'), error);
         process.exit(1);
       }
     } else {
