@@ -1,0 +1,57 @@
+{
+  "name": "xtsjs",
+  "version": "0.1.0",
+  "description": "TypeScript build tool with ESM import extension rewriting",
+  "author": "Joel Chen <joel123@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jchip/mcpu.git",
+    "directory": "packages/xtsjs"
+  },
+  "homepage": "https://github.com/jchip/mcpu/tree/main/packages/xtsjs#readme",
+  "bugs": {
+    "url": "https://github.com/jchip/mcpu/issues"
+  },
+  "keywords": [
+    "typescript",
+    "esbuild",
+    "build",
+    "esm",
+    "import",
+    "rewrite"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "xtsjs": "./bin/xtsjs.mjs"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsx src/cli.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "esbuild": "^0.27.0",
+    "nix-clap": "^2.4.2"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}
