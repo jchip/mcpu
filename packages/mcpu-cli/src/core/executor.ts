@@ -4,6 +4,7 @@ import { SchemaCache } from '../cache.ts';
 import type { CommandResult } from '../types/result.ts';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ConnectionPool } from '../daemon/connection-pool.ts';
+import { ExecutionContext } from './context.ts';
 
 /**
  * Core command executor - shared logic for CLI and daemon
@@ -16,6 +17,8 @@ export interface ExecuteOptions {
   noCache?: boolean;
   stdin?: boolean;
   connectionPool?: ConnectionPool;  // Optional connection pool for persistent connections
+  cwd?: string;  // Client's working directory for resolving paths
+  context?: ExecutionContext;  // Execution context (preferred over individual options)
 }
 
 export interface ServersCommandArgs {
@@ -36,6 +39,22 @@ export interface CallCommandArgs {
   tool: string;
   args: string[];
   stdinData?: string;
+}
+
+/**
+ * Get or create execution context from options
+ */
+function getContext(options: ExecuteOptions): ExecutionContext {
+  if (options.context) {
+    return options.context;
+  }
+  return new ExecutionContext({
+    cwd: options.cwd,
+    verbose: options.verbose,
+    json: options.json,
+    configFile: options.config,
+    noCache: options.noCache,
+  });
 }
 
 /**
@@ -64,12 +83,13 @@ export async function executeServersCommand(
   options: ExecuteOptions
 ): Promise<CommandResult> {
   try {
+    const ctx = getContext(options);
     const discovery = new ConfigDiscovery({
-      configFile: options.config,
-      verbose: options.verbose,
+      configFile: ctx.configFile,
+      verbose: ctx.verbose,
     });
 
-    const configs = await discovery.loadConfigs();
+    const configs = await discovery.loadConfigs(ctx.cwd);
     const client = new MCPClient();
 
     // Fetch server info for each server
@@ -95,7 +115,7 @@ export async function executeServersCommand(
       }
     }
 
-    if (options.json) {
+    if (ctx.json) {
       const servers = Array.from(configs.entries()).map(([name, config]) => ({
         name,
         ...config,
@@ -111,7 +131,7 @@ export async function executeServersCommand(
         output,
         exitCode: 0,
       };
-    } else {
+    } else{
       let output = '';
 
       if (configs.size === 0) {
@@ -191,7 +211,7 @@ export async function executeToolsCommand(
       verbose: options.verbose,
     });
 
-    const configs = await discovery.loadConfigs();
+    const configs = await discovery.loadConfigs(options.cwd);
     const client = new MCPClient();
     const cache = new SchemaCache();
 
@@ -314,7 +334,7 @@ export async function executeInfoCommand(
       verbose: options.verbose,
     });
 
-    const configs = await discovery.loadConfigs();
+    const configs = await discovery.loadConfigs(options.cwd);
     const config = configs.get(args.server);
 
     if (!config) {
@@ -504,7 +524,7 @@ export async function executeCallCommand(
       verbose: options.verbose,
     });
 
-    const configs = await discovery.loadConfigs();
+    const configs = await discovery.loadConfigs(options.cwd);
     const config = configs.get(args.server);
 
     if (!config) {

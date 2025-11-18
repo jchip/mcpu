@@ -26,9 +26,12 @@ export class ConfigDiscovery {
     this.options = options;
   }
 
-  async loadConfigs(): Promise<Map<string, MCPServerConfig>> {
+  async loadConfigs(cwd?: string): Promise<Map<string, MCPServerConfig>> {
     // Get XDG_CONFIG_HOME or fall back to ~/.config
     const configHome = process.env.XDG_CONFIG_HOME || join(homedir(), '.config');
+
+    // Use provided cwd or fall back to process.cwd()
+    const workingDir = cwd || process.cwd();
 
     // Priority order (highest to lowest)
     const sources = [
@@ -36,7 +39,7 @@ export class ConfigDiscovery {
       this.options.configFile,
 
       // 2. Local project config
-      join(process.cwd(), '.config', 'mcpu', 'config.local.json'),
+      join(workingDir, '.config', 'mcpu', 'config.local.json'),
 
       // 3. User config (XDG)
       join(configHome, 'mcpu', 'config.json'),

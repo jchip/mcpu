@@ -55,7 +55,10 @@ async function sendCommand(port: number, argv: string[], params?: any): Promise<
   try {
     const url = `http://localhost:${port}/cli`;
 
-    const body: any = { argv };
+    const body: any = {
+      argv,
+      cwd: process.cwd()
+    };
     if (params) {
       body.params = params;
     }

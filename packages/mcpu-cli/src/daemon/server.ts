@@ -57,7 +57,7 @@ export class DaemonServer {
     // Execute CLI command
     this.app.post('/cli', async (req: Request, res: Response) => {
       try {
-        const { argv, params, outputFile } = req.body;
+        const { argv, params, outputFile, cwd } = req.body;
 
         if (!Array.isArray(argv)) {
           res.status(400).json({
@@ -76,13 +76,13 @@ export class DaemonServer {
           parsed.args.stdinData = JSON.stringify(params);
         }
 
-        // Load configs if not already loaded
+        // Load configs if not already loaded (with client's cwd)
         if (this.configs.size === 0) {
-          this.configs = await this.configDiscovery.loadConfigs();
+          this.configs = await this.configDiscovery.loadConfigs(cwd);
         }
 
         // Execute command with persistent connections
-        const result = await this.executeWithPool(parsed.command, parsed.args, parsed.options);
+        const result = await this.executeWithPool(parsed.command, parsed.args, parsed.options, cwd);
 
         // Optionally write to file
         if (outputFile && result.output) {
@@ -195,17 +195,19 @@ export class DaemonServer {
   private async executeWithPool(
     command: string,
     args: any,
-    options: ExecuteOptions
+    options: ExecuteOptions,
+    cwd?: string
   ): Promise<any> {
     // Load configs if needed
     if (this.configs.size === 0) {
-      this.configs = await this.configDiscovery.loadConfigs();
+      this.configs = await this.configDiscovery.loadConfigs(cwd);
     }
 
     // Execute the command with connection pool for persistent connections
     return await executeCommand(command, args, {
       ...options,
       connectionPool: this.pool,
+      cwd,
     });
   }
 
