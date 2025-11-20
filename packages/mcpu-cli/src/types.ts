@@ -87,4 +87,5 @@ export interface ShowOutput {
 export interface CallOutput {
   result: unknown;
   error?: string;
+  stderr?: string;  // Stderr output from stdio-based MCP servers
 }

@@ -2,8 +2,7 @@
 
 import { NixClap } from 'nix-clap';
 import { daemonCommand } from './commands/daemon.ts';
-
-const VERSION = '0.1.0';
+import { VERSION } from './version.ts';
 
 new NixClap({ name: 'mcpu-daemon' })
   .version(VERSION)

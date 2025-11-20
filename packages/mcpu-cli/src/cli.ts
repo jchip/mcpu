@@ -3,8 +3,7 @@
 import { NixClap } from 'nix-clap';
 import chalk from 'chalk';
 import { coreExecute } from './core/core.ts';
-
-const VERSION = '0.1.0';
+import { VERSION } from './version.ts';
 
 // Create CLI with nix-clap
 const nc = new NixClap({ name: 'mcpu' })

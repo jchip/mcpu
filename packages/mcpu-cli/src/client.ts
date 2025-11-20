@@ -10,6 +10,7 @@ export interface MCPConnection {
   client: Client;
   transport: Transport;
   serverName: string;
+  stderrBuffer?: string[];  // Buffer for stderr output from stdio servers
 }
 
 /**
@@ -49,6 +50,7 @@ export class MCPClient {
         command: config.command,
         args: config.args,
         env: config.env,
+        stderr: 'pipe',  // Capture stderr for buffering
       });
     }
 
@@ -62,10 +64,22 @@ export class MCPClient {
     // Connect
     await client.connect(transport);
 
+    // Set up stderr buffering for stdio transport
+    const stderrBuffer: string[] = [];
+    if (transport instanceof StdioClientTransport) {
+      const stderrStream = transport.stderr;
+      if (stderrStream) {
+        stderrStream.on('data', (chunk: Buffer) => {
+          stderrBuffer.push(chunk.toString('utf8'));
+        });
+      }
+    }
+
     return {
       client,
       transport,
       serverName,
+      stderrBuffer,
     };
   }
 
@@ -118,6 +132,29 @@ export class MCPClient {
     } else {
       // Raw response
       return response;
+    }
+  }
+
+  /**
+   * Get stderr output and optionally clear the buffer
+   */
+  getStderr(connection: MCPConnection, clear = false): string {
+    if (!connection.stderrBuffer) {
+      return '';
+    }
+    const output = connection.stderrBuffer.join('');
+    if (clear) {
+      connection.stderrBuffer.length = 0;
+    }
+    return output;
+  }
+
+  /**
+   * Clear stderr buffer
+   */
+  clearStderr(connection: MCPConnection): void {
+    if (connection.stderrBuffer) {
+      connection.stderrBuffer.length = 0;
     }
   }
 
