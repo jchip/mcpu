@@ -101,6 +101,22 @@ function createParserCLI() {
             },
           },
         },
+        connect: {
+          desc: 'Connect to an MCP server (daemon mode only)',
+          args: '<server string>',
+        },
+        disconnect: {
+          desc: 'Disconnect from an MCP server (daemon mode only)',
+          args: '<server string>',
+        },
+        reconnect: {
+          desc: 'Reconnect to an MCP server (daemon mode only)',
+          args: '<server string>',
+        },
+        connections: {
+          alias: ['list-connections'],
+          desc: 'List active server connections (daemon mode only)',
+        },
       },
     });
 
@@ -241,6 +257,29 @@ export async function coreExecute(options: CoreExecutionOptions): Promise<Comman
           ...globalOptions,
           stdin: localOpts.stdin as boolean | undefined,
         });
+      }
+
+      case 'connect': {
+        return await executeCommand('connect', {
+          server: args.server as string,
+        }, globalOptions);
+      }
+
+      case 'disconnect': {
+        return await executeCommand('disconnect', {
+          server: args.server as string,
+        }, globalOptions);
+      }
+
+      case 'reconnect': {
+        return await executeCommand('reconnect', {
+          server: args.server as string,
+        }, globalOptions);
+      }
+
+      case 'connections':
+      case 'list-connections': {
+        return await executeCommand('connections', {}, globalOptions);
       }
 
       default:

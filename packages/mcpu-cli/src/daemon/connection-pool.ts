@@ -53,6 +53,12 @@ export class ConnectionPool {
     const id = this.nextId++;
     const now = Date.now();
 
+    // Log any stderr output from initial connection (but don't clear it so caller can access it)
+    const stderr = this.client.getStderr(connection, false);
+    if (stderr) {
+      console.error(`[${serverName}] stderr during connection:\n${stderr}`);
+    }
+
     const info: ConnectionInfo = {
       id,
       server: serverName,
@@ -135,6 +141,13 @@ export class ConnectionPool {
       }
     }
     return result;
+  }
+
+  /**
+   * Get stderr output from a connection
+   */
+  getStderr(connection: MCPConnection, clear = false): string {
+    return this.client.getStderr(connection, clear);
   }
 
   /**

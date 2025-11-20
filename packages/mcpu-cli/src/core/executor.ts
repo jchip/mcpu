@@ -11,6 +11,62 @@ import { ExecutionContext } from './context.ts';
  * Core command executor - shared logic for CLI and daemon
  */
 
+/**
+ * Unwrap MCP response according to the MCP spec
+ * https://spec.modelcontextprotocol.io/
+ *
+ * Handles standard MCP response format:
+ * {
+ *   content: Array<{type, text?, data?, mimeType?, uri?, ...}>,
+ *   isError?: boolean
+ * }
+ */
+function unwrapMcpResponse(response: unknown): string {
+  // Handle non-object responses
+  if (typeof response === 'string') {
+    return response;
+  }
+
+  if (typeof response !== 'object' || response === null) {
+    return String(response);
+  }
+
+  const mcpResponse = response as any;
+
+  // Check for error responses
+  if (mcpResponse.isError === true) {
+    const errorText = mcpResponse.content?.[0]?.text || 'Unknown error';
+    throw new Error(errorText);
+  }
+
+  // Handle standard MCP response with content array
+  if ('content' in mcpResponse && Array.isArray(mcpResponse.content)) {
+    const content = mcpResponse.content;
+    const parts: string[] = [];
+
+    for (const item of content) {
+      if (item.type === 'text' && item.text) {
+        parts.push(item.text);
+      } else if (item.type === 'image') {
+        // For images, show metadata (actual image data would be base64)
+        parts.push(`[Image: ${item.mimeType || 'unknown type'}]`);
+      } else if (item.type === 'resource') {
+        // For resources, show URI and any text
+        const resourceInfo = [`[Resource: ${item.uri || 'unknown'}]`];
+        if (item.text) {
+          resourceInfo.push(item.text);
+        }
+        parts.push(resourceInfo.join('\n'));
+      }
+    }
+
+    return parts.join('\n');
+  }
+
+  // Fallback: stringify the response
+  return JSON.stringify(response, null, 2);
+}
+
 export interface ExecuteOptions {
   json?: boolean;
   yaml?: boolean;
@@ -48,6 +104,22 @@ export interface CallCommandArgs {
 export interface SchemaCommandArgs {
   server: string;
   tools: string[];
+}
+
+export interface ConnectCommandArgs {
+  server: string;
+}
+
+export interface DisconnectCommandArgs {
+  server: string;
+}
+
+export interface ReconnectCommandArgs {
+  server: string;
+}
+
+export interface ConnectionsCommandArgs {
+  // No args needed
 }
 
 /**
@@ -658,16 +730,13 @@ export async function executeCallCommand(
       // Format output
       const ctx = getContext(options);
       let output: string;
-      if (ctx.json || ctx.yaml) {
+
+      // If json/yaml/raw requested, return full MCP response structure
+      if (ctx.json || ctx.yaml || ctx.raw) {
         output = formatOutput({ result }, ctx);
       } else {
-        if (typeof result === 'string') {
-          output = result;
-        } else if (typeof result === 'object') {
-          output = JSON.stringify(result, null, 2);
-        } else {
-          output = String(result);
-        }
+        // Default: unwrap MCP response to extract meaningful content (like Claude CLI does)
+        output = unwrapMcpResponse(result);
       }
 
       return {
@@ -693,6 +762,207 @@ export async function executeCallCommand(
 /**
  * Main executor - route commands to appropriate handlers
  */
+/**
+ * Connect command - manually connect to a server
+ */
+async function executeConnectCommand(
+  args: ConnectCommandArgs,
+  options: ExecuteOptions
+): Promise<CommandResult> {
+  const { server } = args;
+  const { connectionPool } = options;
+
+  if (!connectionPool) {
+    return {
+      success: false,
+      error: 'Connection pool not available. This command only works in daemon mode.',
+      exitCode: 1,
+    };
+  }
+
+  try {
+    const ctx = getContext(options);
+    const discovery = new ConfigDiscovery({
+      configFile: ctx.configFile,
+      verbose: ctx.verbose,
+    });
+
+    await discovery.loadConfigs(ctx.cwd);
+    const config = discovery.getServer(server);
+    if (!config) {
+      return {
+        success: false,
+        error: `Server "${server}" not found in config`,
+        exitCode: 1,
+      };
+    }
+
+    const info = await connectionPool.getConnection(server, config);
+
+    // Get stderr from the connection
+    const stderr = connectionPool.getStderr(info.connection);
+
+    let output = `Connected to server "${server}"`;
+    if (stderr) {
+      output += `\n\n[${server}] stderr:\n${stderr}`;
+    }
+
+    return {
+      success: true,
+      output,
+      exitCode: 0,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: `Failed to connect to "${server}": ${error.message || error}`,
+      exitCode: 1,
+    };
+  }
+}
+
+/**
+ * Disconnect command - disconnect from a server
+ */
+async function executeDisconnectCommand(
+  args: DisconnectCommandArgs,
+  options: ExecuteOptions
+): Promise<CommandResult> {
+  const { server } = args;
+  const { connectionPool } = options;
+
+  if (!connectionPool) {
+    return {
+      success: false,
+      error: 'Connection pool not available. This command only works in daemon mode.',
+      exitCode: 1,
+    };
+  }
+
+  try {
+    connectionPool.disconnect(server);
+    return {
+      success: true,
+      output: `Disconnected from server "${server}"`,
+      exitCode: 0,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: `Failed to disconnect from "${server}": ${error.message || error}`,
+      exitCode: 1,
+    };
+  }
+}
+
+/**
+ * Reconnect command - reconnect to a server
+ */
+async function executeReconnectCommand(
+  args: ReconnectCommandArgs,
+  options: ExecuteOptions
+): Promise<CommandResult> {
+  const { server } = args;
+  const { connectionPool } = options;
+
+  if (!connectionPool) {
+    return {
+      success: false,
+      error: 'Connection pool not available. This command only works in daemon mode.',
+      exitCode: 1,
+    };
+  }
+
+  try {
+    const ctx = getContext(options);
+    const discovery = new ConfigDiscovery({
+      configFile: ctx.configFile,
+      verbose: ctx.verbose,
+    });
+
+    await discovery.loadConfigs(ctx.cwd);
+    const config = discovery.getServer(server);
+    if (!config) {
+      return {
+        success: false,
+        error: `Server "${server}" not found in config`,
+        exitCode: 1,
+      };
+    }
+
+    await connectionPool.disconnect(server);
+    const info = await connectionPool.getConnection(server, config);
+
+    // Get stderr from the connection
+    const stderr = connectionPool.getStderr(info.connection);
+
+    let output = `Reconnected to server "${server}"`;
+    if (stderr) {
+      output += `\n\n[${server}] stderr:\n${stderr}`;
+    }
+
+    return {
+      success: true,
+      output,
+      exitCode: 0,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: `Failed to reconnect to "${server}": ${error.message || error}`,
+      exitCode: 1,
+    };
+  }
+}
+
+/**
+ * Connections command - list active connections
+ */
+async function executeConnectionsCommand(
+  args: ConnectionsCommandArgs,
+  options: ExecuteOptions
+): Promise<CommandResult> {
+  const { connectionPool } = options;
+
+  if (!connectionPool) {
+    return {
+      success: false,
+      error: 'Connection pool not available. This command only works in daemon mode.',
+      exitCode: 1,
+    };
+  }
+
+  try {
+    const connections = connectionPool.listConnections();
+
+    if (connections.length === 0) {
+      return {
+        success: true,
+        output: 'No active connections',
+        exitCode: 0,
+      };
+    }
+
+    const lines = ['Active connections:'];
+    for (const conn of connections) {
+      const lastUsedDate = new Date(conn.lastUsed).toLocaleString();
+      lines.push(`  ${conn.server} (last used: ${lastUsedDate})`);
+    }
+
+    return {
+      success: true,
+      output: lines.join('\n'),
+      exitCode: 0,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: `Failed to list connections: ${error.message || error}`,
+      exitCode: 1,
+    };
+  }
+}
+
 export async function executeCommand(
   command: string,
   args: any,
@@ -707,6 +977,14 @@ export async function executeCommand(
       return executeInfoCommand(args, options);
     case 'call':
       return executeCallCommand(args, options);
+    case 'connect':
+      return executeConnectCommand(args, options);
+    case 'disconnect':
+      return executeDisconnectCommand(args, options);
+    case 'reconnect':
+      return executeReconnectCommand(args, options);
+    case 'connections':
+      return executeConnectionsCommand(args, options);
     default:
       return {
         success: false,

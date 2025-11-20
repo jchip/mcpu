@@ -104,35 +104,8 @@ export class MCPClient {
       arguments: args,
     });
 
-    // Handle different response formats
-    if ('content' in response) {
-      // If it has content array (standard format)
-      const content = response.content;
-      if (Array.isArray(content) && content.length > 0) {
-        // Return the first content item
-        const item = content[0];
-        if (item.type === 'text') {
-          return item.text;
-        } else if (item.type === 'image') {
-          return {
-            type: 'image',
-            data: item.data,
-            mimeType: item.mimeType,
-          };
-        } else if (item.type === 'resource') {
-          return {
-            type: 'resource',
-            uri: item.resource?.uri,
-            mimeType: item.resource?.mimeType,
-            text: item.resource?.text,
-          };
-        }
-      }
-      return content;
-    } else {
-      // Raw response
-      return response;
-    }
+    // Return raw response - let caller decide how to format
+    return response;
   }
 
   /**
