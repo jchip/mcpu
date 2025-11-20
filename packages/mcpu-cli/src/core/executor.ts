@@ -91,7 +91,7 @@ export interface ToolsCommandArgs {
 
 export interface InfoCommandArgs {
   server: string;
-  tools: string[];
+  tools?: string[];
 }
 
 export interface CallCommandArgs {
@@ -490,8 +490,13 @@ export async function executeInfoCommand(
       await cache.set(args.server, availableTools);
     }
 
+    // If no tools specified, show all tools
+    const toolsToShow = args.tools && args.tools.length > 0
+      ? args.tools
+      : availableTools.map(t => t.name);
+
     const results = [];
-    for (const toolName of args.tools) {
+    for (const toolName of toolsToShow) {
       const tool = availableTools.find(t => t.name === toolName);
       if (!tool) {
         return {
@@ -579,9 +584,9 @@ export async function executeInfoCommand(
     const ctx = getContext(options);
 
     if (ctx.json || ctx.yaml || options.raw) {
-      // If --raw is used without explicit format, default to YAML
+      // If --raw is used without explicit format, default to JSON (native MCP format)
       const outputCtx = options.raw && !ctx.json && !ctx.yaml
-        ? { ...ctx, yaml: true }
+        ? { ...ctx, json: true }
         : ctx;
 
       return {
@@ -731,9 +736,13 @@ export async function executeCallCommand(
       const ctx = getContext(options);
       let output: string;
 
-      // If json/yaml/raw requested, return full MCP response structure
+      // If json/yaml/raw requested, return full MCP response structure verbatim
       if (ctx.json || ctx.yaml || ctx.raw) {
-        output = formatOutput({ result }, ctx);
+        // --raw defaults to JSON (native MCP format), unless --yaml is explicitly set
+        const outputCtx = ctx.raw && !ctx.json && !ctx.yaml
+          ? { ...ctx, json: true }
+          : ctx;
+        output = formatOutput(result, outputCtx);
       } else {
         // Default: unwrap MCP response to extract meaningful content (like Claude CLI does)
         output = unwrapMcpResponse(result);

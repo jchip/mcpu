@@ -89,7 +89,7 @@ function createParserCLI() {
         },
         info: {
           desc: 'Show detailed information about one or more tools',
-          args: '<server string> <tools string..>',
+          args: '<server string> [tools string..]',
         },
         call: {
           desc: 'Execute a tool with the given arguments',

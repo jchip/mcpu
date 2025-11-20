@@ -2,9 +2,9 @@
 
 > **Universal MCP gateway for any AI agent - Zero upfront tokens, unlimited servers**
 
-MCPU enables ANY AI agent to use MCP servers, even without native MCP SDK integration. It compresses schemas by 97%* and provides on-demand discovery of unlimited MCP servers with zero upfront token cost.
+MCPU enables ANY AI agent to use MCP servers, even without native MCP SDK integration. It compresses schemas by 97%\* and provides on-demand discovery of unlimited MCP servers with zero upfront token cost.
 
-*Example: The Playwright MCP server alone requires ~14,000 tokens upfront for its schema. MCPU reduces this to just a few hundred tokens of instructions.
+\*Example: The Playwright MCP server alone requires ~14,000 tokens upfront for its schema. MCPU reduces this to just a few hundred tokens of instructions.
 
 ## 📦 Installation
 
@@ -21,41 +21,49 @@ Add this to your `.claude/CLAUDE.md` or project's `CLAUDE.md` to enable Claude C
 
 ### MCPU CLI Daemon
 
-First start the daemon in the background, run it as background with Bash tool directly:
+First start the daemon in the background using the Bash tool:
 
-- `mcpu-daemon &` - options: `--port=<port-number>` else automatic OS assigned port
-- It will log port number and PID to console and save port to `$XDG_DATA_HOME/mcpu/daemon.<pid>.json`
+- `mcpu-daemon.mjs &` - Options: `--port=<port-number>` or automatic OS-assigned port
+- Logs port number and PID to console, saves to `$XDG_DATA_HOME/mcpu/daemon.<pid>.json`
 
-Once MCPU daemon is running. Use `mcpu-remote` to access MCP tools:
+Once MCPU daemon is running, use `mcpu-remote` to access MCP tools:
 
-- `mcpuremote` discovers port number automatically, but can control it with `--port=<port-number>` or `--pid=<pid>`
+- `mcpu-remote` discovers port number automatically, or use `--port=<port-number>` or `--pid=<pid>`
 
 ### `mcpu-remote` usage
 
 - `mcpu-remote -- servers` - List all configured MCP servers
 - `mcpu-remote -- tools [servers...]` - List tools from servers
 
-**DON'T GUESS, list tools from a mcp server first**
+**DON'T GUESS, list tools from an MCP server first**
 
 - `mcpu-remote -- info <server> <tools...>` - Show tool info (human-readable)
-- `mcpu-remote -- info --raw <server> <tools...>` - Get complete raw schema in YAML
-- `mcpu-remote -- info --raw --json <server> <tools...>` - Get complete raw schema in JSON
-- `mcpu-remote -- call <server> <tool> [--<param>=<value>]` - Execute tool
+- `mcpu-remote -- call <server> <tool> [--<param>=<value>]` - Execute tool (returns unwrapped text by default)
+- `mcpu-remote -- --yaml info <server> <tools...>` - Get complete raw schema in YAML
+- `mcpu-remote -- --yaml call <server> <tool>` - Execute tool (returns full MCP response structure in YAML)
 
-**When to use `--raw` flag:**
-- Use `--raw` to get the complete, unprocessed tool schema including `inputSchema` and `annotations`
-- Useful for understanding complex nested parameters, enums, and validation rules
-- Defaults to YAML format, add `--json` for JSON format
+**Response formats:**
 
-### `mcpu-remote` YAML mode
+- Default: Unwrapped text content (user-friendly, matches Claude CLI behavior)
+- `--json/--yaml/--raw`: Full MCP response structure with metadata
 
-- `mcpu-remote --stdin -- [CLI args to prepend to YAML argv]` and provide YAML input as heredoc:
+**When to use `--raw`, `--yaml`, or `--json` flags:**
 
-```yaml
-argv: [...]
+- For `info`: Get complete tool schema including `inputSchema` and `annotations`
+- For `call`: Get full MCP response structure instead of just extracted text
+- Useful for debugging, understanding complex parameters, or accessing response metadata
+
+### `mcpu-remote` stdin YAML input mode
+
+For complex parameters, use stdin YAML mode:
+
+```bash
+mcpu-remote --stdin -- call <server> <tool> <<'EOF'
+argv: [call, <server>, <tool>]
 params:
   param1: value1
   param2: value2
+EOF
 ```
 ````
 
@@ -102,9 +110,11 @@ EOF
 ## Commands
 
 ### `mcpu servers`
+
 Lists configured MCP servers.
 
 ### `mcpu tools [servers...]`
+
 Lists available tools.
 
 ```bash
@@ -114,6 +124,7 @@ mcpu tools filesystem playwright  # Multiple servers
 ```
 
 ### `mcpu info <server> <tools...>`
+
 Shows tool details. Use `--raw` for complete schema.
 
 ```bash
@@ -123,34 +134,55 @@ mcpu info --raw --json filesystem tool   # Complete schema (JSON)
 ```
 
 ### `mcpu call <server> <tool> [args]`
-Executes a tool.
+
+Executes a tool. By default, unwraps MCP response to show just the content.
 
 ```bash
+# Default: unwrapped text content
+mcpu call chroma chroma_list_collections
+# Output: documents\nembeddings\ntutorials...
+
+# Full MCP response structure
+mcpu call --json chroma chroma_list_collections
+mcpu call --yaml chroma chroma_list_collections
+mcpu call --raw chroma chroma_list_collections
+
+# Pass tool arguments
 mcpu call filesystem read_file --path=/etc/hosts
 mcpu call filesystem read_file --stdin <<< '{"path": "/etc/hosts"}'
 ```
+
+**Response unwrapping:**
+
+- Default: Extracts text from MCP response content array (matches Claude CLI behavior)
+- `--json/--yaml/--raw`: Returns complete MCP response structure with all metadata
+- Follows [MCP specification](https://spec.modelcontextprotocol.io/) for response handling
 
 ## File Locations
 
 MCPU follows the [XDG Base Directory](https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html) specification:
 
 ### Configuration Files (searched in order):
+
 1. `--config <file>` - Explicit CLI flag
 2. `.config/mcpu/config.local.json` - Project-specific config (gitignored)
 3. `$XDG_CONFIG_HOME/mcpu/config.json` - User config (defaults to `~/.config/mcpu/config.json`)
 
 ### Cache Files:
+
 - `$XDG_CACHE_HOME/mcpu/` - Tool schema cache (defaults to `~/.cache/mcpu/`)
 - 24-hour TTL, use `--no-cache` to force refresh
 
 ### Daemon PID Files:
+
 - `$XDG_DATA_HOME/mcpu/daemon.<pid>.json` - Daemon port/PID info (defaults to `~/.local/share/mcpu/`)
 - Auto-cleaned when daemon stops
 
 ## Global Options
 
-- `--json` / `--yaml` - Output format
-- `--raw` - Complete unprocessed schema (for `info` command)
+- `--json` / `--yaml` / `--raw` - Output format
+  - For `call` command: Returns full MCP response structure instead of unwrapped content
+  - For `info` command: Returns complete raw schema with all metadata
 - `--config <file>` - Use specific config file
 - `--verbose` - Detailed logging
 - `--no-cache` - Skip cache
