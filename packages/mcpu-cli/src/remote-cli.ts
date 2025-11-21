@@ -139,7 +139,13 @@ async function shutdownDaemons(limit?: number, port?: number, pid?: number, ppid
   const pidManager = new PidManager();
 
   if (limit === 1) {
-    const targetPort = await findDaemonPort(port, pid, ppid);
+    let targetPort: number;
+    try {
+      targetPort = await findDaemonPort(port, pid, ppid);
+    } catch {
+      output('No running daemon found');
+      process.exit(0);
+    }
     const allDaemons = await pidManager.findAllDaemons();
     const targetDaemon = allDaemons.find(d => d.port === targetPort);
 
