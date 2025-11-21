@@ -6,6 +6,7 @@ export interface DaemonOptions {
   port?: number;
   verbose?: boolean;
   config?: string;
+  ppid?: number;
 }
 
 /**
@@ -14,7 +15,7 @@ export interface DaemonOptions {
 export async function daemonCommand(options: DaemonOptions): Promise<void> {
   const daemon = new DaemonServer(options);
 
-  // Handle graceful shutdown
+  // Handle graceful shutdown signals
   process.on('SIGINT', async () => {
     console.log('\nReceived SIGINT, shutting down...');
     await daemon.shutdown();
@@ -23,6 +24,32 @@ export async function daemonCommand(options: DaemonOptions): Promise<void> {
   process.on('SIGTERM', async () => {
     console.log('\nReceived SIGTERM, shutting down...');
     await daemon.shutdown();
+  });
+
+  process.on('SIGHUP', async () => {
+    console.log('\nReceived SIGHUP, shutting down...');
+    await daemon.shutdown();
+  });
+
+  // Handle uncaught errors (best effort cleanup)
+  process.on('uncaughtException', async (error) => {
+    console.error('\nUncaught exception:', error);
+    try {
+      await daemon.shutdown();
+    } catch (shutdownError) {
+      // Ignore shutdown errors
+    }
+    process.exit(1);
+  });
+
+  process.on('unhandledRejection', async (reason) => {
+    console.error('\nUnhandled promise rejection:', reason);
+    try {
+      await daemon.shutdown();
+    } catch (shutdownError) {
+      // Ignore shutdown errors
+    }
+    process.exit(1);
   });
 
   // Start the daemon

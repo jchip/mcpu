@@ -158,7 +158,9 @@ describe('MCPClient', () => {
         path: '/tmp/test.txt',
       });
 
-      expect(result).toBe('Tool result');
+      expect(result).toEqual({
+        content: [{ type: 'text', text: 'Tool result' }],
+      });
     });
 
     it('should handle tool calls without arguments', async () => {
@@ -170,7 +172,9 @@ describe('MCPClient', () => {
       const connection = await client.connect('server', config);
       const result = await client.callTool(connection, 'simple_tool');
 
-      expect(result).toBe('Tool result');
+      expect(result).toEqual({
+        content: [{ type: 'text', text: 'Tool result' }],
+      });
     });
 
     it('should handle image content type', async () => {
@@ -191,9 +195,13 @@ describe('MCPClient', () => {
       const result = await client.callTool(connection, 'screenshot');
 
       expect(result).toEqual({
-        type: 'image',
-        data: 'base64-image-data',
-        mimeType: 'image/png',
+        content: [
+          {
+            type: 'image',
+            data: 'base64-image-data',
+            mimeType: 'image/png',
+          },
+        ],
       });
     });
 
@@ -218,10 +226,16 @@ describe('MCPClient', () => {
       const result = await client.callTool(connection, 'read_resource');
 
       expect(result).toEqual({
-        type: 'resource',
-        uri: 'file:///tmp/test.txt',
-        mimeType: 'text/plain',
-        text: 'Resource content',
+        content: [
+          {
+            type: 'resource',
+            resource: {
+              uri: 'file:///tmp/test.txt',
+              mimeType: 'text/plain',
+              text: 'Resource content',
+            },
+          },
+        ],
       });
     });
 
@@ -236,7 +250,7 @@ describe('MCPClient', () => {
 
       const result = await client.callTool(connection, 'empty_tool');
 
-      expect(result).toEqual([]);
+      expect(result).toEqual({ content: [] });
     });
 
     it('should handle raw response without content field', async () => {

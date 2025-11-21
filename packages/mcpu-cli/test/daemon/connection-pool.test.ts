@@ -8,6 +8,8 @@ vi.mock('../../src/client.js', () => ({
   MCPClient: vi.fn().mockImplementation(() => ({
     connect: vi.fn(),
     disconnect: vi.fn(),
+    getStderr: vi.fn().mockReturnValue(''),
+    clearStderr: vi.fn(),
   })),
 }));
 

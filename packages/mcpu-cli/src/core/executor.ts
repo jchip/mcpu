@@ -6,66 +6,12 @@ import type { CommandResult } from '../types/result.ts';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ConnectionPool } from '../daemon/connection-pool.ts';
 import { ExecutionContext } from './context.ts';
+import { formatToolInfo, formatMcpResponse } from '../formatters.ts';
 
 /**
  * Core command executor - shared logic for CLI and daemon
  */
 
-/**
- * Unwrap MCP response according to the MCP spec
- * https://spec.modelcontextprotocol.io/
- *
- * Handles standard MCP response format:
- * {
- *   content: Array<{type, text?, data?, mimeType?, uri?, ...}>,
- *   isError?: boolean
- * }
- */
-function unwrapMcpResponse(response: unknown): string {
-  // Handle non-object responses
-  if (typeof response === 'string') {
-    return response;
-  }
-
-  if (typeof response !== 'object' || response === null) {
-    return String(response);
-  }
-
-  const mcpResponse = response as any;
-
-  // Check for error responses
-  if (mcpResponse.isError === true) {
-    const errorText = mcpResponse.content?.[0]?.text || 'Unknown error';
-    throw new Error(errorText);
-  }
-
-  // Handle standard MCP response with content array
-  if ('content' in mcpResponse && Array.isArray(mcpResponse.content)) {
-    const content = mcpResponse.content;
-    const parts: string[] = [];
-
-    for (const item of content) {
-      if (item.type === 'text' && item.text) {
-        parts.push(item.text);
-      } else if (item.type === 'image') {
-        // For images, show metadata (actual image data would be base64)
-        parts.push(`[Image: ${item.mimeType || 'unknown type'}]`);
-      } else if (item.type === 'resource') {
-        // For resources, show URI and any text
-        const resourceInfo = [`[Resource: ${item.uri || 'unknown'}]`];
-        if (item.text) {
-          resourceInfo.push(item.text);
-        }
-        parts.push(resourceInfo.join('\n'));
-      }
-    }
-
-    return parts.join('\n');
-  }
-
-  // Fallback: stringify the response
-  return JSON.stringify(response, null, 2);
-}
 
 export interface ExecuteOptions {
   json?: boolean;
@@ -187,28 +133,34 @@ export async function executeServersCommand(
     });
 
     const configs = await discovery.loadConfigs(ctx.cwd);
-    const client = new MCPClient();
+    const pool = options.connectionPool;
 
-    // Fetch server info for each server
+    // Get server info from active connections only (don't spawn new connections)
     const serverInfos = new Map<string, { description?: string; toolCount?: number; tools?: Array<{ name: string; description?: string }> }>();
 
-    for (const [name, config] of configs.entries()) {
-      try {
-        const info = await client.withConnection(name, config, async (conn) => {
-          const tools = await client.listTools(conn);
-          const serverInfo = (conn.client as any)._serverVersion;
-          const description = serverInfo?.name ?
-            `${serverInfo.name}${serverInfo.version ? ` v${serverInfo.version}` : ''}` :
-            undefined;
-          return {
-            description,
-            toolCount: tools.length,
-            tools: args.tools ? tools.map(t => ({ name: t.name, description: t.description })) : undefined
-          };
-        });
-        serverInfos.set(name, info);
-      } catch (error) {
-        serverInfos.set(name, {});
+    if (pool) {
+      const activeConnections = pool.listConnections();
+
+      for (const connInfo of activeConnections) {
+        try {
+          const conn = pool.getRawConnection(connInfo.server);
+          if (conn) {
+            const client = new MCPClient();
+            const tools = await client.listTools(conn);
+            const serverInfo = (conn.client as any)._serverVersion;
+            const description = serverInfo?.name ?
+              `${serverInfo.name}${serverInfo.version ? ` v${serverInfo.version}` : ''}` :
+              undefined;
+
+            serverInfos.set(connInfo.server, {
+              description,
+              toolCount: tools.length,
+              tools: args.tools ? tools.map(t => ({ name: t.name, description: t.description })) : undefined
+            });
+          }
+        } catch (error) {
+          // Ignore errors from getting connection info
+        }
       }
     }
 
@@ -282,11 +234,18 @@ export async function executeServersCommand(
 
         output += `Total: ${configs.size} server${configs.size === 1 ? '' : 's'}\n`;
       } else {
-        // Concise format - one line per server
+        // Concise format - grouped by connection status
+        const connected: string[] = [];
+        const disconnected: string[] = [];
+
         for (const [name, config] of configs.entries()) {
           const info = serverInfos.get(name);
-          const parts = [`- ${name}`];
+          const hasConnection = info && (info.description || info.toolCount !== undefined);
 
+          const parts = [`- ${name}`];
+          parts.push(hasConnection ? 'connected' : 'disconnected');
+
+          // Type info
           if ('url' in config) {
             const url = new URL(config.url);
             const isWebSocket = config.type === 'websocket' || url.protocol === 'ws:' || url.protocol === 'wss:';
@@ -294,9 +253,21 @@ export async function executeServersCommand(
             parts.push(`URL: ${config.url}`);
           } else {
             parts.push(`Type: stdio`);
-            parts.push(`Command: ${config.command}`);
+            if (hasConnection) {
+              // Connected: don't show command
+            } else {
+              // Disconnected: show full command
+              const cmdParts = [config.command, ...(config.args || [])];
+              parts.push(`Command: ${cmdParts.join(' ')}`);
+            }
           }
 
+          // ENV
+          if (config.env && Object.keys(config.env).length > 0) {
+            parts.push(`ENV: ${JSON.stringify(config.env)}`);
+          }
+
+          // Server info (only if connected)
           if (info?.description) {
             parts.push(info.description);
           }
@@ -305,10 +276,24 @@ export async function executeServersCommand(
             parts.push(`Tools: ${info.toolCount}`);
           }
 
-          output += parts.join(' - ') + '\n';
+          if (hasConnection) {
+            connected.push(parts.join(' - '));
+          } else {
+            disconnected.push(parts.join(' - '));
+          }
         }
 
-        output += `\nTotal: ${configs.size} server${configs.size === 1 ? '' : 's'}\n`;
+        if (connected.length > 0) {
+          output += 'connected:\n';
+          output += connected.join('\n') + '\n\n';
+        }
+
+        if (disconnected.length > 0) {
+          output += 'disconnected:\n';
+          output += disconnected.join('\n') + '\n';
+        }
+
+        output += `\nTotal: ${configs.size} server${configs.size === 1 ? '' : 's'} (${connected.length} connected, ${disconnected.length} disconnected)\n`;
       }
 
       return {
@@ -508,76 +493,13 @@ export async function executeInfoCommand(
 
       const ctx = getContext(options);
 
-      // --raw flag implies structured output (default to YAML)
+      // --yaml or --raw flags imply structured output with complete tool object
       if (ctx.json || ctx.yaml || options.raw) {
-        // If raw flag is set, output complete tool object without processing
-        if (options.raw) {
-          results.push(tool);
-        } else {
-          // Processed/simplified schema output
-          const schema = tool.inputSchema as any;
-          const properties = schema?.properties || {};
-          const required = schema?.required || [];
-
-          const argsInfo = Object.entries(properties).map(([name, prop]: [string, any]) => ({
-            name,
-            type: prop.type || 'any',
-            required: required.includes(name),
-            description: prop.description,
-            default: prop.default,
-            enum: prop.enum,
-          }));
-
-          results.push({
-            server: args.server,
-            tool: toolName,
-            description: tool.description,
-            arguments: argsInfo,
-          });
-        }
+        // Output complete tool object without processing
+        results.push(tool);
       } else {
-        let output = `\n${toolName}\n\n`;
-
-        if (tool.description) {
-          output += `${tool.description}\n\n`;
-        }
-
-        const schema = tool.inputSchema as any;
-        if (schema && schema.properties) {
-          const properties = schema.properties;
-          const required = schema?.required || [];
-
-          output += 'Arguments:\n';
-
-          if (Object.keys(properties).length === 0) {
-            output += '  (no arguments)\n';
-          } else {
-            for (const [name, prop] of Object.entries(properties)) {
-              const propSchema = prop as any;
-              const requiredMark = required.includes(name) ? '' : '?';
-              let typeStr = propSchema.type || 'any';
-
-              if (propSchema.enum) {
-                typeStr = propSchema.enum.join('|');
-              }
-
-              if (propSchema.type === 'array' && propSchema.items) {
-                typeStr = `${propSchema.items.type || 'any'}[]`;
-              }
-
-              const desc = propSchema.description ? ` - ${propSchema.description}` : '';
-              const defaultVal = propSchema.default !== undefined ? ` (default: ${JSON.stringify(propSchema.default)})` : '';
-
-              output += `  ${name}${requiredMark}  ${typeStr}${desc}${defaultVal}\n`;
-            }
-          }
-          output += '\n';
-        }
-
-        output += 'Example:\n';
-        output += `  mcpu call ${args.server} ${toolName}\n\n`;
-
-        results.push(output);
+        // Use enhanced text formatter
+        results.push(formatToolInfo(tool, args.server));
       }
     }
 
@@ -710,6 +632,15 @@ export async function executeCallCommand(
     // Parse arguments
     let toolArgs: Record<string, any> = {};
 
+    // Check if --stdin flag is used in daemon mode (not allowed)
+    if (options.stdin && options.connectionPool && !args.stdinData) {
+      return {
+        success: false,
+        error: '--stdin flag not supported when running through daemon. Use: mcpu-remote --stdin -- call ...',
+        exitCode: 1,
+      };
+    }
+
     if (args.stdinData || options.stdin) {
       // Read JSON from stdin data or stdin
       const jsonStr = args.stdinData || '';
@@ -745,7 +676,7 @@ export async function executeCallCommand(
         output = formatOutput(result, outputCtx);
       } else {
         // Default: unwrap MCP response to extract meaningful content (like Claude CLI does)
-        output = unwrapMcpResponse(result);
+        output = formatMcpResponse(result);
       }
 
       return {

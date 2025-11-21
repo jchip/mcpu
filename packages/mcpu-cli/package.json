@@ -45,7 +45,8 @@
     "dev": "tsx src/cli.ts",
     "start": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "coverage": "vitest --coverage run"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
@@ -60,6 +61,7 @@
     "@types/express": "^5.0.5",
     "@types/node": "^22.0.0",
     "@types/supertest": "^6.0.3",
+    "@vitest/coverage-v8": "^2.1.9",
     "supertest": "^7.1.4",
     "tsx": "^4.19.0",
     "vitest": "^2.0.0",

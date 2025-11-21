@@ -4,6 +4,7 @@ import { homedir } from 'os';
 
 export interface DaemonInfo {
   pid: number;
+  ppid: number;  // Parent PID (0 for shared/singleton daemons)
   port: number;
   startTime: string;
 }
@@ -35,27 +36,27 @@ export class PidManager {
   }
 
   /**
-   * Get PID file path for a specific PID
+   * Get PID file path for a specific daemon
    */
-  private getPidFilePath(pid: number): string {
-    return join(this.dataDir, `daemon.${pid}.json`);
+  private getPidFilePath(ppid: number, pid: number): string {
+    return join(this.dataDir, `daemon.${ppid}-${pid}.json`);
   }
 
   /**
    * Write daemon info to PID file
    */
-  async writeDaemonInfo(info: DaemonInfo): Promise<void> {
+  async saveDaemonInfo(info: DaemonInfo): Promise<void> {
     await this.ensureDataDir();
-    const filePath = this.getPidFilePath(info.pid);
+    const filePath = this.getPidFilePath(info.ppid, info.pid);
     await fs.writeFile(filePath, JSON.stringify(info, null, 2), 'utf-8');
   }
 
   /**
    * Read daemon info from PID file
    */
-  async readDaemonInfo(pid: number): Promise<DaemonInfo | null> {
+  async readDaemonInfo(ppid: number, pid: number): Promise<DaemonInfo | null> {
     try {
-      const filePath = this.getPidFilePath(pid);
+      const filePath = this.getPidFilePath(ppid, pid);
       const content = await fs.readFile(filePath, 'utf-8');
       return JSON.parse(content);
     } catch (error: any) {
@@ -69,9 +70,9 @@ export class PidManager {
   /**
    * Remove daemon PID file
    */
-  async removeDaemonInfo(pid: number): Promise<void> {
+  async removeDaemonInfo(ppid: number, pid: number): Promise<void> {
     try {
-      const filePath = this.getPidFilePath(pid);
+      const filePath = this.getPidFilePath(ppid, pid);
       await fs.unlink(filePath);
     } catch (error: any) {
       if (error.code !== 'ENOENT') {
@@ -105,10 +106,11 @@ export class PidManager {
 
       for (const file of files) {
         if (file.startsWith('daemon.') && file.endsWith('.json')) {
-          const pidMatch = file.match(/daemon\.(\d+)\.json/);
-          if (pidMatch) {
-            const pid = parseInt(pidMatch[1], 10);
-            const info = await this.readDaemonInfo(pid);
+          const match = file.match(/daemon\.(\d+)-(\d+)\.json/);
+          if (match) {
+            const ppid = parseInt(match[1], 10);
+            const pid = parseInt(match[2], 10);
+            const info = await this.readDaemonInfo(ppid, pid);
 
             if (info) {
               // Check if process is still running
@@ -116,7 +118,7 @@ export class PidManager {
                 daemons.push(info);
               } else {
                 // Clean up stale PID file
-                await this.removeDaemonInfo(pid);
+                await this.removeDaemonInfo(ppid, pid);
               }
             }
           }
@@ -130,6 +132,22 @@ export class PidManager {
       }
       throw error;
     }
+  }
+
+  /**
+   * Find daemon by parent PID
+   */
+  async findDaemonByPpid(ppid: number): Promise<DaemonInfo | null> {
+    const allDaemons = await this.findAllDaemons();
+    return allDaemons.find(d => d.ppid === ppid) || null;
+  }
+
+  /**
+   * Find daemon by PID (any ppid)
+   */
+  async findDaemonByPid(pid: number): Promise<DaemonInfo | null> {
+    const allDaemons = await this.findAllDaemons();
+    return allDaemons.find(d => d.pid === pid) || null;
   }
 
   /**
@@ -159,11 +177,12 @@ export class PidManager {
 
     for (const file of allFiles) {
       if (file.startsWith('daemon.') && file.endsWith('.json')) {
-        const pidMatch = file.match(/daemon\.(\d+)\.json/);
-        if (pidMatch) {
-          const pid = parseInt(pidMatch[1], 10);
+        const match = file.match(/daemon\.(\d+)-(\d+)\.json/);
+        if (match) {
+          const ppid = parseInt(match[1], 10);
+          const pid = parseInt(match[2], 10);
           if (!this.isProcessRunning(pid)) {
-            await this.removeDaemonInfo(pid);
+            await this.removeDaemonInfo(ppid, pid);
             cleaned++;
           }
         }

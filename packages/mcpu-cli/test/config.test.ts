@@ -7,14 +7,34 @@ import { existsSync } from 'fs';
 
 describe('ConfigDiscovery', () => {
   let testDir: string;
+  let originalXdgConfigHome: string | undefined;
+  let originalHome: string | undefined;
 
   beforeEach(async () => {
     // Create a temporary directory for test configs
     testDir = join(tmpdir(), `mcpu-test-${Date.now()}`);
     await mkdir(testDir, { recursive: true });
+
+    // Mock XDG_CONFIG_HOME and HOME to prevent loading real user configs
+    originalXdgConfigHome = process.env.XDG_CONFIG_HOME;
+    originalHome = process.env.HOME;
+    process.env.XDG_CONFIG_HOME = join(testDir, '.config');
+    process.env.HOME = testDir;
   });
 
   afterEach(async () => {
+    // Restore original environment
+    if (originalXdgConfigHome !== undefined) {
+      process.env.XDG_CONFIG_HOME = originalXdgConfigHome;
+    } else {
+      delete process.env.XDG_CONFIG_HOME;
+    }
+    if (originalHome !== undefined) {
+      process.env.HOME = originalHome;
+    } else {
+      delete process.env.HOME;
+    }
+
     // Clean up test directory
     if (existsSync(testDir)) {
       await rm(testDir, { recursive: true, force: true });

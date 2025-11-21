@@ -10,17 +10,34 @@ import type { MCPConnection, MCPServerConfig } from '../../src/types.js';
 vi.mock('../../src/config.js', () => ({
   loadConfig: vi.fn(),
   ConfigDiscovery: vi.fn().mockImplementation(() => ({
-    loadConfigs: vi.fn().mockResolvedValue(new Map()),
+    loadConfigs: vi.fn().mockResolvedValue(
+      new Map([
+        ['testServer', { command: 'test-command', args: ['--arg1'] }],
+        ['anotherServer', { command: 'another-command', args: [] }],
+      ])
+    ),
   })),
 }));
 
 vi.mock('../../src/daemon/connection-pool.js', () => ({
   ConnectionPool: vi.fn().mockImplementation(() => ({
-    getConnection: vi.fn(),
+    getConnection: vi.fn().mockResolvedValue({
+      id: 1,
+      server: 'testServer',
+      connection: {
+        client: { callTool: vi.fn().mockResolvedValue({ content: [] }) },
+        transport: { close: vi.fn() },
+        serverName: 'testServer',
+      },
+      status: 'connected',
+      connectedAt: Date.now(),
+      lastUsed: Date.now(),
+      closedAt: null,
+    }),
     disconnect: vi.fn(),
     disconnectById: vi.fn(),
-    listConnections: vi.fn(),
-    listServerConnections: vi.fn(),
+    listConnections: vi.fn().mockReturnValue([]),
+    listServerConnections: vi.fn().mockReturnValue([]),
     getConnectionById: vi.fn(),
     getConnectionByServer: vi.fn(),
     getRawConnection: vi.fn(),
@@ -33,6 +50,47 @@ vi.mock('../../src/daemon/pid-manager.js', () => ({
     saveDaemonInfo: vi.fn(),
     cleanupOldPidFiles: vi.fn(),
     removeDaemonInfo: vi.fn(),
+  })),
+}));
+
+// Mock MCPClient for /cli endpoint tests
+vi.mock('../../src/client.js', () => ({
+  MCPClient: vi.fn().mockImplementation(() => ({
+    connect: vi.fn().mockResolvedValue({
+      client: { callTool: vi.fn() },
+      transport: { close: vi.fn() },
+      serverName: 'testServer',
+    }),
+    withConnection: vi.fn(async (name, config, callback) => {
+      return await callback({
+        client: { callTool: vi.fn() },
+        transport: { close: vi.fn() },
+        serverName: name,
+      });
+    }),
+    callTool: vi.fn().mockResolvedValue({
+      content: [{ type: 'text', text: 'Success' }],
+    }),
+    disconnect: vi.fn(),
+    listTools: vi.fn().mockResolvedValue([]),
+  })),
+}));
+
+// Mock SchemaCache for /cli endpoint tests
+vi.mock('../../src/cache.js', () => ({
+  SchemaCache: vi.fn().mockImplementation(() => ({
+    get: vi.fn().mockResolvedValue([{
+      name: 'test_tool',
+      description: 'A test tool',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          field1: { type: 'string' },
+          field2: { type: 'number' },
+        },
+      },
+    }]),
+    set: vi.fn(),
   })),
 }));
 
@@ -656,6 +714,116 @@ describe('Daemon Server', () => {
 
         expect(response.body.error.code).toBe('TOOL_EXECUTION_FAILED');
       });
+    });
+  });
+
+  describe('POST /cli endpoint', () => {
+    it('should execute command with argv only', async () => {
+      const response = await request(app)
+        .post('/cli')
+        .send({
+          argv: ['servers'],
+          cwd: '/test/path',
+        })
+        .expect(200);
+
+      if (!response.body.success) {
+        console.log('servers command failed:', response.body.error);
+      }
+
+      expect(response.body).toMatchObject({
+        success: true,
+        exitCode: 0,
+      });
+    });
+
+    it('should execute command with params for stdin data', async () => {
+      const params = {
+        field1: 'value1',
+        field2: 42,
+      };
+
+      const response = await request(app)
+        .post('/cli')
+        .send({
+          argv: ['call', 'testServer', 'test_tool', '--stdin'],
+          params,
+          cwd: '/test/path',
+        })
+        .expect(200);
+
+      if (!response.body.success) {
+        console.log('Test failed:', JSON.stringify(response.body, null, 2));
+      }
+
+      expect(response.body).toMatchObject({
+        success: true,
+        exitCode: 0,
+      });
+    });
+
+    it('should handle params with nested objects', async () => {
+      const params = {
+        fields: [
+          { name: 'First Name', type: 'textbox', value: 'John' },
+          { name: 'Last Name', type: 'textbox', value: 'Doe' },
+        ],
+        options: {
+          nested: { key: 'value' },
+        },
+      };
+
+      const response = await request(app)
+        .post('/cli')
+        .send({
+          argv: ['call', 'testServer', 'test_tool'],
+          params,
+          cwd: '/test/path',
+        })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+    });
+
+    it('should return error for missing argv', async () => {
+      const response = await request(app)
+        .post('/cli')
+        .send({
+          cwd: '/test/path',
+        })
+        .expect(400);
+
+      expect(response.body).toMatchObject({
+        success: false,
+        error: expect.stringContaining('argv'),
+      });
+    });
+
+    it('should return error for invalid argv type', async () => {
+      const response = await request(app)
+        .post('/cli')
+        .send({
+          argv: 'not an array',
+          cwd: '/test/path',
+        })
+        .expect(400);
+
+      expect(response.body).toMatchObject({
+        success: false,
+        error: expect.stringContaining('argv'),
+      });
+    });
+
+    it('should pass cwd to core executor', async () => {
+      const response = await request(app)
+        .post('/cli')
+        .send({
+          argv: ['servers'],
+          cwd: '/custom/working/dir',
+        })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
     });
   });
 

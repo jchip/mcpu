@@ -21,26 +21,24 @@ Add this to your `.claude/CLAUDE.md` or project's `CLAUDE.md` to enable Claude C
 
 ### MCPU CLI Daemon
 
-First start the daemon in the background using the Bash tool:
-
-- `mcpu-daemon.mjs &` - Options: `--port=<port-number>` or automatic OS-assigned port
-- Logs port number and PID to console, saves to `$XDG_DATA_HOME/mcpu/daemon.<pid>.json`
-
-Once MCPU daemon is running, use `mcpu-remote` to access MCP tools:
-
-- `mcpu-remote` discovers port number automatically, or use `--port=<port-number>` or `--pid=<pid>`
+Logs port number and PID to console, saves to `$XDG_DATA_HOME/mcpu/daemon.<ppid>-<pid>.json`
 
 ### `mcpu-remote` usage
 
-- `mcpu-remote -- servers` - List all configured MCP servers
-- `mcpu-remote -- tools [servers...]` - List tools from servers
+- `mcpu-remote --ppid=$PPID -- <args for mcpu>` 
 
-**DON'T GUESS, list tools from an MCP server first**
+**WORKFLOW - Always follow this sequence:**
+0. **START DAEMON with run_in_background FIRST**: `mcpu-daemon --ppid=$PPID`
+1. **If you don't know the server, list all servers**: `mcpu-remote -- servers`
+2. `mcpu-remote --ppid=$PPID -- tools [servers...]` - List tools from servers
+3. **If a tool requires complex input, ALWAYS check info BEFORE calling**: `mcpu-remote --ppid=$PPID -- info <server> <tool>` (human-readable)
+4. `mcpu-remote --ppid=$PPID -- call <server> <tool> [--<param>=<value>]` - Execute tool
 
-- `mcpu-remote -- info <server> <tools...>` - Show tool info (human-readable)
-- `mcpu-remote -- call <server> <tool> [--<param>=<value>]` - Execute tool (returns unwrapped text by default)
-- `mcpu-remote -- --yaml info <server> <tools...>` - Get complete raw schema in YAML
-- `mcpu-remote -- --yaml call <server> <tool>` - Execute tool (returns full MCP response structure in YAML)
+**Commands:**
+- `mcpu-remote --ppid=$PPID -- info <server> <tools...>` - Show tool info (human-readable) - **START HERE**
+- `mcpu-remote --ppid=$PPID -- --yaml info <server> <tools...>` - Get complete raw schema (only if human-readable isn't sufficient)
+- `mcpu-remote --ppid=$PPID -- call <server> <tool> [--<param>=<value>]` - Execute tool (returns unwrapped text by default)
+- `mcpu-remote --ppid=$PPID -- --yaml call <server> <tool>` - Execute tool (returns full MCP response structure in YAML)
 
 **Response formats:**
 
@@ -49,7 +47,7 @@ Once MCPU daemon is running, use `mcpu-remote` to access MCP tools:
 
 **When to use `--raw`, `--yaml`, or `--json` flags:**
 
-- For `info`: Get complete tool schema including `inputSchema` and `annotations`
+- For `info`: Get complete tool schema including `inputSchema` and `annotations` (only if human-readable version insufficient)
 - For `call`: Get full MCP response structure instead of just extracted text
 - Useful for debugging, understanding complex parameters, or accessing response metadata
 
@@ -58,7 +56,7 @@ Once MCPU daemon is running, use `mcpu-remote` to access MCP tools:
 For complex parameters, use stdin YAML mode:
 
 ```bash
-mcpu-remote --stdin -- call <server> <tool> <<'EOF'
+mcpu-remote --ppid=$PPID --stdin <<'EOF'
 argv: [call, <server>, <tool>]
 params:
   param1: value1

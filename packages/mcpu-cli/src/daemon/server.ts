@@ -94,9 +94,10 @@ export class DaemonServer {
   private configs = new Map<string, MCPServerConfig>();
   private server: any = null;
   private port: number = 0;
-  private options: { port?: number; verbose?: boolean; config?: string };
+  private options: { port?: number; verbose?: boolean; config?: string; ppid?: number };
+  private parentMonitor: NodeJS.Timeout | null = null;
 
-  constructor(options: { port?: number; verbose?: boolean; config?: string } = {}) {
+  constructor(options: { port?: number; verbose?: boolean; config?: string; ppid?: number } = {}) {
     this.options = options;
     this.configDiscovery = new ConfigDiscovery({
       configFile: options.config,
@@ -105,6 +106,45 @@ export class DaemonServer {
 
     this.setupMiddleware();
     this.setupRoutes();
+  }
+
+  /**
+   * Check if parent process is still alive
+   */
+  private isParentAlive(ppid: number): boolean {
+    try {
+      return process.kill(ppid, 0);
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Start monitoring parent process (for ppid > 0 with real process)
+   */
+  private startParentMonitor(): void {
+    const ppid = this.options.ppid;
+
+    if (!ppid || ppid <= 0) {
+      return; // Only monitor for session-specific daemons (ppid > 0)
+    }
+
+    // Check if parent process actually exists
+    if (!this.isParentAlive(ppid)) {
+      // Parent doesn't exist - treat ppid as just an ID, no monitoring
+      return;
+    }
+
+    // Parent exists - start monitoring every 5 seconds
+    this.parentMonitor = setInterval(() => {
+      if (!this.isParentAlive(ppid)) {
+        console.log(`Parent process ${ppid} terminated, shutting down...`);
+        this.shutdown().catch(err => {
+          console.error('Error during shutdown:', err);
+          process.exit(1);
+        });
+      }
+    }, 5000);
   }
 
   /**
@@ -650,15 +690,21 @@ export class DaemonServer {
           this.port = address.port;
 
           // Write PID file
-          this.pidManager.writeDaemonInfo({
+          this.pidManager.saveDaemonInfo({
             pid: process.pid,
+            ppid: this.options.ppid || 0,
             port: this.port,
             startTime: new Date().toISOString(),
           }).catch(err => {
             console.error('Failed to write PID file:', err);
           });
 
-          console.log(`Daemon started on port ${this.port} (PID: ${process.pid})`);
+          const ppidStr = this.options.ppid ? `, PPID: ${this.options.ppid}` : '';
+          console.log(`Daemon started on port ${this.port} (PID: ${process.pid}${ppidStr})`);
+
+          // Start monitoring parent process (if ppid > 0 and parent exists)
+          this.startParentMonitor();
+
           resolve(this.port);
         });
 
@@ -675,20 +721,47 @@ export class DaemonServer {
   async shutdown(): Promise<void> {
     console.log('Shutting down daemon...');
 
-    // Close all connections
-    await this.pool.shutdown();
+    // Stop parent monitor
+    if (this.parentMonitor) {
+      clearInterval(this.parentMonitor);
+      this.parentMonitor = null;
+    }
 
-    // Remove PID file
-    await this.pidManager.removeDaemonInfo(process.pid);
+    // Close all connections (best effort)
+    try {
+      await this.pool.shutdown();
+    } catch (error) {
+      console.error('Error closing connections:', error);
+    }
 
-    // Close HTTP server
+    // Remove PID file (always attempt cleanup)
+    try {
+      await this.pidManager.removeDaemonInfo(this.options.ppid || 0, process.pid);
+    } catch (error) {
+      console.error('Error removing PID file:', error);
+    }
+
+    // Close HTTP server (best effort)
     if (this.server) {
-      await new Promise<void>((resolve) => {
-        this.server.close(() => {
-          console.log('Server closed');
-          resolve();
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('Server close timeout'));
+          }, 5000);
+
+          this.server.close((err: any) => {
+            clearTimeout(timeout);
+            if (err) {
+              reject(err);
+            } else {
+              console.log('Server closed');
+              resolve();
+            }
+          });
         });
-      });
+      } catch (error) {
+        console.error('Error closing server:', error);
+      }
     }
 
     console.log('Daemon shut down successfully');
