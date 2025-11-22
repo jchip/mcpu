@@ -11,6 +11,13 @@ export interface ConnectionInfo {
   closedAt: number | null;
 }
 
+export interface ConnectionPoolOptions {
+  /** Enable automatic disconnection of idle connections (default: false) */
+  autoDisconnect?: boolean;
+  /** Time in milliseconds before idle connections are closed (default: 5 minutes) */
+  idleTimeoutMs?: number;
+}
+
 /**
  * Manages persistent MCP server connections for the daemon
  */
@@ -24,12 +31,18 @@ export class ConnectionPool {
   private client = new MCPClient();
   private cleanupInterval: NodeJS.Timeout | null = null;
 
-  // Connection TTL: 5 minutes of inactivity
-  private readonly TTL_MS = 5 * 60 * 1000;
+  // Connection TTL: 5 minutes of inactivity (default)
+  private readonly idleTimeoutMs: number;
+  private readonly autoDisconnect: boolean;
 
-  constructor() {
-    // Start periodic cleanup of stale connections
-    this.startCleanup();
+  constructor(options: ConnectionPoolOptions = {}) {
+    this.autoDisconnect = options.autoDisconnect ?? false;
+    this.idleTimeoutMs = options.idleTimeoutMs ?? 5 * 60 * 1000;
+
+    // Start periodic cleanup of stale connections (only if enabled)
+    if (this.autoDisconnect) {
+      this.startCleanup();
+    }
   }
 
   /**
@@ -221,7 +234,7 @@ export class ConnectionPool {
     for (const [serverName, id] of this.serverToId.entries()) {
       const info = this.connectionInfo.get(id);
       if (info && info.status === 'connected') {
-        if (now - info.lastUsed > this.TTL_MS) {
+        if (now - info.lastUsed > this.idleTimeoutMs) {
           toRemove.push(serverName);
         }
       }

@@ -11,3 +11,5 @@ if (existsSync(srcDir)) {
 } else {
   import('../dist/cli.js');
 }
+//# fynSourceMap=true
+//# sourceMappingURL=mcpu.mjs.fyn.map

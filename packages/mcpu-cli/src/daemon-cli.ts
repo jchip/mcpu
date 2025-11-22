@@ -29,12 +29,22 @@ new NixClap({ name: 'mcpu-daemon' })
       new: {
         desc: 'Force new instance (for ppid=0 only)',
       },
+      'auto-disconnect': {
+        desc: 'Enable automatic disconnection of idle MCP connections',
+      },
+      'idle-timeout': {
+        desc: 'Idle timeout in minutes before disconnecting (default: 5)',
+        args: '<minutes number>',
+      },
     },
     exec: async (cmd) => {
       const opts = cmd.jsonMeta.opts;
       const port = opts.port ? parseInt(opts.port as string, 10) : undefined;
       const ppid = opts.ppid ? parseInt(opts.ppid as string, 10) : 0;
       const forceNew = opts.new as boolean | undefined;
+      const autoDisconnect = opts['auto-disconnect'] as boolean | undefined;
+      const idleTimeoutMinutes = opts['idle-timeout'] ? parseInt(opts['idle-timeout'] as string, 10) : undefined;
+      const idleTimeoutMs = idleTimeoutMinutes ? idleTimeoutMinutes * 60 * 1000 : undefined;
 
       const pidManager = new PidManager();
 
@@ -84,6 +94,8 @@ new NixClap({ name: 'mcpu-daemon' })
         config: opts.config as string | undefined,
         verbose: opts.verbose as boolean | undefined,
         ppid,
+        autoDisconnect,
+        idleTimeoutMs,
       });
     },
   })

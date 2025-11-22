@@ -1,9 +1,10 @@
 import express, { type Request, type Response } from 'express';
-import { ConnectionPool, type ConnectionInfo } from './connection-pool.ts';
+import { ConnectionPool, type ConnectionInfo, type ConnectionPoolOptions } from './connection-pool.ts';
 import { PidManager } from './pid-manager.ts';
 import { ConfigDiscovery } from '../config.ts';
 import { coreExecute } from '../core/core.ts';
 import type { MCPServerConfig } from '../types.ts';
+import { type Logger } from './logger.ts';
 
 /**
  * Standard response envelope for success
@@ -86,19 +87,37 @@ function toConnectionResponse(info: ConnectionInfo) {
 /**
  * HTTP daemon server for persistent MCP connections
  */
+export interface DaemonServerOptions {
+  port?: number;
+  verbose?: boolean;
+  config?: string;
+  ppid?: number;
+  logger?: Logger;
+  /** Enable automatic disconnection of idle connections (default: false) */
+  autoDisconnect?: boolean;
+  /** Time in milliseconds before idle connections are closed (default: 5 minutes) */
+  idleTimeoutMs?: number;
+}
+
 export class DaemonServer {
   private app = express();
-  private pool = new ConnectionPool();
+  private pool: ConnectionPool;
   private pidManager = new PidManager();
   private configDiscovery: ConfigDiscovery;
   private configs = new Map<string, MCPServerConfig>();
   private server: any = null;
   private port: number = 0;
-  private options: { port?: number; verbose?: boolean; config?: string; ppid?: number };
+  private options: DaemonServerOptions;
   private parentMonitor: NodeJS.Timeout | null = null;
+  private logger: Logger | null = null;
 
-  constructor(options: { port?: number; verbose?: boolean; config?: string; ppid?: number } = {}) {
+  constructor(options: DaemonServerOptions = {}) {
+    this.logger = options.logger || null;
     this.options = options;
+    this.pool = new ConnectionPool({
+      autoDisconnect: options.autoDisconnect,
+      idleTimeoutMs: options.idleTimeoutMs,
+    });
     this.configDiscovery = new ConfigDiscovery({
       configFile: options.config,
       verbose: options.verbose,
@@ -106,6 +125,18 @@ export class DaemonServer {
 
     this.setupMiddleware();
     this.setupRoutes();
+  }
+
+  /**
+   * Log helper - uses pino logger if available, falls back to console
+   */
+  private log(level: 'info' | 'warn' | 'error' | 'debug', message: string, data?: Record<string, any>): void {
+    if (this.logger) {
+      this.logger[level](data || {}, message);
+    } else {
+      const fn = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log;
+      fn(data ? `${message} ${JSON.stringify(data)}` : message);
+    }
   }
 
   /**
@@ -138,9 +169,9 @@ export class DaemonServer {
     // Parent exists - start monitoring every 5 seconds
     this.parentMonitor = setInterval(() => {
       if (!this.isParentAlive(ppid)) {
-        console.log(`Parent process ${ppid} terminated, shutting down...`);
+        this.log('info', 'Parent process terminated, shutting down', { ppid });
         this.shutdown().catch(err => {
-          console.error('Error during shutdown:', err);
+          this.log('error', 'Error during shutdown', { error: String(err) });
           process.exit(1);
         });
       }
@@ -170,7 +201,7 @@ export class DaemonServer {
     // Request logging
     if (this.options.verbose) {
       this.app.use((req, _res, next) => {
-        console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+        this.log('debug', 'HTTP request', { method: req.method, path: req.path });
         next();
       });
     }
@@ -206,7 +237,7 @@ export class DaemonServer {
       // Shutdown after sending response
       setTimeout(() => {
         this.shutdown().catch(err => {
-          console.error('Error during shutdown:', err);
+          this.log('error', 'Error during shutdown', { error: String(err) });
           process.exit(1);
         });
       }, 100);
@@ -596,7 +627,7 @@ export class DaemonServer {
 
       setTimeout(() => {
         this.shutdown().catch(err => {
-          console.error('Error during shutdown:', err);
+          this.log('error', 'Error during shutdown', { error: String(err) });
           process.exit(1);
         });
       }, 100);
@@ -696,11 +727,14 @@ export class DaemonServer {
             port: this.port,
             startTime: new Date().toISOString(),
           }).catch(err => {
-            console.error('Failed to write PID file:', err);
+            this.log('error', 'Failed to write PID file', { error: String(err) });
           });
 
-          const ppidStr = this.options.ppid ? `, PPID: ${this.options.ppid}` : '';
-          console.log(`Daemon started on port ${this.port} (PID: ${process.pid}${ppidStr})`);
+          this.log('info', 'Daemon started', {
+            port: this.port,
+            pid: process.pid,
+            ppid: this.options.ppid || 0,
+          });
 
           // Start monitoring parent process (if ppid > 0 and parent exists)
           this.startParentMonitor();
@@ -719,7 +753,7 @@ export class DaemonServer {
    * Shutdown the daemon
    */
   async shutdown(): Promise<void> {
-    console.log('Shutting down daemon...');
+    this.log('info', 'Shutting down daemon');
 
     // Stop parent monitor
     if (this.parentMonitor) {
@@ -731,14 +765,14 @@ export class DaemonServer {
     try {
       await this.pool.shutdown();
     } catch (error) {
-      console.error('Error closing connections:', error);
+      this.log('error', 'Error closing connections', { error: String(error) });
     }
 
     // Remove PID file (always attempt cleanup)
     try {
       await this.pidManager.removeDaemonInfo(this.options.ppid || 0, process.pid);
     } catch (error) {
-      console.error('Error removing PID file:', error);
+      this.log('error', 'Error removing PID file', { error: String(error) });
     }
 
     // Close HTTP server (best effort)
@@ -754,17 +788,17 @@ export class DaemonServer {
             if (err) {
               reject(err);
             } else {
-              console.log('Server closed');
+              this.log('debug', 'Server closed');
               resolve();
             }
           });
         });
       } catch (error) {
-        console.error('Error closing server:', error);
+        this.log('error', 'Error closing server', { error: String(error) });
       }
     }
 
-    console.log('Daemon shut down successfully');
+    this.log('info', 'Daemon shut down successfully');
     process.exit(0);
   }
 

@@ -11,3 +11,5 @@ if (existsSync(srcDir)) {
 } else {
   import('../dist/remote-cli.js');
 }
+//# fynSourceMap=true
+//# sourceMappingURL=mcpu-remote.mjs.fyn.map

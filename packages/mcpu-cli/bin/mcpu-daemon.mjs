@@ -11,3 +11,5 @@ if (existsSync(srcDir)) {
 } else {
   import('../dist/daemon-cli.js');
 }
+//# fynSourceMap=true
+//# sourceMappingURL=mcpu-daemon.mjs.fyn.map
