@@ -4,9 +4,18 @@ import { NixClap } from 'nix-clap';
 import chalk from 'chalk';
 import { coreExecute } from './core/core.ts';
 import { VERSION } from './version.ts';
+import { addServer, addServerJson, parseEnvFlags, parseHeaderFlags, type Scope } from './commands/mcp-add.ts';
 
 // Create CLI with nix-clap
-const nc = new NixClap({ name: 'mcpu' })
+const nc = new NixClap({
+  name: 'mcpu',
+  handlers: {
+    'no-action': () => {
+      nc.showHelp();
+      process.exit(0);
+    },
+  },
+})
   .version(VERSION)
   .usage('$0 [options] <command>')
   .init2({
@@ -102,6 +111,217 @@ const nc = new NixClap({ name: 'mcpu' })
             console.error(result.error);
           }
           process.exit(result.exitCode || 0);
+        },
+      },
+      'add-json': {
+        desc: 'Add an MCP server with a JSON config string',
+        args: '<name string> <json string>',
+        options: {
+          scope: {
+            alias: 's',
+            desc: 'Config scope: local (default), project, or user',
+            args: '<scope string>',
+            default: 'local',
+          },
+        },
+        exec: async (cmd: any) => {
+          const opts = cmd.jsonMeta.opts;
+          const args = cmd.jsonMeta.args;
+
+          const name = args.name;
+          const json = args.json;
+          const scope = (opts.scope || 'local') as Scope;
+
+          const result = await addServerJson(name, json, scope);
+
+          console.log(result.message);
+          process.exit(result.success ? 0 : 1);
+        },
+      },
+      add: {
+        desc: 'Add a new MCP server (alias for "mcp add")',
+        args: '<name string> [url-or-command string]',
+        allowUnknownOption: true,
+        options: {
+          transport: {
+            alias: 't',
+            desc: 'Transport type: stdio, http, or sse',
+            args: '<type string>',
+            default: 'stdio',
+          },
+          scope: {
+            alias: 's',
+            desc: 'Config scope: local (default), project, or user',
+            args: '<scope string>',
+            default: 'local',
+          },
+          env: {
+            alias: 'e',
+            desc: 'Environment variable (KEY=VALUE), can be repeated',
+            args: '<env string>',
+          },
+          header: {
+            desc: 'HTTP header (KEY=VALUE), can be repeated',
+            args: '<header string>',
+          },
+        },
+        exec: async (cmd: any) => {
+          const opts = cmd.jsonMeta.opts;
+          const args = cmd.jsonMeta.args;
+
+          // Get args after -- from process.argv
+          const ddIndex = process.argv.indexOf('--');
+          const restArgs = ddIndex !== -1 ? process.argv.slice(ddIndex + 1) : [];
+
+          const name = args.name;
+          const transport = (opts.transport || 'stdio') as 'stdio' | 'http' | 'sse';
+          const scope = (opts.scope || 'local') as Scope;
+
+          // Parse env flags (can be string or array)
+          const envFlags = Array.isArray(opts.env) ? opts.env : (opts.env ? [opts.env] : []);
+          const env = parseEnvFlags(envFlags);
+
+          // Parse header flags (can be string or array)
+          const headerFlags = Array.isArray(opts.header) ? opts.header : (opts.header ? [opts.header] : []);
+          const headers = parseHeaderFlags(headerFlags);
+
+          // For http/sse, the second positional arg is the URL
+          // For stdio, remaining args after -- form the command
+          let url: string | undefined;
+          let command: string[] | undefined;
+
+          if (transport === 'http' || transport === 'sse') {
+            url = args['url-or-command'];
+          } else {
+            // Stdio: command is everything after --
+            if (restArgs.length > 0) {
+              command = restArgs;
+            } else if (args['url-or-command']) {
+              // Allow single command without --
+              command = [args['url-or-command']];
+            }
+          }
+
+          const result = await addServer({
+            name,
+            transport,
+            scope,
+            url,
+            command,
+            env,
+            headers,
+          });
+
+          console.log(result.message);
+          process.exit(result.success ? 0 : 1);
+        },
+      },
+      mcp: {
+        desc: 'MCP server management commands',
+        subCommands: {
+          'add-json': {
+            desc: 'Add an MCP server with a JSON config string',
+            args: '<name string> <json string>',
+            options: {
+              scope: {
+                alias: 's',
+                desc: 'Config scope: local (default), project, or user',
+                args: '<scope string>',
+                default: 'local',
+              },
+            },
+            exec: async (cmd: any) => {
+              const opts = cmd.jsonMeta.opts;
+              const args = cmd.jsonMeta.args;
+
+              const name = args.name;
+              const json = args.json;
+              const scope = (opts.scope || 'local') as Scope;
+
+              const result = await addServerJson(name, json, scope);
+
+              console.log(result.message);
+              process.exit(result.success ? 0 : 1);
+            },
+          },
+          add: {
+            desc: 'Add a new MCP server',
+            args: '<name string> [url-or-command string]',
+            allowUnknownOption: true,
+            options: {
+              transport: {
+                alias: 't',
+                desc: 'Transport type: stdio, http, or sse',
+                args: '<type string>',
+                default: 'stdio',
+              },
+              scope: {
+                alias: 's',
+                desc: 'Config scope: local (default), project, or user',
+                args: '<scope string>',
+                default: 'local',
+              },
+              env: {
+                alias: 'e',
+                desc: 'Environment variable (KEY=VALUE), can be repeated',
+                args: '<env string>',
+              },
+              header: {
+                desc: 'HTTP header (KEY=VALUE), can be repeated',
+                args: '<header string>',
+              },
+            },
+            exec: async (cmd: any) => {
+              const opts = cmd.jsonMeta.opts;
+              const args = cmd.jsonMeta.args;
+
+              // Get args after -- from process.argv
+              const ddIndex = process.argv.indexOf('--');
+              const restArgs = ddIndex !== -1 ? process.argv.slice(ddIndex + 1) : [];
+
+              const name = args.name;
+              const transport = (opts.transport || 'stdio') as 'stdio' | 'http' | 'sse';
+              const scope = (opts.scope || 'local') as Scope;
+
+              // Parse env flags (can be string or array)
+              const envFlags = Array.isArray(opts.env) ? opts.env : (opts.env ? [opts.env] : []);
+              const env = parseEnvFlags(envFlags);
+
+              // Parse header flags (can be string or array)
+              const headerFlags = Array.isArray(opts.header) ? opts.header : (opts.header ? [opts.header] : []);
+              const headers = parseHeaderFlags(headerFlags);
+
+              // For http/sse, the second positional arg is the URL
+              // For stdio, remaining args after -- form the command
+              let url: string | undefined;
+              let command: string[] | undefined;
+
+              if (transport === 'http' || transport === 'sse') {
+                url = args['url-or-command'];
+              } else {
+                // Stdio: command is everything after --
+                if (restArgs.length > 0) {
+                  command = restArgs;
+                } else if (args['url-or-command']) {
+                  // Allow single command without --
+                  command = [args['url-or-command']];
+                }
+              }
+
+              const result = await addServer({
+                name,
+                transport,
+                scope,
+                url,
+                command,
+                env,
+                headers,
+              });
+
+              console.log(result.message);
+              process.exit(result.success ? 0 : 1);
+            },
+          },
         },
       },
     },

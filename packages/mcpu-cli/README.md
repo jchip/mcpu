@@ -107,6 +107,51 @@ EOF
 
 ## Commands
 
+### `mcpu add <name> [command]`
+
+Add a new MCP server. Works like `claude mcp add`.
+
+```bash
+# Add stdio server with command after --
+mcpu add airtable --env AIRTABLE_API_KEY=xxx -- npx -y airtable-mcp-server
+
+# Add HTTP server
+mcpu add --transport http notion https://mcp.notion.com/mcp
+
+# Add to user config (global)
+mcpu add --scope user memory -- npx -y @modelcontextprotocol/server-memory
+
+# Multiple env vars
+mcpu add myserver -e KEY1=val1 -e KEY2=val2 -- node server.js
+```
+
+**Options:**
+- `-t, --transport <type>` - Transport type: `stdio` (default), `http`, or `sse`
+- `-s, --scope <scope>` - Config scope: `local` (default), `project`, or `user`
+- `-e, --env <KEY=VALUE>` - Environment variable (can repeat)
+- `--header <KEY=VALUE>` - HTTP header (can repeat)
+
+### `mcpu add-json <name> <json>`
+
+Add an MCP server with a JSON config string. Works like `claude mcp add-json`.
+
+```bash
+# Simple stdio server
+mcpu add-json echo '{"command": "echo", "args": ["hello"]}'
+
+# Complex config with env vars
+mcpu add-json myserver '{"command": "uvx", "args": ["some-mcp", "--opt"], "env": {"API_KEY": "secret"}}'
+
+# HTTP server
+mcpu add-json api '{"url": "https://api.example.com/mcp"}'
+
+# Add to user config
+mcpu add-json --scope user memory '{"command": "npx", "args": ["-y", "@modelcontextprotocol/server-memory"]}'
+```
+
+**Options:**
+- `-s, --scope <scope>` - Config scope: `local` (default), `project`, or `user`
+
 ### `mcpu servers`
 
 Lists configured MCP servers.
