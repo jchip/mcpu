@@ -306,6 +306,14 @@ const nc = new NixClap({
 
   // If there are remaining args after --, or --stdin is set, forward to daemon
   const opts = parsed.command.jsonMeta.opts;
+  if (!parsed._ || parsed._.length === 0) {
+    if (!opts.stdin) {
+      // No args and no stdin - show help
+      nc.showHelp();
+      process.exit(0);
+    }
+  }
+
   if ((parsed._ && parsed._.length > 0) || opts.stdin) {
     try {
       const ppid = opts.ppid ? parseInt(opts.ppid as string, 10) : undefined;

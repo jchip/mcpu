@@ -2,7 +2,14 @@
 
 > **Universal MCP gateway for any AI agent - Zero upfront tokens, unlimited servers**
 
-MCPU enables ANY AI agent to use MCP servers, even without native MCP SDK integration. It compresses schemas by 97%\* and provides on-demand discovery of unlimited MCP servers with zero upfront token cost.
+MCPU enables AI agents with a Bash tool to use MCP servers, even without native MCP SDK integration. It compresses schemas by 97%\* and provides on-demand discovery of unlimited MCP servers with zero upfront token cost.
+
+**Requirements:** The AI agent must have a Bash tool that supports:
+
+- Running background processes (`command &` or `run_in_background: true`)
+- Executing shell commands and reading their output
+
+Currently tested with: **Claude Code**
 
 \*Example: The Playwright MCP server alone requires ~14,000 tokens upfront for its schema. MCPU reduces this to just a few hundred tokens of instructions.
 
@@ -19,26 +26,30 @@ Add this to your `.claude/CLAUDE.md` or project's `CLAUDE.md` to enable Claude C
 ````markdown
 ## MCP Servers through MCPU Tools
 
-### MCPU CLI Daemon
+### MCPU Daemon and `mcpu-remote` usage
 
-Logs port number and PID to console, saves to `$XDG_DATA_HOME/mcpu/daemon.<ppid>-<pid>.json`
+**General Command formats**
 
-### `mcpu-remote` usage
+- Start daemon (background): `mcpu-daemon --ppid=$PPID &` (use `run_in_background: true`)
+- Send remote commands to daemon: `mcpu-remote --ppid=$PPID -- <args for mcpu>`
 
-- `mcpu-remote --ppid=$PPID -- <args for mcpu>` 
+**mcpu-remote Commands and their flags and args:**
 
-**WORKFLOW - Always follow this sequence:**
-0. **START DAEMON with run_in_background FIRST**: `mcpu-daemon --ppid=$PPID`
-1. **If you don't know the server, list all servers**: `mcpu-remote -- servers`
-2. `mcpu-remote --ppid=$PPID -- tools [servers...]` - List tools from servers
-3. **If a tool requires complex input, ALWAYS check info BEFORE calling**: `mcpu-remote --ppid=$PPID -- info <server> <tool>` (human-readable)
-4. `mcpu-remote --ppid=$PPID -- call <server> <tool> [--<param>=<value>]` - Execute tool
+- ALWAYS START command with `mcpu-remote --ppid=$PPID`
+- List mcp servers: `-- servers`
+- List tools of mcp servers: `-- tools [servers...]`
+- Get tool info in unwrapped text format: `-- info <server> <tools...>`
+- Get complete raw schema (if unwrapped text isn't sufficient): `-- --yaml info <server> <tools...>`
+- Call tool and receive unwrapped text response: `-- call <server> <tool> [--<param>=<value>]`
+- Call tool and receive full MCP response structure in YAML: `-- --yaml call <server> <tool>`
 
-**Commands:**
-- `mcpu-remote --ppid=$PPID -- info <server> <tools...>` - Show tool info (human-readable) - **START HERE**
-- `mcpu-remote --ppid=$PPID -- --yaml info <server> <tools...>` - Get complete raw schema (only if human-readable isn't sufficient)
-- `mcpu-remote --ppid=$PPID -- call <server> <tool> [--<param>=<value>]` - Execute tool (returns unwrapped text by default)
-- `mcpu-remote --ppid=$PPID -- --yaml call <server> <tool>` - Execute tool (returns full MCP response structure in YAML)
+**WORKFLOW - ALWAYS FOLLOW THIS SEQUENCE:**
+
+1. **START DAEMON** (`run_in_background: true`) - skip if already running
+2. **LIST SERVERS** - skip if known
+3. **LIST TOOLS** - skip if known
+4. **GET TOOL INFO** - skip if already retrieved or tool has no/simple params
+5. **CALL TOOL** - using info from above
 
 **Response formats:**
 
@@ -51,7 +62,7 @@ Logs port number and PID to console, saves to `$XDG_DATA_HOME/mcpu/daemon.<ppid>
 - For `call`: Get full MCP response structure instead of just extracted text
 - Useful for debugging, understanding complex parameters, or accessing response metadata
 
-### `mcpu-remote` stdin YAML input mode
+### stdin YAML input mode
 
 For complex parameters, use stdin YAML mode:
 
@@ -84,9 +95,15 @@ Create `.config/mcpu/config.local.json` in your project:
 
 ## Daemon Mode
 
+The daemon keeps MCP server connections alive for faster repeated tool calls.
+
 ```bash
-# Start daemon
+# Start daemon (connections stay alive indefinitely by default)
 mcpu-daemon &
+
+# Start with auto-disconnect of idle connections
+mcpu-daemon --auto-disconnect                    # 5 min default timeout
+mcpu-daemon --auto-disconnect --idle-timeout 10  # 10 min timeout
 
 # Use remote client
 mcpu-remote -- servers
@@ -104,6 +121,14 @@ params:
       value: user@example.com
 EOF
 ```
+
+**Daemon Options:**
+
+- `--port <port>` - Port to listen on (default: OS assigned)
+- `--ppid <pid>` - Parent process ID (daemon exits when parent dies)
+- `--auto-disconnect` - Enable automatic disconnection of idle MCP connections
+- `--idle-timeout <minutes>` - Idle timeout before disconnecting (default: 5)
+- `--verbose` - Show detailed logging
 
 ## Commands
 
@@ -126,6 +151,7 @@ mcpu add myserver -e KEY1=val1 -e KEY2=val2 -- node server.js
 ```
 
 **Options:**
+
 - `-t, --transport <type>` - Transport type: `stdio` (default), `http`, or `sse`
 - `-s, --scope <scope>` - Config scope: `local` (default), `project`, or `user`
 - `-e, --env <KEY=VALUE>` - Environment variable (can repeat)
@@ -150,6 +176,7 @@ mcpu add-json --scope user memory '{"command": "npx", "args": ["-y", "@modelcont
 ```
 
 **Options:**
+
 - `-s, --scope <scope>` - Config scope: `local` (default), `project`, or `user`
 
 ### `mcpu servers`
@@ -161,10 +188,15 @@ Lists configured MCP servers.
 Lists available tools.
 
 ```bash
-mcpu tools                        # All tools
-mcpu tools filesystem             # Specific server
-mcpu tools filesystem playwright  # Multiple servers
+mcpu tools                        # All tools from all servers
+mcpu tools filesystem             # Tools from specific server
+mcpu tools filesystem playwright  # Tools from multiple servers
+mcpu tools --names                # Names only (no descriptions)
 ```
+
+**Options:**
+
+- `--names` - Show only tool names, no descriptions
 
 ### `mcpu info <server> <tools...>`
 
@@ -216,10 +248,11 @@ MCPU follows the [XDG Base Directory](https://specifications.freedesktop.org/bas
 - `$XDG_CACHE_HOME/mcpu/` - Tool schema cache (defaults to `~/.cache/mcpu/`)
 - 24-hour TTL, use `--no-cache` to force refresh
 
-### Daemon PID Files:
+### Daemon Files:
 
-- `$XDG_DATA_HOME/mcpu/daemon.<pid>.json` - Daemon port/PID info (defaults to `~/.local/share/mcpu/`)
-- Auto-cleaned when daemon stops
+- `$XDG_DATA_HOME/mcpu/daemon.<ppid>-<pid>.json` - Daemon port/PID info (defaults to `~/.local/share/mcpu/`)
+- `$XDG_DATA_HOME/mcpu/logs/daemon.<ppid>-<pid>.log` - Daemon log file (JSON format, always written)
+- PID files auto-cleaned when daemon stops
 
 ## Global Options
 
