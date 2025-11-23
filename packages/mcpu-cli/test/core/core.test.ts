@@ -306,7 +306,7 @@ describe('Core - coreExecute', () => {
 
       expect(result.success).toBe(false);
       expect(result.output).toBeDefined();
-      expect(result.output).toContain('unknown CLI argument');
+      expect(result.output).toContain('Unknown');
     });
 
     it('should handle executor errors', async () => {

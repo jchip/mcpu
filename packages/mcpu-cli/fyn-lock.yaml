@@ -6,7 +6,7 @@ $pkg:
   '@modelcontextprotocol/sdk': ^1.0.4
   chalk: ^5.3.0
   express: ^5.1.0
-  nix-clap: ^2.4.2
+  nix-clap: ../../../nix-clap
   optional-require: ^2.1.0
   pino: ^10.1.0
   pino-pretty: ^13.1.2
@@ -19,8 +19,8 @@ $pkg:
   '@vitest/coverage-v8': ^2.1.9
   supertest: ^7.1.4
   tsx: ^4.19.0
+  typescript: ^5.9.3
   vitest: ^2.0.0
-  xtsjs: ../xtsjs
 '@ampproject/remapping':
  _latest: 2.3.0
  _:
@@ -76,14 +76,6 @@ $pkg:
  _:
   0.21.5: 0.21.5
   0.25.12: 0.25.12
-  0.27.0: 0.27.0
- 0.27.0:
-  $: sha512-uJOQKYCcHhg07DL7i8MzjvS2LaP7W7Pn/7uA0B5S1EnqAirJtbyw4yC5jQ5qcFjHK9l6o/MX9QisBg12kNkdHg==
-  _: 'https://registry.npmjs.org/@esbuild/darwin-arm64/-/darwin-arm64-0.27.0.tgz'
-  os:
-   - darwin
-  cpu:
-   - arm64
  0.25.12:
   $: sha512-N3zl+lxHCifgIlcMUP5016ESkeQjLj/959RxxNYIthIg+CQHInujFuXeWbWMgnTo4cp5XVHqFPmpyu9J65C1Yg==
   _: 'https://registry.npmjs.org/@esbuild/darwin-arm64/-/darwin-arm64-0.25.12.tgz'
@@ -886,39 +878,7 @@ esbuild:
  _latest: 0.27.0
  _:
   ^0.21.3: 0.21.5
-  ^0.27.0: 0.27.0
   ~0.25.0: 0.25.12
- 0.27.0:
-  hasI: 1
-  $: sha512-jd0f4NHbD6cALCyGElNpGAOtWxSq46l9X/sWB0Nzd5er4Kz2YTm+Vl0qKFT9KUJvD8+fiO8AvoHhFvEatfVixA==
-  _: 'https://registry.npmjs.org/esbuild/-/esbuild-0.27.0.tgz'
-  optionalDependencies:
-   '@esbuild/aix-ppc64': 0.27.0
-   '@esbuild/android-arm': 0.27.0
-   '@esbuild/android-arm64': 0.27.0
-   '@esbuild/android-x64': 0.27.0
-   '@esbuild/darwin-arm64': 0.27.0
-   '@esbuild/darwin-x64': 0.27.0
-   '@esbuild/freebsd-arm64': 0.27.0
-   '@esbuild/freebsd-x64': 0.27.0
-   '@esbuild/linux-arm': 0.27.0
-   '@esbuild/linux-arm64': 0.27.0
-   '@esbuild/linux-ia32': 0.27.0
-   '@esbuild/linux-loong64': 0.27.0
-   '@esbuild/linux-mips64el': 0.27.0
-   '@esbuild/linux-ppc64': 0.27.0
-   '@esbuild/linux-riscv64': 0.27.0
-   '@esbuild/linux-s390x': 0.27.0
-   '@esbuild/linux-x64': 0.27.0
-   '@esbuild/netbsd-arm64': 0.27.0
-   '@esbuild/netbsd-x64': 0.27.0
-   '@esbuild/openbsd-arm64': 0.27.0
-   '@esbuild/openbsd-x64': 0.27.0
-   '@esbuild/openharmony-arm64': 0.27.0
-   '@esbuild/sunos-x64': 0.27.0
-   '@esbuild/win32-arm64': 0.27.0
-   '@esbuild/win32-ia32': 0.27.0
-   '@esbuild/win32-x64': 0.27.0
  0.25.12:
   hasI: 1
   $: sha512-bbPBYYrtZbkt6Os6FiTLCTFxvq4tt3JKall1vRwshA3fdVztsLAatFaZobhkBC8/BrPetoa0oksYoKXoG4ryJg==
@@ -1555,13 +1515,13 @@ negotiator:
   $: sha512-8Ofs/AUQh8MaEcrlq5xOX0CQ9ypTF5dl78mjlMNfOK08fzpgTHQRQPBxcPlEtIw0yRpws+Zo/3r+5WRby7u3Gg==
   _: 'https://registry.npmjs.org/negotiator/-/negotiator-1.0.0.tgz'
 nix-clap:
- _latest: 1.3.13
+ _latest: 2.4.3-fynlocal_h
  _:
-  ^2.4.2: 2.4.2
- 2.4.2:
+  ../../../nix-clap: 2.4.3-fynlocal_h
+ 2.4.3-fynlocal_h:
   top: 1
-  $: sha512-AdBQ6iVJrJxkBbtqu6eHr6c0RW/LCy9xgREnU6s6qAmeIhQZv5N7PxsgLIXEnowYCgcwpkxh87hRGSEkryiZ0A==
-  _: 'https://registry.npmjs.org/nix-clap/-/nix-clap-2.4.2.tgz'
+  $: local
+  _: ../../../nix-clap
   dependencies:
    tslib: ^2.6.2
 object-assign:
@@ -2272,6 +2232,14 @@ type-is:
    content-type: ^1.0.5
    media-typer: ^1.1.0
    mime-types: ^3.0.0
+typescript:
+ _latest: 5.9.3
+ _:
+  ^5.9.3: 5.9.3
+ 5.9.3:
+  top: 1
+  $: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==
+  _: 'https://registry.npmjs.org/typescript/-/typescript-5.9.3.tgz'
 undici-types:
  _latest: 7.16.0
  _:
@@ -2411,19 +2379,6 @@ wrappy:
  1.0.2:
   $: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==
   _: 'https://registry.npmjs.org/wrappy/-/wrappy-1.0.2.tgz'
-xtsjs:
- _latest: 0.1.0-fynlocal_h
- _:
-  ../xtsjs: 0.1.0-fynlocal_h
- 0.1.0-fynlocal_h:
-  top: 1
-  $: local
-  _: ../xtsjs
-  dependencies:
-   esbuild: ^0.27.0
-   nix-clap: ^2.4.2
-  peerDependencies:
-   typescript: '>=5.0.0'
 yaml:
  _latest: 2.8.1
  _:

@@ -30,6 +30,32 @@ export const MCPServerConfigSchema = z.union([
 
 export type MCPServerConfig = z.infer<typeof MCPServerConfigSchema>;
 
+// Type for stdio config
+export type StdioConfig = z.infer<typeof StdioConfigSchema>;
+
+// Type for HTTP config
+export type HttpConfig = z.infer<typeof HttpConfigSchema>;
+
+// Type for WebSocket config
+export type WebSocketConfig = z.infer<typeof WebSocketConfigSchema>;
+
+// Type guards for MCPServerConfig
+export function isStdioConfig(config: MCPServerConfig): config is StdioConfig {
+  return 'command' in config;
+}
+
+export function isHttpConfig(config: MCPServerConfig): config is HttpConfig {
+  return 'type' in config && config.type === 'http';
+}
+
+export function isWebSocketConfig(config: MCPServerConfig): config is WebSocketConfig {
+  return 'type' in config && config.type === 'websocket';
+}
+
+export function isUrlConfig(config: MCPServerConfig): config is HttpConfig | WebSocketConfig {
+  return 'url' in config;
+}
+
 // Claude settings.json schema
 export const ClaudeSettingsSchema = z.object({
   mcpServers: z.record(MCPServerConfigSchema).optional(),

@@ -7,6 +7,7 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ConnectionPool } from '../daemon/connection-pool.ts';
 import { ExecutionContext } from './context.ts';
 import { formatToolInfo, formatMcpResponse } from '../formatters.ts';
+import { isStdioConfig, isUrlConfig, isWebSocketConfig } from '../types.ts';
 
 /**
  * Core command executor - shared logic for CLI and daemon
@@ -207,12 +208,12 @@ export async function executeServersCommand(
             output += `  Tools: ${info.toolCount}\n`;
           }
 
-          if ('url' in config) {
+          if (isUrlConfig(config)) {
             const url = new URL(config.url);
-            const isWebSocket = config.type === 'websocket' || url.protocol === 'ws:' || url.protocol === 'wss:';
-            output += `  Type: ${isWebSocket ? 'websocket' : 'http'}\n`;
+            const isWs = isWebSocketConfig(config) || url.protocol === 'ws:' || url.protocol === 'wss:';
+            output += `  Type: ${isWs ? 'websocket' : 'http'}\n`;
             output += `  URL: ${config.url}\n`;
-          } else {
+          } else if (isStdioConfig(config)) {
             output += `  Type: stdio\n`;
             output += `  Command: ${config.command}\n`;
             if (config.args && config.args.length > 0) {
@@ -248,12 +249,12 @@ export async function executeServersCommand(
           parts.push(hasConnection ? 'connected' : 'disconnected');
 
           // Type info
-          if ('url' in config) {
+          if (isUrlConfig(config)) {
             const url = new URL(config.url);
-            const isWebSocket = config.type === 'websocket' || url.protocol === 'ws:' || url.protocol === 'wss:';
-            parts.push(`Type: ${isWebSocket ? 'websocket' : 'http'}`);
+            const isWs = isWebSocketConfig(config) || url.protocol === 'ws:' || url.protocol === 'wss:';
+            parts.push(`Type: ${isWs ? 'websocket' : 'http'}`);
             parts.push(`URL: ${config.url}`);
-          } else {
+          } else if (isStdioConfig(config)) {
             parts.push(`Type: stdio`);
             if (hasConnection) {
               // Connected: don't show command
@@ -262,11 +263,11 @@ export async function executeServersCommand(
               const cmdParts = [config.command, ...(config.args || [])];
               parts.push(`Command: ${cmdParts.join(' ')}`);
             }
-          }
 
-          // ENV
-          if (config.env && Object.keys(config.env).length > 0) {
-            parts.push(`ENV: ${JSON.stringify(config.env)}`);
+            // ENV
+            if (config.env && Object.keys(config.env).length > 0) {
+              parts.push(`ENV: ${JSON.stringify(config.env)}`);
+            }
           }
 
           // Server info (only if connected)
@@ -514,7 +515,7 @@ export async function executeInfoCommand(
     if (ctx.json || ctx.yaml || options.raw) {
       // If --raw is used without explicit format, default to JSON (native MCP format)
       const outputCtx = options.raw && !ctx.json && !ctx.yaml
-        ? { ...ctx, json: true }
+        ? new ExecutionContext({ cwd: ctx.cwd, verbose: ctx.verbose, json: true, yaml: false, raw: ctx.raw, configFile: ctx.configFile, noCache: ctx.noCache })
         : ctx;
 
       return {
@@ -677,7 +678,7 @@ export async function executeCallCommand(
       if (ctx.json || ctx.yaml || ctx.raw) {
         // --raw defaults to JSON (native MCP format), unless --yaml is explicitly set
         const outputCtx = ctx.raw && !ctx.json && !ctx.yaml
-          ? { ...ctx, json: true }
+          ? new ExecutionContext({ cwd: ctx.cwd, verbose: ctx.verbose, json: true, yaml: false, raw: ctx.raw, configFile: ctx.configFile, noCache: ctx.noCache })
           : ctx;
         output = formatOutput(result, outputCtx);
       } else {

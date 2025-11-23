@@ -40,7 +40,7 @@
   },
   "dependencies": {
     "esbuild": "^0.27.0",
-    "nix-clap": "^2.4.2"
+    "nix-clap": "^2.4.3"
   },
   "peerDependencies": {
     "typescript": ">=5.0.0"

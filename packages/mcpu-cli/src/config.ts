@@ -2,7 +2,7 @@ import { readFile } from 'fs/promises';
 import { homedir } from 'os';
 import { join, resolve } from 'path';
 import { existsSync } from 'fs';
-import { ProjectMCPConfigSchema, type MCPServerConfig } from './types.ts';
+import { ProjectMCPConfigSchema, type MCPServerConfig, isStdioConfig, type StdioConfig } from './types.ts';
 
 /**
  * Discovers MCP server configurations from multiple sources:
@@ -77,7 +77,7 @@ export class ConfigDiscovery {
 
   private normalizeConfig(config: MCPServerConfig): MCPServerConfig {
     // HTTP configs don't need normalization
-    if ('url' in config) {
+    if (!isStdioConfig(config)) {
       return config;
     }
 
@@ -92,7 +92,7 @@ export class ConfigDiscovery {
     return {
       ...config,
       command,
-    };
+    } as StdioConfig;
   }
 
   /**

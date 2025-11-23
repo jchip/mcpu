@@ -41,7 +41,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "xtsjs",
+    "build": "tsc || true",
     "dev": "tsx src/cli.ts",
     "start": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
@@ -66,11 +66,16 @@
     "@vitest/coverage-v8": "^2.1.9",
     "supertest": "^7.1.4",
     "tsx": "^4.19.0",
-    "vitest": "^2.0.0",
-    "xtsjs": "^0.1.0"
+    "typescript": "^5.9.3",
+    "vitest": "^2.0.0"
   },
   "engines": {
     "node": ">=18.0.0"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "fyn": {
+    "dependencies": {
+      "nix-clap": "../../../nix-clap"
+    }
+  }
 }

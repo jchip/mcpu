@@ -4,7 +4,7 @@ $fyn:
 $pkg:
  dep:
   esbuild: ^0.27.0
-  nix-clap: ^2.4.2
+  nix-clap: ^2.4.3
  dev:
   '@types/node': ^22.0.0
   tsx: ^4.19.0
@@ -127,11 +127,11 @@ get-tsconfig:
 nix-clap:
  _latest: 1.3.13
  _:
-  ^2.4.2: 2.4.2
- 2.4.2:
+  ^2.4.3: 2.4.3
+ 2.4.3:
   top: 1
-  $: sha512-AdBQ6iVJrJxkBbtqu6eHr6c0RW/LCy9xgREnU6s6qAmeIhQZv5N7PxsgLIXEnowYCgcwpkxh87hRGSEkryiZ0A==
-  _: 'https://registry.npmjs.org/nix-clap/-/nix-clap-2.4.2.tgz'
+  $: sha512-OBRkfnh+7xPQlC2jbjIpccPxFLMkR18A7BG/rJHIud1GSoUcdcUOoRx+ap4xXarz7BjveIfWx9yHU8DAutJwOQ==
+  _: 'https://registry.npmjs.org/nix-clap/-/nix-clap-2.4.3.tgz'
   dependencies:
    tslib: ^2.6.2
 resolve-pkg-maps:

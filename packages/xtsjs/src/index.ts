@@ -52,6 +52,18 @@ export interface XtsjsOptions {
   declaration?: boolean;
 
   /**
+   * Output format: 'esm' or 'cjs'
+   * @default 'esm'
+   */
+  format?: 'esm' | 'cjs';
+
+  /**
+   * Run type checking before build (requires TypeScript and tsconfig.json)
+   * @default false
+   */
+  typecheck?: boolean;
+
+  /**
    * Additional esbuild options to merge
    */
   esbuildOptions?: Partial<BuildOptions>;
@@ -142,6 +154,58 @@ function getDefaultCompilerOptions(
 }
 
 /**
+ * Run type checking without emitting files
+ */
+async function runTypeCheck(srcDir: string): Promise<void> {
+  const ts = await loadTypeScript();
+
+  if (!ts) {
+    throw new Error("TypeScript is required for type checking. Install it with: npm install --save-dev typescript");
+  }
+
+  const configPath = ts.findConfigFile(
+    process.cwd(),
+    ts.sys.fileExists,
+    "tsconfig.json"
+  );
+
+  if (!configPath) {
+    throw new Error("tsconfig.json is required for type checking. Generate one with: xtsjs init");
+  }
+
+  const configFile = ts.readConfigFile(configPath, ts.sys.readFile);
+  const parsedConfig = ts.parseJsonConfigFileContent(
+    configFile.config,
+    ts.sys,
+    dirname(configPath)
+  );
+
+  // Override to noEmit for type checking only
+  const compilerOptions = {
+    ...parsedConfig.options,
+    noEmit: true,
+  };
+
+  const files = findEntryPoints(srcDir);
+  const program = ts.createProgram(files, compilerOptions);
+  const diagnostics = ts.getPreEmitDiagnostics(program);
+
+  if (diagnostics.length > 0) {
+    const formatHost = {
+      getCanonicalFileName: (path: string) => path,
+      getCurrentDirectory: ts.sys.getCurrentDirectory,
+      getNewLine: () => ts.sys.newLine,
+    };
+
+    const errorMessage = ts.formatDiagnosticsWithColorAndContext(
+      diagnostics,
+      formatHost
+    );
+    throw new Error(`Type checking failed:\n${errorMessage}`);
+  }
+}
+
+/**
  * Generate TypeScript declaration files using tsc
  */
 async function generateDeclarations(
@@ -227,6 +291,8 @@ export async function xtsjs(options: XtsjsOptions = {}): Promise<void> {
     target = "node18",
     sourcemap = false,
     declaration = true,
+    format = "esm",
+    typecheck = false,
     esbuildOptions = {},
   } = options;
 
@@ -236,11 +302,16 @@ export async function xtsjs(options: XtsjsOptions = {}): Promise<void> {
     throw new Error(`No TypeScript files found in ${srcDir}`);
   }
 
+  // Run type checking if requested
+  if (typecheck) {
+    await runTypeCheck(srcDir);
+  }
+
   // Compile TypeScript to JavaScript with esbuild
   await esbuild({
     entryPoints,
     outdir: outDir,
-    format: "esm",
+    format,
     platform: "node",
     target,
     outExtension: { ".js": ".js" },

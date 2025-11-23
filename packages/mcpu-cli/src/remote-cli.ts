@@ -309,7 +309,7 @@ const nc = new NixClap({
   if (!parsed._ || parsed._.length === 0) {
     if (!opts.stdin) {
       // No args and no stdin - show help
-      nc.showHelp();
+      nc.showHelp(null);
       process.exit(0);
     }
   }
@@ -317,7 +317,11 @@ const nc = new NixClap({
   if ((parsed._ && parsed._.length > 0) || opts.stdin) {
     try {
       const ppid = opts.ppid ? parseInt(opts.ppid as string, 10) : undefined;
-      const port = await findDaemonPort(opts.port, opts.pid, ppid);
+      const port = await findDaemonPort(
+        opts.port ? parseInt(opts.port as string, 10) : undefined,
+        opts.pid ? parseInt(opts.pid as string, 10) : undefined,
+        ppid
+      );
 
       // Handle --stdin flag
       let params: any = undefined;

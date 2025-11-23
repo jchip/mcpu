@@ -3,7 +3,7 @@ import { ConnectionPool, type ConnectionInfo, type ConnectionPoolOptions } from 
 import { PidManager } from './pid-manager.ts';
 import { ConfigDiscovery } from '../config.ts';
 import { coreExecute } from '../core/core.ts';
-import type { MCPServerConfig } from '../types.ts';
+import { type MCPServerConfig, isStdioConfig, isHttpConfig } from '../types.ts';
 import { type Logger } from './logger.ts';
 
 /**
@@ -245,13 +245,15 @@ export class DaemonServer {
 
     // ===== Server Management (Configured Servers) =====
     this.app.get('/api/servers', (_req: Request, res: Response) => {
-      const servers = Array.from(this.configs.entries()).map(([name, config]) => ({
-        name,
-        type: config.type,
-        command: config.command,
-        args: config.args,
-        env: config.env,
-      }));
+      const servers = Array.from(this.configs.entries()).map(([name, config]) => {
+        if (isStdioConfig(config)) {
+          return { name, type: 'stdio', command: config.command, args: config.args, env: config.env };
+        } else if (isHttpConfig(config)) {
+          return { name, type: 'http', url: config.url, headers: config.headers };
+        } else {
+          return { name, type: 'websocket', url: config.url };
+        }
+      });
       res.json(successResponse(servers, { count: servers.length }));
     });
 
@@ -268,13 +270,28 @@ export class DaemonServer {
         return;
       }
 
-      res.json(successResponse({
-        name: serverName,
-        type: config.type,
-        command: config.command,
-        args: config.args,
-        env: config.env,
-      }));
+      if (isStdioConfig(config)) {
+        res.json(successResponse({
+          name: serverName,
+          type: 'stdio',
+          command: config.command,
+          args: config.args,
+          env: config.env,
+        }));
+      } else if (isHttpConfig(config)) {
+        res.json(successResponse({
+          name: serverName,
+          type: 'http',
+          url: config.url,
+          headers: config.headers,
+        }));
+      } else {
+        res.json(successResponse({
+          name: serverName,
+          type: 'websocket',
+          url: config.url,
+        }));
+      }
     });
 
     // ===== Connection Management (Server-scoped) =====

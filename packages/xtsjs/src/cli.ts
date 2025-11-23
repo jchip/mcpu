@@ -37,6 +37,12 @@ const nc = new NixClap({ name: "xtsjs" })
         args: "<flag boolean>",
         argDefault: ["true"],
       },
+      cjs: {
+        desc: "Output CommonJS format instead of ESM",
+      },
+      typecheck: {
+        desc: "Run type checking before build (requires tsconfig.json)",
+      },
     },
     exec: async (cmd) => {
       const opts = cmd.jsonMeta.opts;
@@ -48,6 +54,8 @@ const nc = new NixClap({ name: "xtsjs" })
           target: opts.target as string,
           sourcemap: opts.sourcemap as boolean,
           declaration: opts.declaration as boolean,
+          format: opts.cjs ? "cjs" : "esm",
+          typecheck: opts.typecheck as boolean,
         });
         console.log("Build complete!");
       } catch (error) {

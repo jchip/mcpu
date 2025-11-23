@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import { ConfigDiscovery } from '../config.ts';
 import { MCPClient } from '../client.ts';
+import { isStdioConfig, isUrlConfig } from '../types.ts';
 
 export interface ServersOptions {
   json?: boolean;
@@ -85,11 +86,11 @@ export async function serversCommand(options: ServersOptions): Promise<void> {
         console.log(`  ${chalk.dim(`${info.toolCount} tool${info.toolCount === 1 ? '' : 's'}`)}`);
       }
 
-      if ('url' in config) {
+      if (isUrlConfig(config)) {
         // HTTP transport
         console.log(`  Type: http`);
         console.log(`  URL: ${config.url}`);
-      } else {
+      } else if (isStdioConfig(config)) {
         // stdio transport
         console.log(`  Command: ${config.command}`);
         if (config.args && config.args.length > 0) {

@@ -11,7 +11,7 @@ const nc = new NixClap({
   name: 'mcpu',
   handlers: {
     'no-action': () => {
-      nc.showHelp();
+      nc.showHelp(null);
       process.exit(0);
     },
   },
@@ -126,7 +126,6 @@ const nc = new NixClap({
             alias: 's',
             desc: 'Config scope: local (default), project, or user',
             args: '<scope string>',
-            default: 'local',
           },
         },
         exec: async (cmd: any) => {
@@ -152,13 +151,11 @@ const nc = new NixClap({
             alias: 't',
             desc: 'Transport type: stdio, http, or sse',
             args: '<type string>',
-            default: 'stdio',
           },
           scope: {
             alias: 's',
             desc: 'Config scope: local (default), project, or user',
             args: '<scope string>',
-            default: 'local',
           },
           env: {
             alias: 'e',
@@ -232,7 +229,6 @@ const nc = new NixClap({
                 alias: 's',
                 desc: 'Config scope: local (default), project, or user',
                 args: '<scope string>',
-                default: 'local',
               },
             },
             exec: async (cmd: any) => {
@@ -258,13 +254,11 @@ const nc = new NixClap({
                 alias: 't',
                 desc: 'Transport type: stdio, http, or sse',
                 args: '<type string>',
-                default: 'stdio',
               },
               scope: {
                 alias: 's',
                 desc: 'Config scope: local (default), project, or user',
                 args: '<scope string>',
-                default: 'local',
               },
               env: {
                 alias: 'e',

@@ -2,7 +2,7 @@ import { readFile, writeFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import { homedir } from 'os';
 import { join, dirname } from 'path';
-import type { MCPServerConfig } from '../types.ts';
+import { type MCPServerConfig, isStdioConfig, isUrlConfig } from '../types.ts';
 
 export type Scope = 'local' | 'project' | 'user';
 
@@ -201,7 +201,7 @@ export async function addServerJson(
   }
 
   // Must have either command (stdio) or url (http/sse)
-  if (!serverConfig.command && !serverConfig.url) {
+  if (!isStdioConfig(serverConfig) && !isUrlConfig(serverConfig)) {
     return {
       success: false,
       message: 'JSON must contain either "command" (for stdio) or "url" (for http/sse)',

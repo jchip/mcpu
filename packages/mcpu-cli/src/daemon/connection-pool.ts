@@ -135,7 +135,7 @@ export class ConnectionPool {
    * Disconnect all servers
    */
   async disconnectAll(): Promise<void> {
-    const promises: Promise<void>[] = [];
+    const promises: Promise<ConnectionInfo | null>[] = [];
     for (const serverName of this.connections.keys()) {
       promises.push(this.disconnect(serverName));
     }
