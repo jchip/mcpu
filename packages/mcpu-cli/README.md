@@ -40,8 +40,47 @@ Add this to your `.claude/CLAUDE.md` or project's `CLAUDE.md` to enable Claude C
 - List tools of mcp servers: `-- tools [servers...]`
 - Get tool info in unwrapped text format: `-- info <server> <tools...>`
 - Get complete raw schema (if unwrapped text isn't sufficient): `-- --yaml info <server> <tools...>`
-- Call tool and receive unwrapped text response: `-- call <server> <tool> [--<param>=<value>]`
-- Call tool and receive full MCP response structure in YAML: `-- --yaml call <server> <tool>`
+- Call tool and receive unwrapped text response, using stdin YAML mode
+- Call tool and receive full MCP response structure in YAML, using stdin YAML mode
+- Shutdown the mcpu-daemon: `mcpu-remote --ppid=$PPID stop`
+
+### stdin YAML input mode
+
+For any parameters, use stdin YAML mode:
+
+```bash
+mcpu-remote --ppid=$PPID --stdin <<'EOF'
+argv: [call, <server>, <tool>]
+params:
+  param1: value1
+  param2: value2
+EOF
+```
+
+### `mcpServerConfig`
+
+- `call` command accepts `--restart` flag and a `mcpServerConfig` object:
+
+```bash
+mcpu-remote --ppid=$PPID --stdin <<'EOF'
+argv: [call, --restart, <server>, <tool>]
+params:
+  param1: value1
+  param2: value2
+mcpServerConfig:
+  extraArgs: []
+EOF
+```
+
+- A dedicate `config` command also available for setting `extraArgs`:
+
+```bash
+mcpu-remote --ppid=$PPID --stdin <<'EOF'
+argv: [config, <server>]
+mcpServerConfig:
+  extraArgs: []
+EOF
+```
 
 **WORKFLOW - ALWAYS FOLLOW THIS SEQUENCE:**
 
@@ -61,19 +100,6 @@ Add this to your `.claude/CLAUDE.md` or project's `CLAUDE.md` to enable Claude C
 - For `info`: Get complete tool schema including `inputSchema` and `annotations` (only if human-readable version insufficient)
 - For `call`: Get full MCP response structure instead of just extracted text
 - Useful for debugging, understanding complex parameters, or accessing response metadata
-
-### stdin YAML input mode
-
-For complex parameters, use stdin YAML mode:
-
-```bash
-mcpu-remote --ppid=$PPID --stdin <<'EOF'
-argv: [call, <server>, <tool>]
-params:
-  param1: value1
-  param2: value2
-EOF
-```
 ````
 
 ## Configuration

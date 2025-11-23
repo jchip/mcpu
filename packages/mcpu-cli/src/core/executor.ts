@@ -366,12 +366,15 @@ export async function executeToolsCommand(
 
     // Collect tools from servers
     const allTools: Array<{ server: string; tool: Tool }> = [];
+    const cachedServers: string[] = [];
 
     for (const [serverName, config] of serversToQuery.entries()) {
       try {
         let tools: Tool[] | null = null;
+        let fromCache = false;
         if (!options.noCache) {
-          tools = await cache.get(serverName);
+          tools = await cache.get(serverName, config.cacheTTL);
+          fromCache = tools !== null;
         }
 
         if (!tools) {
@@ -379,6 +382,10 @@ export async function executeToolsCommand(
             return await client.listTools(conn);
           });
           await cache.set(serverName, tools);
+        }
+
+        if (fromCache) {
+          cachedServers.push(serverName);
         }
 
         for (const tool of tools) {
@@ -391,6 +398,10 @@ export async function executeToolsCommand(
 
     const ctx = getContext(options);
 
+    const meta = cachedServers.length > 0
+      ? { fromCache: true, cachedServers }
+      : undefined;
+
     if (ctx.json || ctx.yaml) {
       const output = formatOutput({
         tools: allTools.map(({ server, tool }) => ({
@@ -400,12 +411,14 @@ export async function executeToolsCommand(
         })),
         total: allTools.length,
         servers: serversToQuery.size,
+        ...(cachedServers.length > 0 && { cachedServers }),
       }, ctx);
 
       return {
         success: true,
         output,
         exitCode: 0,
+        meta,
       };
     } else {
       let output = 'All Available Tools:\n\n';
@@ -434,12 +447,17 @@ export async function executeToolsCommand(
         }
       }
 
-      output += `\nTotal: ${allTools.length} tools across ${serversToQuery.size} servers\n`;
+      output += `\nTotal: ${allTools.length} tools across ${serversToQuery.size} servers`;
+      if (cachedServers.length > 0) {
+        output += ` (cached: ${cachedServers.join(', ')})`;
+      }
+      output += '\n';
 
       return {
         success: true,
         output,
         exitCode: 0,
+        meta,
       };
     }
   } catch (error: any) {
@@ -479,8 +497,10 @@ export async function executeInfoCommand(
     const cache = new SchemaCache();
 
     let availableTools: Tool[] | null = null;
+    let fromCache = false;
     if (!options.noCache) {
-      availableTools = await cache.get(args.server);
+      availableTools = await cache.get(args.server, config.cacheTTL);
+      fromCache = availableTools !== null;
     }
 
     if (!availableTools) {
@@ -489,6 +509,10 @@ export async function executeInfoCommand(
       });
       await cache.set(args.server, availableTools);
     }
+
+    const meta = fromCache
+      ? { fromCache: true, cachedServers: [args.server] }
+      : undefined;
 
     // If no tools specified, show all tools
     const toolsToShow = args.tools && args.tools.length > 0
@@ -526,16 +550,28 @@ export async function executeInfoCommand(
         ? new ExecutionContext({ cwd: ctx.cwd, verbose: ctx.verbose, json: true, yaml: false, raw: ctx.raw, configFile: ctx.configFile, noCache: ctx.noCache })
         : ctx;
 
+      const outputData = results.length === 1 ? results[0] : results;
+      // Include cache status in structured output
+      const wrappedOutput = fromCache
+        ? { ...outputData, _meta: { fromCache: true } }
+        : outputData;
+
       return {
         success: true,
-        output: formatOutput(results.length === 1 ? results[0] : results, outputCtx),
+        output: formatOutput(wrappedOutput, outputCtx),
         exitCode: 0,
+        meta,
       };
     } else {
+      let output = results.join('');
+      if (fromCache) {
+        output += `\n(from cache)\n`;
+      }
       return {
         success: true,
-        output: results.join(''),
+        output,
         exitCode: 0,
+        meta,
       };
     }
   } catch (error: any) {
@@ -664,7 +700,8 @@ export async function executeCallCommand(
     const client = new MCPClient();
     const cache = new SchemaCache();
 
-    let tools: Tool[] | null = await cache.get(args.server);
+    let tools: Tool[] | null = await cache.get(args.server, config.cacheTTL);
+    const schemaFromCache = tools !== null;
 
     if (!tools) {
       tools = await client.withConnection(args.server, config, async (conn) => {
@@ -672,6 +709,10 @@ export async function executeCallCommand(
       });
       await cache.set(args.server, tools);
     }
+
+    const meta = schemaFromCache
+      ? { fromCache: true, cachedServers: [args.server] }
+      : undefined;
 
     const tool = tools.find(t => t.name === args.tool);
     if (!tool) {
@@ -736,6 +777,7 @@ export async function executeCallCommand(
         success: true,
         output,
         exitCode: 0,
+        meta,
       };
     } finally {
       // Only disconnect if not using persistent connection

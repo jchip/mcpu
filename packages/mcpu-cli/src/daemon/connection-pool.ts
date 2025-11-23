@@ -1,5 +1,6 @@
 import { MCPClient, type MCPConnection } from '../client.ts';
 import type { MCPServerConfig } from '../types.ts';
+import { SchemaCache } from '../cache.ts';
 
 export interface ConnectionInfo {
   id: number;
@@ -30,6 +31,8 @@ export class ConnectionPool {
   private configs = new Map<string, MCPServerConfig>();
   private client = new MCPClient();
   private cleanupInterval: NodeJS.Timeout | null = null;
+  private schemaCache = new SchemaCache();
+  private refreshingServers = new Set<string>(); // Track servers being refreshed
 
   // Connection TTL: 5 minutes of inactivity (default)
   private readonly idleTimeoutMs: number;
@@ -57,6 +60,8 @@ export class ConnectionPool {
       if (info) {
         // Update last used timestamp
         info.lastUsed = Date.now();
+        // Check if cache needs refresh (detached async)
+        this.maybeRefreshCache(serverName, info.connection);
         return info;
       }
     }
@@ -88,7 +93,45 @@ export class ConnectionPool {
     this.idToServer.set(id, serverName);
     this.configs.set(serverName, config);
 
+    // New connection - kick off background cache refresh
+    this.maybeRefreshCache(serverName, connection);
+
     return info;
+  }
+
+  /**
+   * Check if cache is expired and refresh in background if needed
+   * This is fire-and-forget - does not block the caller
+   */
+  private maybeRefreshCache(serverName: string, connection: MCPConnection): void {
+    // Don't refresh if already refreshing this server
+    if (this.refreshingServers.has(serverName)) {
+      return;
+    }
+
+    // Get per-server TTL from config
+    const config = this.configs.get(serverName);
+    const ttlMinutes = config?.cacheTTL;
+
+    // Check cache status asynchronously
+    this.schemaCache.getWithExpiry(serverName, ttlMinutes).then(async (cacheResult) => {
+      // Only refresh if cache is expired or missing
+      if (!cacheResult || cacheResult.expired) {
+        this.refreshingServers.add(serverName);
+        try {
+          const response = await connection.client.listTools();
+          const tools = response.tools || [];
+          await this.schemaCache.set(serverName, tools);
+        } catch (error) {
+          // Silently ignore refresh errors - cache will be tried again later
+          console.error(`[${serverName}] Background cache refresh failed:`, error);
+        } finally {
+          this.refreshingServers.delete(serverName);
+        }
+      }
+    }).catch(() => {
+      // Ignore errors checking cache status
+    });
   }
 
   /**

@@ -8,8 +8,20 @@ import type { CacheEntry } from './types.ts';
 const CACHE_DIR = process.env.XDG_CACHE_HOME
   ? join(process.env.XDG_CACHE_HOME, 'mcpu')
   : join(homedir(), '.cache', 'mcpu');
-const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+const DEFAULT_CACHE_TTL_MINUTES = 60;
 const CACHE_VERSION = '1.0.0';
+
+export interface CacheResult {
+  tools: Tool[];
+  expired: boolean;
+}
+
+/**
+ * Convert TTL in minutes to milliseconds
+ */
+function ttlToMs(ttlMinutes?: number): number {
+  return (ttlMinutes ?? DEFAULT_CACHE_TTL_MINUTES) * 60 * 1000;
+}
 
 /**
  * Manages local caching of MCP tool schemas
@@ -41,8 +53,24 @@ export class SchemaCache {
 
   /**
    * Get cached tools for a server
+   * @param serverName - Server name
+   * @param ttlMinutes - Optional TTL in minutes (default: 60)
    */
-  async get(serverName: string): Promise<Tool[] | null> {
+  async get(serverName: string, ttlMinutes?: number): Promise<Tool[] | null> {
+    const result = await this.getWithExpiry(serverName, ttlMinutes);
+    if (!result || result.expired) {
+      return null;
+    }
+    return result.tools;
+  }
+
+  /**
+   * Get cached tools with expiry status
+   * Returns tools even if expired (for stale-while-revalidate pattern)
+   * @param serverName - Server name
+   * @param ttlMinutes - Optional TTL in minutes (default: 60)
+   */
+  async getWithExpiry(serverName: string, ttlMinutes?: number): Promise<CacheResult | null> {
     try {
       const cachePath = this.getCachePath(serverName);
 
@@ -53,20 +81,18 @@ export class SchemaCache {
       const stats = await stat(cachePath);
       const age = Date.now() - stats.mtimeMs;
 
-      // Check if cache is expired
-      if (age > CACHE_TTL) {
-        return null;
-      }
-
       const content = await readFile(cachePath, 'utf-8');
       const entry: CacheEntry = JSON.parse(content);
 
-      // Check version compatibility
+      // Check version compatibility - if incompatible, return null
       if (entry.version !== CACHE_VERSION) {
         return null;
       }
 
-      return entry.tools;
+      return {
+        tools: entry.tools,
+        expired: age > ttlToMs(ttlMinutes),
+      };
     } catch (error) {
       // Cache read failed, return null to trigger fresh fetch
       return null;

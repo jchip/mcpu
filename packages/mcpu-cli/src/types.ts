@@ -1,8 +1,13 @@
 import { z } from 'zod';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 
+// Common config fields shared by all transport types
+const CommonConfigSchema = z.object({
+  cacheTTL: z.number().optional(), // Cache TTL in minutes (default: 60)
+});
+
 // MCP Server Configuration Schema (stdio)
-const StdioConfigSchema = z.object({
+const StdioConfigSchema = CommonConfigSchema.extend({
   command: z.string(),
   args: z.array(z.string()).optional(),
   env: z.record(z.string()).optional(),
@@ -10,14 +15,14 @@ const StdioConfigSchema = z.object({
 });
 
 // MCP Server Configuration Schema (HTTP)
-const HttpConfigSchema = z.object({
+const HttpConfigSchema = CommonConfigSchema.extend({
   type: z.literal('http'),
   url: z.string(),
   headers: z.record(z.string()).optional(),
 });
 
 // MCP Server Configuration Schema (WebSocket)
-const WebSocketConfigSchema = z.object({
+const WebSocketConfigSchema = CommonConfigSchema.extend({
   type: z.literal('websocket'),
   url: z.string(),
 });

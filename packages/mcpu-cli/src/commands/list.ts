@@ -114,10 +114,10 @@ async function listServerTools(
   options: ListOptions
 ): Promise<void> {
   try {
-    // Try cache first
+    // Try cache first (with per-server TTL)
     let tools: Tool[] | null = null;
     if (!options.noCache) {
-      tools = await cache.get(serverName);
+      tools = await cache.get(serverName, config.cacheTTL);
       if (options.verbose && tools) {
         console.error(chalk.dim(`Using cached tools for ${serverName}`));
       }
@@ -182,10 +182,10 @@ async function listAllTools(
 
   for (const [serverName, config] of configs.entries()) {
     try {
-      // Try cache first
+      // Try cache first (with per-server TTL)
       let tools: Tool[] | null = null;
       if (!options.noCache) {
-        tools = await cache.get(serverName);
+        tools = await cache.get(serverName, config.cacheTTL);
         if (options.verbose && tools) {
           console.error(chalk.dim(`Using cached tools for ${serverName}`));
         }
