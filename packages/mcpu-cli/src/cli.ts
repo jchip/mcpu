@@ -68,6 +68,11 @@ const nc = new NixClap({
       tools: {
         desc: 'List tools from all servers or specific servers',
         args: '[servers string..]',
+        options: {
+          names: {
+            desc: 'Show only tool names, no descriptions',
+          },
+        },
         exec: async () => {
           const result = await coreExecute({ argv: process.argv.slice(2) });
           if (result.output) {

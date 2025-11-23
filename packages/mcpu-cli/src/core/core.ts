@@ -86,6 +86,11 @@ function createParserCLI() {
         tools: {
           desc: 'List tools from all servers or specific servers',
           args: '[servers string..]',
+          options: {
+            names: {
+              desc: 'Show only tool names, no descriptions',
+            },
+          },
         },
         info: {
           desc: 'Show detailed information about one or more tools',
@@ -227,6 +232,7 @@ export async function coreExecute(options: CoreExecutionOptions): Promise<Comman
       case 'tools': {
         return await executeCommand('tools', {
           servers: args.servers as string[] | undefined,
+          names: localOpts.names as boolean | undefined,
         }, globalOptions);
       }
 

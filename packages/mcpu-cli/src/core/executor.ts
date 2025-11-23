@@ -33,6 +33,8 @@ export interface ServersCommandArgs {
 
 export interface ToolsCommandArgs {
   servers?: string[];
+  /** Show only tool names, no descriptions */
+  names?: boolean;
 }
 
 export interface InfoCommandArgs {
@@ -413,7 +415,11 @@ export async function executeToolsCommand(
         for (const [server, tools] of toolsByServer.entries()) {
           output += `MCP server ${server}:\n`;
           for (const tool of tools) {
-            output += `  ${tool.name} - ${tool.description || 'No description'}\n`;
+            if (args.names) {
+              output += `  ${tool.name}\n`;
+            } else {
+              output += `  ${tool.name} - ${tool.description || 'No description'}\n`;
+            }
           }
           output += '\n';
         }
