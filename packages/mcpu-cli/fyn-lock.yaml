@@ -6,7 +6,7 @@ $pkg:
   '@modelcontextprotocol/sdk': ^1.0.4
   chalk: ^5.3.0
   express: ^5.1.0
-  nix-clap: ../../../nix-clap
+  nix-clap: ^2.4.4
   optional-require: ^2.1.0
   pino: ^10.1.0
   pino-pretty: ^13.1.2
@@ -1515,13 +1515,13 @@ negotiator:
   $: sha512-8Ofs/AUQh8MaEcrlq5xOX0CQ9ypTF5dl78mjlMNfOK08fzpgTHQRQPBxcPlEtIw0yRpws+Zo/3r+5WRby7u3Gg==
   _: 'https://registry.npmjs.org/negotiator/-/negotiator-1.0.0.tgz'
 nix-clap:
- _latest: 2.4.3-fynlocal_h
+ _latest: 1.3.13
  _:
-  ../../../nix-clap: 2.4.3-fynlocal_h
- 2.4.3-fynlocal_h:
+  ^2.4.4: 2.4.4
+ 2.4.4:
   top: 1
-  $: local
-  _: ../../../nix-clap
+  $: sha512-Sgl0skrGiZc5/xi0xv4NV1VZ17OenGEwu/i6+tIFRpASuAbZHzaANtf3CrUqPJWrfSIjoovEOki8EEV3ouesKA==
+  _: 'https://registry.npmjs.org/nix-clap/-/nix-clap-2.4.4.tgz'
   dependencies:
    tslib: ^2.6.2
 object-assign:
