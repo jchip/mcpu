@@ -15,8 +15,10 @@ import type { ConnectionPool } from '../daemon/connection-pool.ts';
 export interface CoreExecutionOptions {
   argv: string[];
   params?: any;
+  mcpServerConfig?: { extraArgs?: string[] };
   cwd?: string;
   connectionPool?: ConnectionPool;
+  configs?: Map<string, any>;  // Runtime config map from daemon
 }
 
 /**
@@ -104,6 +106,9 @@ function createParserCLI() {
             stdin: {
               desc: 'Read arguments from stdin as YAML',
             },
+            restart: {
+              desc: 'Restart server if extraArgs changed',
+            },
           },
         },
         connect: {
@@ -122,6 +127,10 @@ function createParserCLI() {
           alias: ['list-connections'],
           desc: 'List active server connections (daemon mode only)',
         },
+        config: {
+          desc: 'Configure MCP server runtime settings',
+          args: '<server string>',
+        },
       },
     });
 
@@ -136,7 +145,7 @@ function createParserCLI() {
  * Core execution - parse and execute command
  */
 export async function coreExecute(options: CoreExecutionOptions): Promise<CommandResult> {
-  const { argv, params, cwd, connectionPool } = options;
+  const { argv, params, mcpServerConfig, cwd, connectionPool, configs } = options;
 
   try {
     // Parse command line with custom output/exit handlers
@@ -194,6 +203,7 @@ export async function coreExecute(options: CoreExecutionOptions): Promise<Comman
       noCache: opts.noCache as boolean | undefined,
       cwd,
       connectionPool,
+      configs,
     };
 
     // Get the sub-command data from parsed result
@@ -249,7 +259,7 @@ export async function coreExecute(options: CoreExecutionOptions): Promise<Comman
 
         // Add unknown options as --key=value arguments
         for (const [key, value] of Object.entries(localOpts)) {
-          if (key !== 'stdin' && value !== undefined) {
+          if (key !== 'stdin' && key !== 'restart' && value !== undefined) {
             allArgs.push(`--${key}=${value}`);
           }
         }
@@ -259,6 +269,8 @@ export async function coreExecute(options: CoreExecutionOptions): Promise<Comman
           tool: args.tool as string,
           args: allArgs,
           stdinData: params ? JSON.stringify(params) : undefined,
+          mcpServerConfig,
+          restart: localOpts.restart as boolean | undefined,
         }, {
           ...globalOptions,
           stdin: localOpts.stdin as boolean | undefined,
@@ -286,6 +298,13 @@ export async function coreExecute(options: CoreExecutionOptions): Promise<Comman
       case 'connections':
       case 'list-connections': {
         return await executeCommand('connections', {}, globalOptions);
+      }
+
+      case 'config': {
+        return await executeCommand('config', {
+          server: args.server as string,
+          mcpServerConfig,
+        }, globalOptions);
       }
 
       default:

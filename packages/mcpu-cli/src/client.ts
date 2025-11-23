@@ -3,7 +3,8 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { WebSocketClientTransport } from '@modelcontextprotocol/sdk/client/websocket.js';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
-import type { MCPServerConfig } from './types.ts';
+import type { MCPServerConfig, StdioConfig } from './types.ts';
+import { isStdioConfig } from './types.ts';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 
 export interface MCPConnection {
@@ -43,12 +44,17 @@ export class MCPClient {
       }
     } else {
       // stdio transport
-      if (!('command' in config)) {
+      if (!isStdioConfig(config)) {
         throw new Error('Invalid stdio config: missing command');
       }
+      // Merge args and extraArgs
+      const mergedArgs = [
+        ...(config.args || []),
+        ...(config.extraArgs || []),
+      ];
       transport = new StdioClientTransport({
         command: config.command,
-        args: config.args,
+        args: mergedArgs.length > 0 ? mergedArgs : undefined,
         env: config.env,
         stderr: 'pipe',  // Capture stderr for buffering
       });

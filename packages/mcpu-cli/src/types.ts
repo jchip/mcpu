@@ -6,6 +6,7 @@ const StdioConfigSchema = z.object({
   command: z.string(),
   args: z.array(z.string()).optional(),
   env: z.record(z.string()).optional(),
+  extraArgs: z.array(z.string()).optional(), // Runtime-added args via config command
 });
 
 // MCP Server Configuration Schema (HTTP)

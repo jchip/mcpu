@@ -104,12 +104,16 @@ async function findDaemonPort(port?: number, pid?: number, ppid?: number): Promi
 /**
  * Send command to daemon via HTTP
  */
-async function sendCommand(port: number, argv: string[], params?: any): Promise<void> {
+async function sendCommand(port: number, argv: string[], params?: any, mcpServerConfig?: any): Promise<void> {
   const url = `http://localhost:${port}/cli`;
   const body: any = { argv, cwd: process.cwd() };
 
   if (params !== undefined) {
     body.params = params;
+  }
+
+  if (mcpServerConfig !== undefined) {
+    body.mcpServerConfig = mcpServerConfig;
   }
 
   const response = await fetch(url, {
@@ -325,6 +329,7 @@ const nc = new NixClap({
 
       // Handle --stdin flag
       let params: any = undefined;
+      let mcpServerConfig: any = undefined;
       let argv = parsed._ || [];
 
       if (opts.stdin) {
@@ -352,9 +357,14 @@ const nc = new NixClap({
           // Extract params from YAML
           if (yamlData.params !== undefined) {
             params = yamlData.params;
-          } else if (!yamlData.argv) {
-            // If no params key and no argv key, treat entire YAML as params
+          } else if (!yamlData.argv && !yamlData.mcpServerConfig) {
+            // If no params key, no argv key, and no mcpServerConfig, treat entire YAML as params
             params = yamlData;
+          }
+
+          // Extract mcpServerConfig from YAML
+          if (yamlData.mcpServerConfig !== undefined) {
+            mcpServerConfig = yamlData.mcpServerConfig;
           }
         } catch (error: any) {
           console.error('Error: Failed to parse YAML from stdin:', error.message);
@@ -362,7 +372,7 @@ const nc = new NixClap({
         }
       }
 
-      await sendCommand(port, argv, params);
+      await sendCommand(port, argv, params, mcpServerConfig);
     } catch (error: any) {
       console.error('Error:', error.message || error);
       process.exit(1);

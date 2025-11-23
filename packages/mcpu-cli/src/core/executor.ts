@@ -25,6 +25,7 @@ export interface ExecuteOptions {
   connectionPool?: ConnectionPool;  // Optional connection pool for persistent connections
   cwd?: string;  // Client's working directory for resolving paths
   context?: ExecutionContext;  // Execution context (preferred over individual options)
+  configs?: Map<string, any>;  // Runtime config map from daemon (mutable)
 }
 
 export interface ServersCommandArgs {
@@ -48,6 +49,13 @@ export interface CallCommandArgs {
   tool: string;
   args: string[];
   stdinData?: string;
+  mcpServerConfig?: { extraArgs?: string[] };
+  restart?: boolean;
+}
+
+export interface ConfigCommandArgs {
+  server: string;
+  mcpServerConfig?: { extraArgs?: string[] };
 }
 
 export interface SchemaCommandArgs {
@@ -599,12 +607,18 @@ export async function executeCallCommand(
   options: ExecuteOptions
 ): Promise<CommandResult> {
   try {
-    const discovery = new ConfigDiscovery({
-      configFile: options.config,
-      verbose: options.verbose,
-    });
+    // Use daemon's config map if available, otherwise load fresh
+    let configs: Map<string, any>;
+    if (options.configs) {
+      configs = options.configs;
+    } else {
+      const discovery = new ConfigDiscovery({
+        configFile: options.config,
+        verbose: options.verbose,
+      });
+      configs = await discovery.loadConfigs(options.cwd);
+    }
 
-    const configs = await discovery.loadConfigs(options.cwd);
     const config = configs.get(args.server);
 
     if (!config) {
@@ -613,6 +627,38 @@ export async function executeCallCommand(
         error: `Server "${args.server}" not found. Available servers: ${Array.from(configs.keys()).join(', ')}`,
         exitCode: 1,
       };
+    }
+
+    // Handle mcpServerConfig.extraArgs if provided
+    if (args.mcpServerConfig?.extraArgs !== undefined && isStdioConfig(config)) {
+      const newExtraArgs = args.mcpServerConfig.extraArgs;
+      const oldExtraArgs = config.extraArgs;
+      const argsChanged = !extraArgsEqual(oldExtraArgs, newExtraArgs);
+
+      // Check if server is currently connected
+      let serverRunning = false;
+      if (options.connectionPool) {
+        const connections = options.connectionPool.listConnections();
+        serverRunning = connections.some(c => c.server === args.server);
+      }
+
+      if (argsChanged && serverRunning) {
+        if (!args.restart) {
+          // Error: server running with different args, no --restart flag
+          return {
+            success: false,
+            error: `Server "${args.server}" is running with different extraArgs. Use --restart to apply new extraArgs.`,
+            exitCode: 1,
+          };
+        }
+        // Restart: disconnect server, store new args
+        options.connectionPool!.disconnect(args.server);
+        config.extraArgs = newExtraArgs;
+      } else if (!serverRunning) {
+        // Server not running: just store the args
+        config.extraArgs = newExtraArgs;
+      }
+      // If server running with same args: proceed normally, no change needed
     }
 
     const client = new MCPClient();
@@ -707,8 +753,83 @@ export async function executeCallCommand(
 }
 
 /**
- * Main executor - route commands to appropriate handlers
+ * Helper to compare extraArgs arrays
  */
+function extraArgsEqual(a?: string[], b?: string[]): boolean {
+  const arrA = a || [];
+  const arrB = b || [];
+  if (arrA.length !== arrB.length) return false;
+  return arrA.every((v, i) => v === arrB[i]);
+}
+
+/**
+ * Execute the 'config' command - configure MCP server runtime settings
+ */
+async function executeConfigCommand(
+  args: ConfigCommandArgs,
+  options: ExecuteOptions
+): Promise<CommandResult> {
+  const { server, mcpServerConfig } = args;
+  const { configs, connectionPool } = options;
+
+  if (!configs) {
+    return {
+      success: false,
+      error: 'Config map not available. This command only works in daemon mode.',
+      exitCode: 1,
+    };
+  }
+
+  const config = configs.get(server);
+  if (!config) {
+    return {
+      success: false,
+      error: `Server "${server}" not found in config`,
+      exitCode: 1,
+    };
+  }
+
+  // Check if this is a stdio config (only stdio supports extraArgs)
+  if (!isStdioConfig(config)) {
+    return {
+      success: false,
+      error: `Server "${server}" is not a stdio server. extraArgs only applies to stdio servers.`,
+      exitCode: 1,
+    };
+  }
+
+  const newExtraArgs = mcpServerConfig?.extraArgs;
+  const oldExtraArgs = config.extraArgs;
+  const changed = !extraArgsEqual(oldExtraArgs, newExtraArgs);
+
+  // Store the new extraArgs
+  config.extraArgs = newExtraArgs;
+
+  // Check if server is currently connected
+  let serverRunning = false;
+  if (connectionPool) {
+    const connections = connectionPool.listConnections();
+    serverRunning = connections.some(c => c.server === server);
+  }
+
+  let message = `Server "${server}" config updated`;
+  if (newExtraArgs && newExtraArgs.length > 0) {
+    message += `: extraArgs = [${newExtraArgs.join(', ')}]`;
+  } else {
+    message += `: extraArgs cleared`;
+  }
+
+  if (changed && serverRunning) {
+    message += `\nNote: Server is running with previous args. Restart required to apply new extraArgs.`;
+  }
+
+  return {
+    success: true,
+    output: message,
+    exitCode: 0,
+  };
+}
+
 /**
  * Connect command - manually connect to a server
  */
@@ -932,6 +1053,8 @@ export async function executeCommand(
       return executeReconnectCommand(args, options);
     case 'connections':
       return executeConnectionsCommand(args, options);
+    case 'config':
+      return executeConfigCommand(args, options);
     default:
       return {
         success: false,
