@@ -30,56 +30,61 @@ Add this to your `.claude/CLAUDE.md` or project's `CLAUDE.md` to enable Claude C
 
 **General Command formats**
 
-- Start daemon (background): `mcpu-daemon --ppid=$PPID &` (use `run_in_background: true`)
-- Send remote commands to daemon: `mcpu-remote --ppid=$PPID -- <args for mcpu>`
+- Start daemon (background): `mcpu-daemon -p=$PPID &` (use `run_in_background: true`)
+- Send remote commands to daemon: `mcpu-remote -p=$PPID -- <args for mcpu>`
 
 **mcpu-remote Commands and their flags and args:**
 
-- ALWAYS START command with `mcpu-remote --ppid=$PPID`
+- ALWAYS START command with `mcpu-remote -p=$PPID`
 - List mcp servers: `-- servers`
 - List tools of mcp servers: `-- tools [servers...]`
 - Get tool info in unwrapped text format: `-- info <server> <tools...>`
 - Get complete raw schema (if unwrapped text isn't sufficient): `-- --yaml info <server> <tools...>`
-- Call tool and receive unwrapped text response, using stdin YAML mode
-- Call tool and receive full MCP response structure in YAML, using stdin YAML mode
-- Shutdown the mcpu-daemon: `mcpu-remote --ppid=$PPID stop`
+- Call tool and receive unwrapped text response: `-- call <server> <tool>`, and use YAML input mode for params.
+- Call tool and receive full MCP response as YAML: `-- --yaml call <server> <tool>`
+- Shutdown the mcpu-daemon: `mcpu-remote -p=$PPID stop`
 
-### stdin YAML input mode
+### YAML input mode (stdin/file)
 
-For any parameters, use stdin YAML mode:
+- `mcpu-remote --stdin` accepts a YAML/JSON piped to its stdin.
+- `mcpu-remote -b -c=<file>` accepts a YAML/JSON file,
+  - `-b` renames the file with `.bak` suffix after reading it, replacing possible existing `.bak` file.
 
-```bash
-mcpu-remote --ppid=$PPID --stdin <<'EOF'
+**WORKFLOW**
+
+- One time step: `mkdir -p /tmp/.tmp-claude-$PPID && echo /tmp/.tmp-claude-$PPID`
+
+1. Use Write tool to create `mcpu-cmd.yaml` in the dir from one time step
+2. Run mcpu-remote with `-b -c=<file>` option
+
+Example YAML:
+
+```YAML
 argv: [call, <server>, <tool>]
 params:
-  param1: value1
-  param2: value2
-EOF
+  a: b
+  a: b
 ```
 
 ### `mcpServerConfig`
 
 - `call` command accepts `--restart` flag and a `mcpServerConfig` object:
 
-```bash
-mcpu-remote --ppid=$PPID --stdin <<'EOF'
+```YAML
 argv: [call, --restart, <server>, <tool>]
 params:
-  param1: value1
-  param2: value2
+  a: b
+  a: b
 mcpServerConfig:
   extraArgs: []
-EOF
 ```
 
 - A dedicate `config` command also available for setting `extraArgs`:
 
-```bash
-mcpu-remote --ppid=$PPID --stdin <<'EOF'
+```YAML
 argv: [config, <server>]
 mcpServerConfig:
   extraArgs: []
-EOF
 ```
 
 **WORKFLOW - ALWAYS FOLLOW THIS SEQUENCE:**
