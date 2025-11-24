@@ -2,10 +2,26 @@
 
 import { NixClap } from 'nix-clap';
 import { parse as parseYaml } from 'yaml';
+import { readFile, rename, unlink } from 'fs/promises';
 import { PidManager } from './daemon/pid-manager.ts';
 import { VERSION } from './version.ts';
 
 const output = (text: string) => console.log(text);
+
+/**
+ * Read and parse YAML/JSON from a file
+ */
+async function readParamFile(filePath: string): Promise<any> {
+  try {
+    const content = await readFile(filePath, 'utf-8');
+    return parseYaml(content);
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      throw new Error(`File not found: ${filePath}`);
+    }
+    throw new Error(`Failed to read param file: ${error.message}`);
+  }
+}
 
 /**
  * Read YAML from stdin
@@ -231,14 +247,16 @@ const nc = new NixClap({
   }
 })
   .version(VERSION)
-  .usage('$0 [--port=N | --pid=N | --ppid=N] [--stdin] [command] [-- args...]')
+  .usage('$0 [--port=N | --pid=N | --ppid=N] [--stdin | --cmd-file=FILE] [command] [-- args...]')
   .init2({
     desc: 'Connect to MCPU daemon and execute commands',
     options: {
       port: { desc: 'Connect to daemon on specific port', args: '<port number>' },
       pid: { desc: 'Connect to daemon with specific PID', args: '<pid number>' },
-      ppid: { desc: 'Connect to daemon for specific parent PID', args: '<ppid number>' },
-      stdin: { desc: 'Read parameters from stdin as YAML' },
+      ppid: { alias: 'p', desc: 'Connect to daemon for specific parent PID', args: '<ppid number>' },
+      stdin: { desc: 'Read command from stdin as YAML' },
+      'cmd-file': { alias: 'c', desc: 'Read command from YAML/JSON file', args: '<file string>' },
+      'bak-after-use': { alias: 'b', desc: 'Rename cmd-file to .bak after reading (requires --cmd-file)' },
     },
     subCommands: {
       stop: {
@@ -308,17 +326,19 @@ const nc = new NixClap({
     process.exit(0);
   }
 
-  // If there are remaining args after --, or --stdin is set, forward to daemon
+  // If there are remaining args after --, or --stdin/--cmd-file is set, forward to daemon
   const opts = parsed.command.jsonMeta.opts;
+  const cmdFile = opts['cmd-file'] as string | undefined;
+
   if (!parsed._ || parsed._.length === 0) {
-    if (!opts.stdin) {
-      // No args and no stdin - show help
+    if (!opts.stdin && !cmdFile) {
+      // No args and no stdin/cmd-file - show help
       nc.showHelp(null);
       process.exit(0);
     }
   }
 
-  if ((parsed._ && parsed._.length > 0) || opts.stdin) {
+  if ((parsed._ && parsed._.length > 0) || opts.stdin || cmdFile) {
     try {
       const ppid = opts.ppid ? parseInt(opts.ppid as string, 10) : undefined;
       const port = await findDaemonPort(
@@ -327,48 +347,50 @@ const nc = new NixClap({
         ppid
       );
 
-      // Handle --stdin flag
+      // Handle --stdin or --param-file
       let params: any = undefined;
       let mcpServerConfig: any = undefined;
       let argv = parsed._ || [];
 
-      if (opts.stdin) {
-        const yamlInput = await readStdin();
+      // --stdin and --cmd-file are mutually exclusive, --stdin takes precedence
+      const yamlData = opts.stdin
+        ? await (async () => {
+            const yamlInput = await readStdin();
+            if (!yamlInput || yamlInput.trim() === '') {
+              console.error('Error: --stdin specified but no input received');
+              process.exit(1);
+            }
+            return parseYaml(yamlInput);
+          })()
+        : cmdFile
+          ? await (async () => {
+              const data = await readParamFile(cmdFile);
+              // Rename file to .bak after reading if --bak-after-use is set
+              if (opts['bak-after-use']) {
+                const bakFile = `${cmdFile}.bak`;
+                // Remove existing .bak file if present
+                await unlink(bakFile).catch(() => {});
+                await rename(cmdFile, bakFile).catch(() => {});
+              }
+              return data;
+            })()
+          : null;
 
-        if (!yamlInput || yamlInput.trim() === '') {
-          console.error('Error: --stdin specified but no input received');
-          process.exit(1);
+      if (yamlData) {
+        // Extract argv from YAML if present
+        if (yamlData.argv) {
+          // Prepend CLI args to YAML argv
+          argv = [...(parsed._ || []), ...yamlData.argv];
         }
 
-        try {
-          const yamlData = parseYaml(yamlInput);
+        // Extract params from YAML
+        if (yamlData.params !== undefined) {
+          params = yamlData.params;
+        }
 
-          if (!yamlData) {
-            console.error('Error: Empty YAML input');
-            process.exit(1);
-          }
-
-          // Extract argv from YAML if present
-          if (yamlData.argv) {
-            // Prepend CLI args to YAML argv
-            argv = [...(parsed._ || []), ...yamlData.argv];
-          }
-
-          // Extract params from YAML
-          if (yamlData.params !== undefined) {
-            params = yamlData.params;
-          } else if (!yamlData.argv && !yamlData.mcpServerConfig) {
-            // If no params key, no argv key, and no mcpServerConfig, treat entire YAML as params
-            params = yamlData;
-          }
-
-          // Extract mcpServerConfig from YAML
-          if (yamlData.mcpServerConfig !== undefined) {
-            mcpServerConfig = yamlData.mcpServerConfig;
-          }
-        } catch (error: any) {
-          console.error('Error: Failed to parse YAML from stdin:', error.message);
-          process.exit(1);
+        // Extract mcpServerConfig from YAML
+        if (yamlData.mcpServerConfig !== undefined) {
+          mcpServerConfig = yamlData.mcpServerConfig;
         }
       }
 

@@ -367,14 +367,29 @@ export async function executeToolsCommand(
     // Collect tools from servers
     const allTools: Array<{ server: string; tool: Tool }> = [];
     const cachedServers: string[] = [];
+    const pool = options.connectionPool;
 
     for (const [serverName, config] of serversToQuery.entries()) {
       try {
         let tools: Tool[] | null = null;
         let fromCache = false;
+
         if (!options.noCache) {
-          tools = await cache.get(serverName, config.cacheTTL);
-          fromCache = tools !== null;
+          const cacheResult = await cache.getWithExpiry(serverName, config.cacheTTL);
+          if (cacheResult) {
+            if (cacheResult.expired) {
+              // TTL expired - force sync refresh if we have a pool connection
+              if (pool) {
+                await pool.refreshCacheSync(serverName);
+                tools = await cache.get(serverName, config.cacheTTL);
+              }
+              // If no pool or refresh failed, fall through to fetch fresh
+            } else {
+              // Cache valid
+              tools = cacheResult.tools;
+              fromCache = true;
+            }
+          }
         }
 
         if (!tools) {
@@ -495,12 +510,27 @@ export async function executeInfoCommand(
 
     const client = new MCPClient();
     const cache = new SchemaCache();
+    const pool = options.connectionPool;
 
     let availableTools: Tool[] | null = null;
     let fromCache = false;
+
     if (!options.noCache) {
-      availableTools = await cache.get(args.server, config.cacheTTL);
-      fromCache = availableTools !== null;
+      const cacheResult = await cache.getWithExpiry(args.server, config.cacheTTL);
+      if (cacheResult) {
+        if (cacheResult.expired) {
+          // TTL expired - force sync refresh if we have a pool connection
+          if (pool) {
+            await pool.refreshCacheSync(args.server);
+            availableTools = await cache.get(args.server, config.cacheTTL);
+          }
+          // If no pool or refresh failed, fall through to fetch fresh
+        } else {
+          // Cache valid
+          availableTools = cacheResult.tools;
+          fromCache = true;
+        }
+      }
     }
 
     if (!availableTools) {
@@ -699,9 +729,28 @@ export async function executeCallCommand(
 
     const client = new MCPClient();
     const cache = new SchemaCache();
+    const pool = options.connectionPool;
 
-    let tools: Tool[] | null = await cache.get(args.server, config.cacheTTL);
-    const schemaFromCache = tools !== null;
+    let tools: Tool[] | null = null;
+    let schemaFromCache = false;
+
+    if (!options.noCache) {
+      const cacheResult = await cache.getWithExpiry(args.server, config.cacheTTL);
+      if (cacheResult) {
+        if (cacheResult.expired) {
+          // TTL expired - force sync refresh if we have a pool connection
+          if (pool) {
+            await pool.refreshCacheSync(args.server);
+            tools = await cache.get(args.server, config.cacheTTL);
+          }
+          // If no pool or refresh failed, fall through to fetch fresh
+        } else {
+          // Cache valid
+          tools = cacheResult.tools;
+          schemaFromCache = true;
+        }
+      }
+    }
 
     if (!tools) {
       tools = await client.withConnection(args.server, config, async (conn) => {

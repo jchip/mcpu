@@ -23,6 +23,7 @@ new NixClap({ name: 'mcpu-daemon' })
         desc: 'Show detailed logging',
       },
       ppid: {
+        alias: 'p',
         desc: 'Parent process ID (0 for shared singleton)',
         args: '<ppid number>',
       },

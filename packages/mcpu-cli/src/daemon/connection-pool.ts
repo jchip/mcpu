@@ -60,8 +60,6 @@ export class ConnectionPool {
       if (info) {
         // Update last used timestamp
         info.lastUsed = Date.now();
-        // Check if cache needs refresh (detached async)
-        this.maybeRefreshCache(serverName, info.connection);
         return info;
       }
     }
@@ -93,45 +91,56 @@ export class ConnectionPool {
     this.idToServer.set(id, serverName);
     this.configs.set(serverName, config);
 
-    // New connection - kick off background cache refresh
-    this.maybeRefreshCache(serverName, connection);
+    // New connection - always kick off async cache refresh check
+    this.refreshCacheAsync(serverName, connection);
 
     return info;
   }
 
   /**
-   * Check if cache is expired and refresh in background if needed
-   * This is fire-and-forget - does not block the caller
+   * Async cache refresh - always runs on first connection
+   * Fire-and-forget, does not block the caller
    */
-  private maybeRefreshCache(serverName: string, connection: MCPConnection): void {
+  private refreshCacheAsync(serverName: string, connection: MCPConnection): void {
     // Don't refresh if already refreshing this server
     if (this.refreshingServers.has(serverName)) {
       return;
     }
 
-    // Get per-server TTL from config
-    const config = this.configs.get(serverName);
-    const ttlMinutes = config?.cacheTTL;
+    this.refreshingServers.add(serverName);
 
-    // Check cache status asynchronously
-    this.schemaCache.getWithExpiry(serverName, ttlMinutes).then(async (cacheResult) => {
-      // Only refresh if cache is expired or missing
-      if (!cacheResult || cacheResult.expired) {
-        this.refreshingServers.add(serverName);
-        try {
-          const response = await connection.client.listTools();
-          const tools = response.tools || [];
-          await this.schemaCache.set(serverName, tools);
-        } catch (error) {
-          // Silently ignore refresh errors - cache will be tried again later
-          console.error(`[${serverName}] Background cache refresh failed:`, error);
-        } finally {
-          this.refreshingServers.delete(serverName);
-        }
+    // Fire and forget - fetch tools and update cache
+    (async () => {
+      try {
+        const response = await connection.client.listTools();
+        const tools = response.tools || [];
+        await this.schemaCache.set(serverName, tools);
+      } catch (error) {
+        console.error(`[${serverName}] Background cache refresh failed:`, error);
+      } finally {
+        this.refreshingServers.delete(serverName);
       }
-    }).catch(() => {
-      // Ignore errors checking cache status
-    });
+    })();
+  }
+
+  /**
+   * Sync cache refresh - blocks until cache is updated
+   * Called when TTL is expired and fresh data is required
+   */
+  async refreshCacheSync(serverName: string): Promise<void> {
+    const connection = this.connections.get(serverName);
+    if (!connection) {
+      return;
+    }
+
+    try {
+      const response = await connection.client.listTools();
+      const tools = response.tools || [];
+      await this.schemaCache.set(serverName, tools);
+    } catch (error) {
+      console.error(`[${serverName}] Sync cache refresh failed:`, error);
+      throw error;
+    }
   }
 
   /**

@@ -41,6 +41,20 @@ vi.mock('../../src/cache.js', () => ({
         },
       },
     }]),
+    getWithExpiry: vi.fn().mockResolvedValue({
+      tools: [{
+        name: 'test_tool',
+        description: 'A test tool',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            field1: { type: 'string' },
+            field2: { type: 'number' },
+          },
+        },
+      }],
+      expired: false,
+    }),
     set: vi.fn(),
   })),
 }));
