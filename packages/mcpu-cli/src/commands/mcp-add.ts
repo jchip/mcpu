@@ -27,8 +27,11 @@ export function getConfigPath(scope: Scope, cwd?: string): string {
 
   switch (scope) {
     case 'local':
-    case 'project':
+      // Project local config (gitignored)
       return join(workingDir, '.config', 'mcpu', 'config.local.json');
+    case 'project':
+      // Project shared config (committed to git)
+      return join(workingDir, '.config', 'mcpu', 'config.json');
     case 'user':
       return join(configHome, 'mcpu', 'config.json');
   }

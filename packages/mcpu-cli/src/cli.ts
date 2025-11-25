@@ -2,9 +2,15 @@
 
 import { NixClap } from 'nix-clap';
 import chalk from 'chalk';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { coreExecute } from './core/core.ts';
 import { VERSION } from './version.ts';
 import { addServer, addServerJson, parseEnvFlags, parseHeaderFlags, type Scope } from './commands/mcp-add.ts';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Create CLI with nix-clap
 const nc = new NixClap({
@@ -321,6 +327,34 @@ const nc = new NixClap({
               process.exit(result.success ? 0 : 1);
             },
           },
+        },
+      },
+      setup: {
+        desc: 'Print setup instructions for AI agents',
+        exec: async () => {
+          // Read AGENT-INSTRUCTIONS.md from the setup directory
+          const setupDir = join(__dirname, '..', 'setup');
+          const agentInstructionsPath = join(setupDir, 'AGENT-INSTRUCTIONS.md');
+
+          let agentInstructions: string;
+          try {
+            agentInstructions = readFileSync(agentInstructionsPath, 'utf-8');
+          } catch (err) {
+            console.error(`Error: Could not read ${agentInstructionsPath}`);
+            process.exit(1);
+          }
+
+          console.log(`Please complete the following tasks:
+1. Please add the MCPU Instructions to the agent file user specified, in an appropriate location. Integrate it naturally into any existing structure.
+If user didn't specify an agent file, then use AGENTS.md.
+
+--- BEGIN MCPU Instructions CONTENT ---
+${agentInstructions}
+--- END MCPU Instructions CONTENT ---
+
+2. Update CLAUDE.md (if present, and not the file used in step 1)
+See AGENTS.md for details about using MCPU to talk to MCP servers.
+`);
         },
       },
     },

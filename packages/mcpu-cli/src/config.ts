@@ -7,10 +7,11 @@ import { ProjectMCPConfigSchema, type MCPServerConfig, isStdioConfig, type Stdio
 /**
  * Discovers MCP server configurations from multiple sources:
  * 1. --config flag (explicit config file)
- * 2. .config/mcpu/config.local.json in current directory (local project config, gitignored)
- * 3. $XDG_CONFIG_HOME/mcpu/config.json or ~/.config/mcpu/config.json (user config, follows XDG)
+ * 2. .config/mcpu/config.local.json in current directory (project local, gitignored)
+ * 3. .config/mcpu/config.json in current directory (project shared, committed)
+ * 4. $XDG_CONFIG_HOME/mcpu/config.json or ~/.config/mcpu/config.json (user config, follows XDG)
  *
- * Configs are merged with later sources taking precedence.
+ * Configs are merged with higher priority sources overwriting lower priority.
  */
 export class ConfigDiscovery {
   private configs: Map<string, MCPServerConfig> = new Map();
@@ -38,10 +39,13 @@ export class ConfigDiscovery {
       // 1. Explicit config file
       this.options.configFile,
 
-      // 2. Local project config
+      // 2. Project local config (gitignored)
       join(workingDir, '.config', 'mcpu', 'config.local.json'),
 
-      // 3. User config (XDG)
+      // 3. Project shared config (committed)
+      join(workingDir, '.config', 'mcpu', 'config.json'),
+
+      // 4. User config (XDG)
       join(configHome, 'mcpu', 'config.json'),
     ];
 

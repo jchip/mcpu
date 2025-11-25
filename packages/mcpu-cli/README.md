@@ -21,95 +21,61 @@ npm install -g @mcpu/cli
 
 ## 🤖 Using with Claude Code
 
-Add this to your `.claude/CLAUDE.md` or project's `CLAUDE.md` to enable Claude Code to use MCPU:
+Add the content from [setup/AGENT-INSTRUCTIONS.md](setup/AGENT-INSTRUCTIONS.md) to your `.claude/CLAUDE.md` or project's `CLAUDE.md` to enable Claude Code to use MCPU.
 
-````markdown
-## MCP Servers through MCPU Tools
+Or tell Claude to do it. Pick a prompt appropriate for your need:
 
-### MCPU Daemon and `mcpu-remote` usage
+- `AGENTS.md` and reference in `CLAUDE.md`
 
-**General Command formats**
-
-- Start daemon (background): `mcpu-daemon -p=$PPID &` (use `run_in_background: true`)
-- Send remote commands to daemon: `mcpu-remote -p=$PPID -- <args for mcpu>`
-
-**mcpu-remote Commands and their flags and args:**
-
-- ALWAYS START command with `mcpu-remote -p=$PPID`
-- List mcp servers: `-- servers`
-- List tools of mcp servers: `-- tools [servers...]`
-- Get tool info in unwrapped text format: `-- info <server> <tools...>`
-- Get complete raw schema (if unwrapped text isn't sufficient): `-- --yaml info <server> <tools...>`
-- Call tool and receive unwrapped text response: `-- call <server> <tool>`, and use YAML input mode for params.
-- Call tool and receive full MCP response as YAML: `-- --yaml call <server> <tool>`
-- Shutdown the mcpu-daemon: `mcpu-remote -p=$PPID stop`
-
-### YAML input mode (stdin/file)
-
-- `mcpu-remote --stdin` accepts a YAML/JSON piped to its stdin.
-- `mcpu-remote -b -c=<file>` accepts a YAML/JSON file,
-  - `-b` renames the file with `.bak` suffix after reading it, replacing possible existing `.bak` file.
-
-**WORKFLOW**
-
-- One time step: `mkdir -p /tmp/.tmp-claude-$PPID && echo /tmp/.tmp-claude-$PPID`
-
-1. Use Write tool to create `mcpu-cmd.yaml` in the dir from one time step
-2. Run mcpu-remote with `-b -c=<file>` option
-
-Example YAML:
-
-```YAML
-argv: [call, <server>, <tool>]
-params:
-  a: b
-  a: b
+```
+run `mcpu setup` and follow the instructions
 ```
 
-### `mcpServerConfig`
+- Project `CLAUDE.md`
 
-- `call` command accepts `--restart` flag and a `mcpServerConfig` object:
-
-```YAML
-argv: [call, --restart, <server>, <tool>]
-params:
-  a: b
-  a: b
-mcpServerConfig:
-  extraArgs: []
+```
+run `mcpu setup` and follow the instrctuions to setup only my project CLAUDE.md
 ```
 
-- A dedicate `config` command also available for setting `extraArgs`:
+- User level `CLAUDE.md`
 
-```YAML
-argv: [config, <server>]
-mcpServerConfig:
-  extraArgs: []
 ```
-
-**WORKFLOW - ALWAYS FOLLOW THIS SEQUENCE:**
-
-1. **START DAEMON** (`run_in_background: true`) - skip if already running
-2. **LIST SERVERS** - skip if known
-3. **LIST TOOLS** - skip if known
-4. **GET TOOL INFO** - skip if already retrieved or tool has no/simple params
-5. **CALL TOOL** - using info from above
-
-**Response formats:**
-
-- Default: Unwrapped text content (user-friendly, matches Claude CLI behavior)
-- `--json/--yaml/--raw`: Full MCP response structure with metadata
-
-**When to use `--raw`, `--yaml`, or `--json` flags:**
-
-- For `info`: Get complete tool schema including `inputSchema` and `annotations` (only if human-readable version insufficient)
-- For `call`: Get full MCP response structure instead of just extracted text
-- Useful for debugging, understanding complex parameters, or accessing response metadata
-````
+run `mcpu setup` and follow the instrctuions to setup only my user CLAUDE.md
+```
 
 ## Configuration
 
-Create `.config/mcpu/config.local.json` in your project:
+MCPU loads and merges configuration from multiple sources (highest priority first):
+
+| Priority | Location                         | Scope             | Git    |
+| -------- | -------------------------------- | ----------------- | ------ |
+| 1        | `.config/mcpu/config.local.json` | Project (private) | Ignore |
+| 2        | `.config/mcpu/config.json`       | Project (shared)  | Commit |
+| 3        | `~/.config/mcpu/config.json`     | User (global)     | N/A    |
+
+- **User config** (`~/.config/mcpu/config.json`) - Your personal MCP servers available in all projects
+- **Project config** (`.config/mcpu/config.json`) - Shared with your team via git
+- **Local config** (`.config/mcpu/config.local.json`) - Your private overrides, not committed
+
+### Adding MCP Servers
+
+Use `mcpu add` to easily add servers to any config:
+
+```bash
+# Add to project local config (default, gitignored)
+mcpu add airtable --env AIRTABLE_API_KEY=xxx -- npx -y airtable-mcp-server
+
+# Add to project shared config (committed to git)
+mcpu add --scope project playwright -- npx -y @anthropic/mcp-playwright
+
+# Add to user config (available in all projects)
+mcpu add --scope user memory -- npx -y @modelcontextprotocol/server-memory
+
+# Add HTTP/SSE server
+mcpu add --transport http notion https://mcp.notion.com/mcp
+```
+
+### Config File Format
 
 ```json
 {
@@ -165,21 +131,7 @@ EOF
 
 ### `mcpu add <name> [command]`
 
-Add a new MCP server. Works like `claude mcp add`.
-
-```bash
-# Add stdio server with command after --
-mcpu add airtable --env AIRTABLE_API_KEY=xxx -- npx -y airtable-mcp-server
-
-# Add HTTP server
-mcpu add --transport http notion https://mcp.notion.com/mcp
-
-# Add to user config (global)
-mcpu add --scope user memory -- npx -y @modelcontextprotocol/server-memory
-
-# Multiple env vars
-mcpu add myserver -e KEY1=val1 -e KEY2=val2 -- node server.js
-```
+Add a new MCP server. See [Configuration](#configuration) for examples.
 
 **Options:**
 
@@ -190,20 +142,10 @@ mcpu add myserver -e KEY1=val1 -e KEY2=val2 -- node server.js
 
 ### `mcpu add-json <name> <json>`
 
-Add an MCP server with a JSON config string. Works like `claude mcp add-json`.
+Add an MCP server with a JSON config string.
 
 ```bash
-# Simple stdio server
-mcpu add-json echo '{"command": "echo", "args": ["hello"]}'
-
-# Complex config with env vars
-mcpu add-json myserver '{"command": "uvx", "args": ["some-mcp", "--opt"], "env": {"API_KEY": "secret"}}'
-
-# HTTP server
-mcpu add-json api '{"url": "https://api.example.com/mcp"}'
-
-# Add to user config
-mcpu add-json --scope user memory '{"command": "npx", "args": ["-y", "@modelcontextprotocol/server-memory"]}'
+mcpu add-json myserver '{"command": "uvx", "args": ["some-mcp"], "env": {"API_KEY": "xxx"}}'
 ```
 
 **Options:**
@@ -266,13 +208,16 @@ mcpu call filesystem read_file --stdin <<< '{"path": "/etc/hosts"}'
 
 ## File Locations
 
-MCPU follows the [XDG Base Directory](https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html) specification:
+MCPU follows the [XDG Base Directory](https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html) specification.
 
-### Configuration Files (searched in order):
+### Configuration Files
 
-1. `--config <file>` - Explicit CLI flag
-2. `.config/mcpu/config.local.json` - Project-specific config (gitignored)
-3. `$XDG_CONFIG_HOME/mcpu/config.json` - User config (defaults to `~/.config/mcpu/config.json`)
+See [Configuration](#configuration) for details. Files are merged in priority order:
+
+1. `--config <file>` - Explicit CLI flag (overrides all)
+2. `.config/mcpu/config.local.json` - Project local (gitignored)
+3. `.config/mcpu/config.json` - Project shared (committed)
+4. `~/.config/mcpu/config.json` - User global
 
 ### Cache Files:
 
@@ -296,7 +241,7 @@ MCPU follows the [XDG Base Directory](https://specifications.freedesktop.org/bas
 
 ## Troubleshooting
 
-- **No MCP servers configured**: Check `.config/mcpu/config.local.json` or `~/.config/mcpu/config.json`
+- **No MCP servers configured**: Add servers with `mcpu add` or check config files (see [Configuration](#configuration))
 - **Failed to connect**: Verify MCP server is installed and command path is correct
 - **Unknown option**: Tool arguments must come after `mcpu call <server> <tool>`
 
