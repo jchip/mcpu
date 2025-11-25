@@ -6,7 +6,7 @@ $pkg:
   '@modelcontextprotocol/sdk': ^1.0.4
   chalk: ^5.3.0
   express: ^5.1.0
-  nix-clap: ^2.4.4
+  nix-clap: ^2.4.5
   optional-require: ^2.1.0
   pino: ^10.1.0
   pino-pretty: ^13.1.2
@@ -1517,11 +1517,11 @@ negotiator:
 nix-clap:
  _latest: 1.3.13
  _:
-  ^2.4.4: 2.4.4
- 2.4.4:
+  ^2.4.5: 2.4.5
+ 2.4.5:
   top: 1
-  $: sha512-Sgl0skrGiZc5/xi0xv4NV1VZ17OenGEwu/i6+tIFRpASuAbZHzaANtf3CrUqPJWrfSIjoovEOki8EEV3ouesKA==
-  _: 'https://registry.npmjs.org/nix-clap/-/nix-clap-2.4.4.tgz'
+  $: sha512-EUJI4U1nL0XFnBL0iu7xkod9791ggnElOaExdYufBllNOqVE+cGcCdYGaYUdbIrrcxFnwhxKILq0nf+QBC7zRQ==
+  _: 'https://registry.npmjs.org/nix-clap/-/nix-clap-2.4.5.tgz'
   dependencies:
    tslib: ^2.6.2
 object-assign:

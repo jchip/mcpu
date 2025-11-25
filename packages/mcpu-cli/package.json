@@ -53,7 +53,7 @@
     "@modelcontextprotocol/sdk": "^1.0.4",
     "chalk": "^5.3.0",
     "express": "^5.1.0",
-    "nix-clap": "^2.4.4",
+    "nix-clap": "^2.4.5",
     "optional-require": "^2.1.0",
     "pino": "^10.1.0",
     "pino-pretty": "^13.1.2",
