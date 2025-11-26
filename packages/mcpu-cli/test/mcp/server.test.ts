@@ -75,9 +75,9 @@ describe('McpuMcpServer', () => {
       expect(serverWithOptions).toBeDefined();
     });
 
-    it('should register mcpu_cli tool', () => {
+    it('should register cli tool', () => {
       expect(mockTool).toHaveBeenCalledWith(
-        'mcpu_cli',
+        'cli',
         expect.any(String),
         expect.any(Object),
         expect.any(Function)
@@ -85,7 +85,7 @@ describe('McpuMcpServer', () => {
     });
   });
 
-  describe('mcpu_cli tool', () => {
+  describe('cli tool', () => {
     let toolHandler: Function;
 
     beforeEach(() => {

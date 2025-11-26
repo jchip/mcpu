@@ -63,7 +63,7 @@ argv: servers | tools [svr..] | info <svr> [tools..] | call <svr> <tool> | conne
 params: tool args for call. --yaml/--json: full MCP response.`;
 
     this.server.tool(
-      "mcpu_cli",
+      "cli",
       description,
       {
         argv: z.array(z.string()).describe("Command args"),

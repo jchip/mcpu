@@ -40,14 +40,14 @@ claude mcp add mcpu -- npx -y --package @mcpu/cli -c mcpu-mcp
 
 Or if installed globally, use `"command": "mcpu-mcp"` instead.
 
-This exposes a single `mcpu_cli` tool that provides access to all your configured MCP servers.
+This exposes a single `cli` tool that provides access to all your configured MCP servers.
 
 Add to your `CLAUDE.md`:
 
 ```markdown
 ## MCP Servers through MCPU
 
-Use the MCPU MCP server `mcpu_cli` tool as a proxy to discover and use other MCP servers.
+Use the MCPU MCP server `cli` tool as a proxy to discover and use other MCP servers.
 ```
 
 ## 🤖 Using with Claude Code (CLI Mode)
