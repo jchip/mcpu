@@ -237,6 +237,40 @@ describe('McpuMcpServer', () => {
         isError: false,
       });
     });
+
+    it('should handle concurrent calls', async () => {
+      let callCount = 0;
+      mockCoreExecute.mockImplementation(async ({ argv }) => {
+        callCount++;
+        const currentCall = callCount;
+        // Simulate varying execution times
+        await new Promise(resolve => setTimeout(resolve, Math.random() * 50));
+        return {
+          success: true,
+          output: `Result ${currentCall}: ${argv.join(' ')}`,
+          exitCode: 0,
+        };
+      });
+
+      // Launch 5 concurrent calls
+      const results = await Promise.all([
+        toolHandler({ argv: ['servers'] }),
+        toolHandler({ argv: ['tools', 'playwright'] }),
+        toolHandler({ argv: ['call', 'server1', 'tool1'], params: { a: 1 } }),
+        toolHandler({ argv: ['call', 'server2', 'tool2'], params: { b: 2 } }),
+        toolHandler({ argv: ['connections'] }),
+      ]);
+
+      // All should succeed
+      expect(results).toHaveLength(5);
+      results.forEach(result => {
+        expect(result.isError).toBe(false);
+        expect(result.content[0].text).toMatch(/^Result \d:/);
+      });
+
+      // All calls should have been made
+      expect(mockCoreExecute).toHaveBeenCalledTimes(5);
+    });
   });
 
   describe('start', () => {
