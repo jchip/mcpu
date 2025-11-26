@@ -22,7 +22,15 @@ npm install -g @mcpu/cli
 **Claude Code:**
 
 ```bash
+# Add to your project's config
 claude mcp add mcpu -- npx -y --package @mcpu/cli -c mcpu-mcp
+
+# or for user level:
+claude mcp add --scope user mcpu -- npx -y --package @mcpu/cli -c mcpu-mcp
+
+# if installed @mcpu/cli globally:
+claude mcp add mcpu -- mcpu-mcp
+claude mcp add --scope user mcpu -- mcpu-mcp  # user scope config
 ```
 
 **Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
@@ -42,7 +50,7 @@ Or if installed globally, use `"command": "mcpu-mcp"` instead.
 
 This exposes a single `cli` tool that provides access to all your configured MCP servers.
 
-Add to your `CLAUDE.md`:
+**Add to your `CLAUDE.md`**:
 
 ```markdown
 ## MCP Servers through MCPU
