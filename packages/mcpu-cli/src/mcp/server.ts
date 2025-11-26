@@ -64,6 +64,9 @@ Commands for argv:
 - info <server> [tools...]: Get detailed tool schema
 - call <server> <tool>: Call a tool
 - config <server>: Additional config for MCP server (extraArgs)
+- connect <server>: Connect to an MCP server
+- disconnect <server>: Disconnect from an MCP server
+- connections: List active server connections
 
 For call commands, pass tool parameters in the params field.
 
