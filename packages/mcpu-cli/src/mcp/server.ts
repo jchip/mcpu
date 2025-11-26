@@ -67,7 +67,7 @@ params: tool args for call. --yaml/--json: full MCP response.`;
       description,
       {
         argv: z.array(z.string()).describe("Command args"),
-        params: z.record(z.any()).optional().describe("Tool params for call"),
+        params: z.union([z.record(z.any()), z.string()]).optional().describe("Tool params for call"),
         mcpServerConfig: z
           .object({
             extraArgs: z.array(z.string()).optional(),
@@ -77,12 +77,22 @@ params: tool args for call. --yaml/--json: full MCP response.`;
         cwd: z.string().optional().describe("Working dir"),
       },
       async ({ argv, params, mcpServerConfig, cwd }) => {
-        this.log("Executing command", { argv, params, mcpServerConfig, cwd });
+        // Parse params if passed as JSON string
+        let parsedParams = params;
+        if (typeof params === "string") {
+          try {
+            parsedParams = JSON.parse(params);
+          } catch {
+            parsedParams = params; // Keep as-is if not valid JSON
+          }
+        }
+
+        this.log("Executing command", { argv, params: parsedParams, mcpServerConfig, cwd });
 
         try {
           const result = await coreExecute({
             argv,
-            params,
+            params: parsedParams,
             mcpServerConfig,
             cwd,
             connectionPool: this.pool,
