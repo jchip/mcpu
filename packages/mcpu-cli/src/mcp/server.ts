@@ -5,14 +5,14 @@
  * using the standard MCP protocol over stdio.
  */
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { z } from 'zod';
-import { coreExecute } from '../core/core.ts';
-import { ConnectionPool } from '../daemon/connection-pool.ts';
-import { ConfigDiscovery } from '../config.ts';
-import { VERSION } from '../version.ts';
-import type { MCPServerConfig } from '../types.ts';
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
+import { coreExecute } from "../core/core.ts";
+import { ConnectionPool } from "../daemon/connection-pool.ts";
+import { ConfigDiscovery } from "../config.ts";
+import { VERSION } from "../version.ts";
+import type { MCPServerConfig } from "../types.ts";
 
 export interface McpuMcpServerOptions {
   config?: string;
@@ -30,7 +30,7 @@ export class McpuMcpServer {
   constructor(options: McpuMcpServerOptions = {}) {
     this.options = options;
     this.server = new McpServer({
-      name: 'mcpu-mcp',
+      name: "mcpu-mcp",
       version: VERSION,
     });
     this.pool = new ConnectionPool({
@@ -56,19 +56,44 @@ export class McpuMcpServer {
    * Register the mcpu_cli tool
    */
   private registerTools(): void {
+    const description = `Execute MCPU CLI commands to interact with MCP servers.
+
+Commands for argv:
+- servers: List configured MCP servers
+- tools [servers...]: List tools from servers
+- info <server> [tools...]: Get detailed tool schema
+- call <server> <tool>: Call a tool
+- config <server>: Additional config for MCP server (extraArgs)
+
+For call commands, pass tool parameters in the params field.
+
+Response format:
+- Default: Unwrapped text content extracted from MCP response
+- '--yaml' in argv: Full MCP response structure with metadata.  '--json' also supported.  ie: ['--yaml', 'info', 'playwright', 'browser_navigate']`;
+
     this.server.tool(
-      'mcpu_cli',
-      'Execute MCPU CLI commands to interact with MCP servers. Use argv to specify the command (e.g., ["servers"], ["tools"], ["call", "server", "tool"]). For call commands, pass tool parameters in params.',
+      "mcpu_cli",
+      description,
       {
-        argv: z.array(z.string()).describe('CLI arguments (e.g., ["servers"], ["tools", "playwright"], ["call", "playwright", "browser_navigate"])'),
-        params: z.record(z.any()).optional().describe('Tool parameters for the call command'),
-        mcpServerConfig: z.object({
-          extraArgs: z.array(z.string()).optional(),
-        }).optional().describe('Runtime server configuration (e.g., extraArgs for stdio servers)'),
-        cwd: z.string().optional().describe('Working directory for resolving config paths'),
+        argv: z
+          .array(z.string())
+          .describe(
+            'Command and arguments (e.g., ["servers"], ["tools", "playwright"], ["call", "playwright", "browser_navigate"])'
+          ),
+        params: z
+          .record(z.any())
+          .optional()
+          .describe("Tool parameters for the call command"),
+        mcpServerConfig: z
+          .object({
+            extraArgs: z.array(z.string()).optional(),
+          })
+          .optional()
+          .describe("Additional CLI flags for starting stdio MCP servers"),
+        cwd: z.string().optional().describe("Working directory"),
       },
       async ({ argv, params, mcpServerConfig, cwd }) => {
-        this.log('Executing command', { argv, params, mcpServerConfig, cwd });
+        this.log("Executing command", { argv, params, mcpServerConfig, cwd });
 
         try {
           const result = await coreExecute({
@@ -80,22 +105,29 @@ export class McpuMcpServer {
             configs: this.configs,
           });
 
-          this.log('Command result', { success: result.success, exitCode: result.exitCode });
+          this.log("Command result", {
+            success: result.success,
+            exitCode: result.exitCode,
+          });
 
           return {
-            content: [{
-              type: 'text' as const,
-              text: result.output || result.error || '',
-            }],
+            content: [
+              {
+                type: "text" as const,
+                text: result.output || result.error || "",
+              },
+            ],
             isError: !result.success,
           };
         } catch (error: any) {
-          this.log('Command error', { error: error.message });
+          this.log("Command error", { error: error.message });
           return {
-            content: [{
-              type: 'text' as const,
-              text: `Error: ${error.message || String(error)}`,
-            }],
+            content: [
+              {
+                type: "text" as const,
+                text: `Error: ${error.message || String(error)}`,
+              },
+            ],
             isError: true,
           };
         }
@@ -114,27 +146,27 @@ export class McpuMcpServer {
     });
     this.configs = await discovery.loadConfigs();
 
-    this.log('Loaded configs', { servers: Array.from(this.configs.keys()) });
+    this.log("Loaded configs", { servers: Array.from(this.configs.keys()) });
 
     // Connect via stdio transport
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
 
-    this.log('MCP server started');
+    this.log("MCP server started");
   }
 
   /**
    * Shutdown the server and cleanup connections
    */
   async shutdown(): Promise<void> {
-    this.log('Shutting down');
+    this.log("Shutting down");
 
     try {
       await this.pool.shutdown();
     } catch (error: any) {
-      this.log('Error during pool shutdown', { error: error.message });
+      this.log("Error during pool shutdown", { error: error.message });
     }
 
-    this.log('Shutdown complete');
+    this.log("Shutdown complete");
   }
 }
