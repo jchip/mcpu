@@ -56,44 +56,25 @@ export class McpuMcpServer {
    * Register the mcpu_cli tool
    */
   private registerTools(): void {
-    const description = `Execute MCPU CLI commands to interact with MCP servers.
+    const description = `MCPU CLI proxy for MCP servers.
 
-Commands for argv:
-- servers: List configured MCP servers
-- tools [servers...]: List tools from servers
-- info <server> [tools...]: Get detailed tool schema
-- call <server> <tool>: Call a tool
-- config <server>: Additional config for MCP server (extraArgs)
-- connect <server>: Connect to an MCP server
-- disconnect <server>: Disconnect from an MCP server
-- connections: List active server connections
+argv: servers | tools [svr..] | info <svr> [tools..] | call <svr> <tool> | connect/disconnect <svr> | connections | config <svr>
 
-For call commands, pass tool parameters in the params field.
-
-Response format:
-- Default: Unwrapped text content extracted from MCP response
-- '--yaml' in argv: Full MCP response structure with metadata.  '--json' also supported.  ie: ['--yaml', 'info', 'playwright', 'browser_navigate']`;
+params: tool args for call. --yaml/--json: full MCP response.`;
 
     this.server.tool(
       "mcpu_cli",
       description,
       {
-        argv: z
-          .array(z.string())
-          .describe(
-            'Command and arguments (e.g., ["servers"], ["tools", "playwright"], ["call", "playwright", "browser_navigate"])'
-          ),
-        params: z
-          .record(z.any())
-          .optional()
-          .describe("Tool parameters for the call command"),
+        argv: z.array(z.string()).describe("Command args"),
+        params: z.record(z.any()).optional().describe("Tool params for call"),
         mcpServerConfig: z
           .object({
             extraArgs: z.array(z.string()).optional(),
           })
           .optional()
-          .describe("Additional CLI flags for starting stdio MCP servers"),
-        cwd: z.string().optional().describe("Working directory"),
+          .describe("Server extraArgs"),
+        cwd: z.string().optional().describe("Working dir"),
       },
       async ({ argv, params, mcpServerConfig, cwd }) => {
         this.log("Executing command", { argv, params, mcpServerConfig, cwd });
