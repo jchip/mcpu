@@ -2,14 +2,12 @@
 
 > **Universal MCP gateway for any AI agent - Zero upfront tokens, unlimited servers**
 
-MCPU enables AI agents with a Bash tool to use MCP servers, even without native MCP SDK integration. It compresses schemas by 97%\* and provides on-demand discovery of unlimited MCP servers with zero upfront token cost.
+MCPU enables AI agents to use MCP servers with minimal token overhead. It can be used in two ways:
 
-**Requirements:** The AI agent must have a Bash tool that supports:
+1. **As an MCP Server** (`mcpu-mcp`) - For agents with native MCP support (Claude Desktop, etc.)
+2. **Via CLI** (`mcpu-daemon` + `mcpu-remote`) - For agents with Bash tool support (Claude Code, etc.)
 
-- Running background processes (`command &` or `run_in_background: true`)
-- Executing shell commands and reading their output
-
-Currently tested with: **Claude Code**
+Both modes provide on-demand discovery of unlimited MCP servers with zero upfront token cost, compressing schemas by 97%\*.
 
 \*Example: The Playwright MCP server alone requires ~14,000 tokens upfront for its schema. MCPU reduces this to just a few hundred tokens of instructions.
 
@@ -19,7 +17,40 @@ Currently tested with: **Claude Code**
 npm install -g @mcpu/cli
 ```
 
-## 🤖 Using with Claude Code
+### As an MCP Server (Claude Desktop, Claude Code, etc.)
+
+**Claude Code:**
+
+```bash
+claude mcp add mcpu -- npx -y --package @mcpu/cli -c mcpu-mcp
+```
+
+**Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "mcpu": {
+      "command": "npx",
+      "args": ["-y", "--package", "@mcpu/cli", "-c", "mcpu-mcp"]
+    }
+  }
+}
+```
+
+Or if installed globally, use `"command": "mcpu-mcp"` instead.
+
+This exposes a single `mcpu_cli` tool that provides access to all your configured MCP servers.
+
+Add to your `CLAUDE.md`:
+
+```markdown
+## MCP Servers through MCPU
+
+Use the MCPU MCP server `mcpu_cli` tool as a proxy to discover and use other MCP servers.
+```
+
+## 🤖 Using with Claude Code (CLI Mode)
 
 Add the content from [setup/AGENT-INSTRUCTIONS.md](setup/AGENT-INSTRUCTIONS.md) to your `.claude/CLAUDE.md` or project's `CLAUDE.md` to enable Claude Code to use MCPU.
 
