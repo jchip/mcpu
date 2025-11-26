@@ -29,7 +29,8 @@
   "bin": {
     "mcpu": "./bin/mcpu.mjs",
     "mcpu-daemon": "./bin/mcpu-daemon.mjs",
-    "mcpu-remote": "./bin/mcpu-remote.mjs"
+    "mcpu-remote": "./bin/mcpu-remote.mjs",
+    "mcpu-mcp": "./bin/mcpu-mcp.mjs"
   },
   "files": [
     "bin",
