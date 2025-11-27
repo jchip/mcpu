@@ -4,6 +4,7 @@
   "description": "MCPU Proxy - MCP Unified server management and routing",
   "main": "dist/index.js",
   "homepage": "",
+  "private": true,
   "license": "UNLICENSED",
   "scripts": {
     "build": "tsc",
