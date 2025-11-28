@@ -202,7 +202,7 @@ async function listServerTools(
       } else {
         for (const tool of tools) {
           const briefArgs = formatBriefArgs(tool);
-          console.log(`${chalk.green(tool.name)} - ${tool.description || 'No description'}${chalk.dim(briefArgs)}`);
+          console.log(`  - ${chalk.green(tool.name)} - ${tool.description || 'No description'}${chalk.dim(briefArgs)}`);
         }
       }
 
@@ -295,7 +295,7 @@ async function listAllTools(
         for (const tool of tools) {
           const briefArgs = formatBriefArgs(tool);
           const description = tool.description || 'No description';
-          console.log(`  ${chalk.green(tool.name)} - ${description}${chalk.dim(briefArgs)}`);
+          console.log(`  - ${chalk.green(tool.name)} - ${description}${chalk.dim(briefArgs)}`);
 
           // Estimate tokens for this entry
           totalTokens += estimateTokens(`${tool.name} - ${description}${briefArgs}\n`);

@@ -536,10 +536,10 @@ export async function executeToolsCommand(
           output += `MCP server ${server}:\n`;
           for (const tool of tools) {
             if (args.names) {
-              output += `  ${tool.name}\n`;
+              output += `  - ${tool.name}\n`;
             } else {
               const briefArgs = formatBriefArgs(tool);
-              output += `  ${tool.name} - ${tool.description || 'No description'}${briefArgs}\n`;
+              output += `  - ${tool.name} - ${tool.description || 'No description'}${briefArgs}\n`;
             }
           }
           output += '\n';
