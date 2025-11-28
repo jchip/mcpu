@@ -78,7 +78,7 @@ function formatBriefArgs(tool: Tool): string {
     args.push(argStr);
   }
 
-  return args.length > 0 ? ` ${args.join(', ')}` : '';
+  return args.length > 0 ? ` PARAMS: ${args.join(', ')}` : '';
 }
 
 
