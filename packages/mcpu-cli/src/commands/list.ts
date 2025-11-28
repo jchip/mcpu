@@ -78,9 +78,9 @@ function formatBriefArgs(tool: Tool): string {
       typeStr = propSchema.enum.join('|');
     }
 
-    // Build parameter string: `name?` type
+    // Build parameter string: name? type
     const optionalMark = !required.has(name) ? '?' : '';
-    const argStr = `\`${name}${optionalMark}\` ${typeStr}`;
+    const argStr = `${name}${optionalMark} ${typeStr}`;
 
     args.push(argStr);
   }
