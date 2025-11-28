@@ -14,6 +14,21 @@ import { isStdioConfig, isUrlConfig, isWebSocketConfig } from '../types.ts';
  */
 
 /**
+ * Abbreviate type names to 3-letter codes
+ */
+function abbreviateType(type: string): string {
+  const abbrevMap: Record<string, string> = {
+    'string': 'str',
+    'integer': 'int',
+    'number': 'num',
+    'boolean': 'bool',
+    'object': 'obj',
+    'array': 'arr',
+  };
+  return abbrevMap[type] || type;
+}
+
+/**
  * Extract brief argument summary from tool schema
  * Format: "`arg1?` type, `arg2` type"
  */
@@ -37,17 +52,17 @@ function formatBriefArgs(tool: Tool): string {
     if (propSchema.type) {
       // Handle union types (array of types)
       if (Array.isArray(propSchema.type)) {
-        typeStr = propSchema.type.join('|');
+        typeStr = propSchema.type.map(abbreviateType).join('|');
       }
       // Handle single type
       else if (propSchema.type === 'array' && propSchema.items) {
         // Array type with items
         const itemType = Array.isArray(propSchema.items.type)
-          ? propSchema.items.type.join('|')
-          : propSchema.items.type || 'any';
+          ? propSchema.items.type.map(abbreviateType).join('|')
+          : abbreviateType(propSchema.items.type || 'any');
         typeStr = `${itemType}[]`;
       } else {
-        typeStr = propSchema.type;
+        typeStr = abbreviateType(propSchema.type);
       }
     }
 
