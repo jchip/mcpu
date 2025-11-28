@@ -37,6 +37,43 @@ function abbreviateType(type: string): string {
 }
 
 /**
+ * Format object type with its properties
+ */
+function formatObjectType(propSchema: any): string {
+  if (propSchema.type !== 'object' || !propSchema.properties) {
+    return 'o';
+  }
+
+  const props = propSchema.properties;
+  const required = new Set(propSchema.required || []);
+  const propStrs: string[] = [];
+
+  // Limit to first 4 properties to keep it compact
+  const propEntries = Object.entries(props).slice(0, 4);
+  const hasMore = Object.keys(props).length > 4;
+
+  for (const [name, prop] of propEntries) {
+    const p = prop as any;
+    let typeStr = 'any';
+
+    if (p.type) {
+      if (Array.isArray(p.type)) {
+        typeStr = p.type.map(abbreviateType).join('|');
+      } else {
+        typeStr = abbreviateType(p.type);
+      }
+    }
+
+    const opt = required.has(name) ? '' : '?';
+    propStrs.push(`${name}${opt}:${typeStr}`);
+  }
+
+  const propsStr = propStrs.join(',');
+  const ellipsis = hasMore ? ',...' : '';
+  return `o{${propsStr}${ellipsis}}`;
+}
+
+/**
  * Extract brief argument summary from tool schema
  * Format: "required_params, optional_params?"
  */
@@ -70,13 +107,21 @@ function formatBriefArgs(tool: Tool): string {
       if (Array.isArray(propSchema.type)) {
         typeStr = propSchema.type.map(abbreviateType).join('|');
       }
-      // Handle single type
+      // Handle object type with properties
+      else if (propSchema.type === 'object') {
+        typeStr = formatObjectType(propSchema);
+      }
+      // Handle array type
       else if (propSchema.type === 'array' && propSchema.items) {
-        // Array type with items
-        const itemType = Array.isArray(propSchema.items.type)
-          ? propSchema.items.type.map(abbreviateType).join('|')
-          : abbreviateType(propSchema.items.type || 'any');
-        typeStr = `${itemType}[]`;
+        // Check if array items are objects with properties
+        if (propSchema.items.type === 'object' && propSchema.items.properties) {
+          typeStr = `${formatObjectType(propSchema.items)}[]`;
+        } else {
+          const itemType = Array.isArray(propSchema.items.type)
+            ? propSchema.items.type.map(abbreviateType).join('|')
+            : abbreviateType(propSchema.items.type || 'any');
+          typeStr = `${itemType}[]`;
+        }
       } else {
         typeStr = abbreviateType(propSchema.type);
       }
