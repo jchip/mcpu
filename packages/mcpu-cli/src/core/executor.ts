@@ -21,7 +21,7 @@ function abbreviateType(type: string): string {
     'string': 's',
     'integer': 'i',
     'number': 'n',
-    'null': 'null',
+    'null': 'z',
     'boolean': 'b',
     'object': 'o',
     'array': 'a',
@@ -536,7 +536,7 @@ export async function executeToolsCommand(
 
         // Add type legend if not in names-only mode
         if (!args.names) {
-          output += 'Types: s=string, i=integer, n=number, b=bool, o=object\n\n';
+          output += 'Types: s=string, i=integer, n=number, z=null, b=bool, o=object\n\n';
         }
 
         for (const [server, tools] of toolsByServer.entries()) {
