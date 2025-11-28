@@ -20,8 +20,8 @@ function abbreviateType(type: string): string {
   const abbrevMap: Record<string, string> = {
     'string': 's',
     'integer': 'i',
-    'number': '#',
-    'null': 'n',
+    'number': 'n',
+    'null': 'null',
     'boolean': 'b',
     'object': 'o',
     'array': 'a',
@@ -536,7 +536,7 @@ export async function executeToolsCommand(
 
         // Add type legend if not in names-only mode
         if (!args.names) {
-          output += 'Types: s=string, i=integer, #=number, n=null, b=bool, o=object\n\n';
+          output += 'Types: s=string, i=integer, n=number, b=bool, o=object\n\n';
         }
 
         for (const [server, tools] of toolsByServer.entries()) {

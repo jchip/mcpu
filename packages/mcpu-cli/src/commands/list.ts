@@ -27,8 +27,8 @@ function abbreviateType(type: string): string {
   const abbrevMap: Record<string, string> = {
     'string': 's',
     'integer': 'i',
-    'number': '#',
-    'null': 'n',
+    'number': 'n',
+    'null': 'null',
     'boolean': 'b',
     'object': 'o',
     'array': 'a',
@@ -196,7 +196,7 @@ async function listServerTools(
       }, null, 2));
     } else {
       // Human-readable output
-      console.log(chalk.dim('Types: s=string, i=integer, #=number, n=null, b=bool, o=object\n'));
+      console.log(chalk.dim('Types: s=string, i=integer, n=number, b=bool, o=object\n'));
       console.log(chalk.bold(`Tools from ${chalk.cyan(serverName)}:\n`));
 
       if (tools.length === 0) {
@@ -278,7 +278,7 @@ async function listAllTools(
   } else {
     // Human-readable output
     console.log(chalk.bold('\nAll Available Tools:\n'));
-    console.log(chalk.dim('Types: s=string, i=integer, #=number, n=null, b=bool, o=object\n'));
+    console.log(chalk.dim('Types: s=string, i=integer, n=number, b=bool, o=object\n'));
 
     if (allTools.length === 0) {
       console.log(chalk.yellow('No tools available'));
