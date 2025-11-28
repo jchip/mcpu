@@ -519,7 +519,8 @@ export async function executeToolsCommand(
         meta,
       };
     } else {
-      let output = 'All Available Tools:\n\n';
+      // Only show "All Available Tools" header if querying multiple servers
+      let output = serversToQuery.size > 1 ? 'All Available Tools:\n\n' : '';
 
       if (allTools.length === 0) {
         output += 'No tools available\n';
