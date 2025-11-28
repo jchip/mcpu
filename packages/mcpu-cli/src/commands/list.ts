@@ -38,7 +38,7 @@ function abbreviateType(type: string): string {
 
 /**
  * Extract brief argument summary from tool schema
- * Format: "arg1? type, arg2 type"
+ * Format: "required_params, optional_params?"
  */
 function formatBriefArgs(tool: Tool): string {
   if (!tool.inputSchema || typeof tool.inputSchema !== 'object') {
@@ -56,7 +56,8 @@ function formatBriefArgs(tool: Tool): string {
     return '';
   }
 
-  const args: string[] = [];
+  const requiredArgs: string[] = [];
+  const optionalArgs: string[] = [];
 
   for (const [name, prop] of Object.entries(properties)) {
     const propSchema = prop as any;
@@ -86,22 +87,38 @@ function formatBriefArgs(tool: Tool): string {
       typeStr = propSchema.enum.join('|');
     }
 
-    // Build parameter string: name? type
-    const optionalMark = !required.has(name) ? '?' : '';
-    const argStr = `${name}${optionalMark} ${typeStr}`;
+    // Build parameter string: name type (no ? for required, ? for optional)
+    const argStr = `${name} ${typeStr}`;
 
-    args.push(argStr);
+    if (required.has(name)) {
+      requiredArgs.push(argStr);
+    } else {
+      optionalArgs.push(`${name}? ${typeStr}`);
+    }
   }
 
-  const paramsStr = args.join(', ');
+  // Build full params string: required first, then optional
+  const allArgs = [...requiredArgs, ...optionalArgs];
+  const fullParamsStr = allArgs.join(', ');
+  const requiredParamsStr = requiredArgs.join(', ');
 
-  // Detect if params are too complex to display inline
-  // Criteria: more than 10 params OR params string longer than 160 chars
-  if (paramCount > 10 || paramsStr.length > 160) {
-    return ' PARAMS: (use info for details)';
+  // Check complexity thresholds
+  const isFullComplex = paramCount > 10 || fullParamsStr.length > 160;
+  const isRequiredComplex = requiredArgs.length > 10 || requiredParamsStr.length > 160;
+
+  // If full list is too complex, try showing only required params
+  if (isFullComplex) {
+    if (isRequiredComplex || requiredArgs.length === 0) {
+      // Even required params are too complex, or no required params
+      return ' PARAMS: (use info for details)';
+    } else {
+      // Show only required params with indicator
+      return ` PARAMS: ${requiredParamsStr} (+${optionalArgs.length} optional)`;
+    }
   }
 
-  return ` PARAMS: ${paramsStr}`;
+  // Show all params
+  return ` PARAMS: ${fullParamsStr}`;
 }
 
 /**
