@@ -96,8 +96,8 @@ function formatBriefArgs(tool: Tool): string {
   const paramsStr = args.join(', ');
 
   // Detect if params are too complex to display inline
-  // Criteria: more than 7 params OR params string longer than 120 chars
-  if (paramCount > 7 || paramsStr.length > 120) {
+  // Criteria: more than 10 params OR params string longer than 160 chars
+  if (paramCount > 10 || paramsStr.length > 160) {
     return ' PARAMS: (use info for details)';
   }
 
