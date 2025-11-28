@@ -14,16 +14,17 @@ import { isStdioConfig, isUrlConfig, isWebSocketConfig } from '../types.ts';
  */
 
 /**
- * Abbreviate type names to 3-letter codes
+ * Abbreviate type names to single-letter codes
  */
 function abbreviateType(type: string): string {
   const abbrevMap: Record<string, string> = {
-    'string': 'str',
-    'integer': 'int',
-    'number': 'num',
-    'boolean': 'bool',
-    'object': 'obj',
-    'array': 'arr',
+    'string': 's',
+    'integer': 'i',
+    'number': '#',
+    'null': 'n',
+    'boolean': 'b',
+    'object': 'o',
+    'array': 'a',
   };
   return abbrevMap[type] || type;
 }
@@ -531,6 +532,11 @@ export async function executeToolsCommand(
             toolsByServer.set(server, []);
           }
           toolsByServer.get(server)!.push(tool);
+        }
+
+        // Add type legend if not in names-only mode
+        if (!args.names) {
+          output += 'Types: s=string, i=integer, #=number, n=null, b=bool, o=object\n\n';
         }
 
         for (const [server, tools] of toolsByServer.entries()) {
