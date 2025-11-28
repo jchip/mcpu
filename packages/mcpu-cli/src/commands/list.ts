@@ -266,7 +266,9 @@ async function listServerTools(
       } else {
         for (const tool of tools) {
           const briefArgs = formatBriefArgs(tool);
-          console.log(`  - ${chalk.green(tool.name)} - ${tool.description || 'No description'}${chalk.dim(briefArgs)}`);
+          // Only show first line of description
+          const description = (tool.description || 'No description').split('\n')[0].trim();
+          console.log(`  - ${chalk.green(tool.name)} - ${description}${chalk.dim(briefArgs)}`);
         }
       }
 
@@ -359,7 +361,8 @@ async function listAllTools(
         console.log(chalk.bold(`MCP server ${chalk.cyan(server)}:`));
         for (const tool of tools) {
           const briefArgs = formatBriefArgs(tool);
-          const description = tool.description || 'No description';
+          // Only show first line of description
+          const description = (tool.description || 'No description').split('\n')[0].trim();
           console.log(`  - ${chalk.green(tool.name)} - ${description}${chalk.dim(briefArgs)}`);
 
           // Estimate tokens for this entry

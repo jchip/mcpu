@@ -608,7 +608,9 @@ export async function executeToolsCommand(
               output += `  - ${tool.name}\n`;
             } else {
               const briefArgs = formatBriefArgs(tool);
-              output += `  - ${tool.name} - ${tool.description || 'No description'}${briefArgs}\n`;
+              // Only show first line of description
+              const description = (tool.description || 'No description').split('\n')[0].trim();
+              output += `  - ${tool.name} - ${description}${briefArgs}\n`;
             }
           }
           output += '\n';
