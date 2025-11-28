@@ -13,6 +13,59 @@ import { isStdioConfig, isUrlConfig, isWebSocketConfig } from '../types.ts';
  * Core command executor - shared logic for CLI and daemon
  */
 
+/**
+ * Extract brief argument summary from tool schema
+ * Format: "`arg1?` type, `arg2` type"
+ */
+function formatBriefArgs(tool: Tool): string {
+  if (!tool.inputSchema || typeof tool.inputSchema !== 'object') {
+    return '';
+  }
+
+  const schema = tool.inputSchema as any;
+  const properties = schema.properties || {};
+  const required = new Set(schema.required || []);
+
+  const args: string[] = [];
+
+  for (const [name, prop] of Object.entries(properties)) {
+    const propSchema = prop as any;
+
+    // Determine type string
+    let typeStr = 'any';
+
+    if (propSchema.type) {
+      // Handle union types (array of types)
+      if (Array.isArray(propSchema.type)) {
+        typeStr = propSchema.type.join('|');
+      }
+      // Handle single type
+      else if (propSchema.type === 'array' && propSchema.items) {
+        // Array type with items
+        const itemType = Array.isArray(propSchema.items.type)
+          ? propSchema.items.type.join('|')
+          : propSchema.items.type || 'any';
+        typeStr = `${itemType}[]`;
+      } else {
+        typeStr = propSchema.type;
+      }
+    }
+
+    // Handle enums (override type)
+    if (propSchema.enum) {
+      typeStr = propSchema.enum.join('|');
+    }
+
+    // Build parameter string: `name?` type
+    const optionalMark = !required.has(name) ? '?' : '';
+    const argStr = `\`${name}${optionalMark}\` ${typeStr}`;
+
+    args.push(argStr);
+  }
+
+  return args.length > 0 ? ` ${args.join(', ')}` : '';
+}
+
 
 export interface ExecuteOptions {
   json?: boolean;
@@ -455,7 +508,8 @@ export async function executeToolsCommand(
             if (args.names) {
               output += `  ${tool.name}\n`;
             } else {
-              output += `  ${tool.name} - ${tool.description || 'No description'}\n`;
+              const briefArgs = formatBriefArgs(tool);
+              output += `  ${tool.name} - ${tool.description || 'No description'}${briefArgs}\n`;
             }
           }
           output += '\n';

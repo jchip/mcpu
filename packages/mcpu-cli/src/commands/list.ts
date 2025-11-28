@@ -22,7 +22,7 @@ function estimateTokens(text: string): number {
 
 /**
  * Extract brief argument summary from tool schema
- * Format: "arg1, arg2=default, arg3?"
+ * Format: "`arg1?` type, `arg2` type"
  */
 function formatBriefArgs(tool: Tool): string {
   if (!tool.inputSchema || typeof tool.inputSchema !== 'object') {
@@ -37,24 +37,40 @@ function formatBriefArgs(tool: Tool): string {
 
   for (const [name, prop] of Object.entries(properties)) {
     const propSchema = prop as any;
-    let argStr = name;
 
-    // Add type hint for strings with specific values
-    if (propSchema.type === 'string' && propSchema.default) {
-      argStr += `="${propSchema.default}"`;
-    } else if (propSchema.type === 'boolean' && propSchema.default !== undefined) {
-      argStr += `=${propSchema.default}`;
+    // Determine type string
+    let typeStr = 'any';
+
+    if (propSchema.type) {
+      // Handle union types (array of types)
+      if (Array.isArray(propSchema.type)) {
+        typeStr = propSchema.type.join('|');
+      }
+      // Handle single type
+      else if (propSchema.type === 'array' && propSchema.items) {
+        // Array type with items
+        const itemType = Array.isArray(propSchema.items.type)
+          ? propSchema.items.type.join('|')
+          : propSchema.items.type || 'any';
+        typeStr = `${itemType}[]`;
+      } else {
+        typeStr = propSchema.type;
+      }
     }
 
-    // Mark optional args
-    if (!required.has(name)) {
-      argStr += '?';
+    // Handle enums (override type)
+    if (propSchema.enum) {
+      typeStr = propSchema.enum.join('|');
     }
+
+    // Build parameter string: `name?` type
+    const optionalMark = !required.has(name) ? '?' : '';
+    const argStr = `\`${name}${optionalMark}\` ${typeStr}`;
 
     args.push(argStr);
   }
 
-  return args.length > 0 ? `, args: ${args.join(', ')}` : '';
+  return args.length > 0 ? ` ${args.join(', ')}` : '';
 }
 
 /**
