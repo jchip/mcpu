@@ -70,7 +70,7 @@ function formatObjectType(propSchema: any): string {
  * Extract brief argument summary from tool schema
  * Format: "required_params, optional_params?"
  */
-function formatBriefArgs(tool: Tool): string {
+function formatBriefArgs(tool: Tool, description?: string): string {
   if (!tool.inputSchema || typeof tool.inputSchema !== 'object') {
     return '';
   }
@@ -84,6 +84,16 @@ function formatBriefArgs(tool: Tool): string {
   // If no parameters, return empty
   if (paramCount === 0) {
     return '';
+  }
+
+  // If description is multi-line, check if it already documents the args
+  if (description && description.includes('\n')) {
+    const allArgNames = Object.keys(properties);
+    // If description mentions most of the args (at least 75%), skip our ARGS: section
+    const mentionedCount = allArgNames.filter(argName => description.includes(argName)).length;
+    if (allArgNames.length > 0 && mentionedCount / allArgNames.length >= 0.75) {
+      return '';
+    }
   }
 
   const requiredArgs: string[] = [];
@@ -148,15 +158,15 @@ function formatBriefArgs(tool: Tool): string {
   if (isFullComplex) {
     if (isRequiredComplex || requiredArgs.length === 0) {
       // Even required params are too complex, or no required params
-      return ' PARAMS: (use info for details)';
+      return ' ARGS: (use info for details)';
     } else {
       // Show only required params with indicator
-      return ` PARAMS: ${requiredParamsStr} (+${optionalArgs.length} optional)`;
+      return ` ARGS: ${requiredParamsStr} (+${optionalArgs.length} optional)`;
     }
   }
 
   // Show all params
-  return ` PARAMS: ${fullParamsStr}`;
+  return ` ARGS: ${fullParamsStr}`;
 }
 
 
@@ -611,12 +621,12 @@ export async function executeToolsCommand(
             if (args.names) {
               output += `  - ${tool.name}\n`;
             } else {
-              // --no-params sets params to false
-              const briefArgs = args.params === false ? '' : formatBriefArgs(tool);
               // Show full description by default, first line only if --no-full-desc
               const description = args.fullDesc === false
                 ? (tool.description || 'No description').split('\n')[0].trim()
                 : (tool.description || 'No description');
+              // --no-params sets params to false
+              const briefArgs = args.params === false ? '' : formatBriefArgs(tool, description);
               output += `  - ${tool.name} - ${description}${briefArgs}\n`;
             }
           }
