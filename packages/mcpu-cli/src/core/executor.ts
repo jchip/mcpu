@@ -183,6 +183,10 @@ export interface ToolsCommandArgs {
   servers?: string[];
   /** Show only tool names, no descriptions */
   names?: boolean;
+  /** Show full multi-line descriptions instead of first line only */
+  fullDesc?: boolean;
+  /** Skip parameter information */
+  skipParams?: boolean;
 }
 
 export interface InfoCommandArgs {
@@ -607,9 +611,11 @@ export async function executeToolsCommand(
             if (args.names) {
               output += `  - ${tool.name}\n`;
             } else {
-              const briefArgs = formatBriefArgs(tool);
-              // Only show first line of description
-              const description = (tool.description || 'No description').split('\n')[0].trim();
+              const briefArgs = args.skipParams ? '' : formatBriefArgs(tool);
+              // Show full description or first line only based on flag
+              const description = args.fullDesc
+                ? (tool.description || 'No description')
+                : (tool.description || 'No description').split('\n')[0].trim();
               output += `  - ${tool.name} - ${description}${briefArgs}\n`;
             }
           }

@@ -78,6 +78,12 @@ const nc = new NixClap({
           names: {
             desc: 'Show only tool names, no descriptions',
           },
+          fullDesc: {
+            desc: 'Show full multi-line descriptions instead of first line only',
+          },
+          skipParams: {
+            desc: 'Skip parameter information',
+          },
         },
         exec: async () => {
           const result = await coreExecute({ argv: process.argv.slice(2) });

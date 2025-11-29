@@ -92,6 +92,12 @@ function createParserCLI() {
             names: {
               desc: 'Show only tool names, no descriptions',
             },
+            fullDesc: {
+              desc: 'Show full multi-line descriptions',
+            },
+            skipParams: {
+              desc: 'Skip parameter information',
+            },
           },
         },
         info: {
@@ -243,6 +249,8 @@ export async function coreExecute(options: CoreExecutionOptions): Promise<Comman
         return await executeCommand('tools', {
           servers: args.servers as string[] | undefined,
           names: localOpts.names as boolean | undefined,
+          fullDesc: localOpts.fullDesc as boolean | undefined,
+          skipParams: localOpts.skipParams as boolean | undefined,
         }, globalOptions);
       }
 
