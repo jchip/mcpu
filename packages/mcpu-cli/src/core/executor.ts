@@ -67,13 +67,105 @@ function formatObjectType(propSchema: any): string {
 }
 
 /**
+ * Extract enum/range value from a property schema
+ * Returns the extracted value string or null if not found
+ */
+function extractEnumOrRange(propSchema: any): string | null {
+  // Check schema enum first
+  if (propSchema.enum) {
+    return propSchema.enum.join('|');
+  }
+
+  if (propSchema.description) {
+    // Try to extract enum-like patterns from description
+    // Allow alphanumeric, underscore, and hyphen in enum values
+    const enumMatch = propSchema.description.match(/(?:Type|Enum|Options?|Allowed|One of):\s*([a-zA-Z0-9_-]+(?:\s*\|\s*[a-zA-Z0-9_-]+)+)/i);
+    if (enumMatch) {
+      return enumMatch[1].replace(/\s+/g, '');
+    }
+
+    // Try to extract range patterns
+    const rangeMatch = propSchema.description.match(/(?:Values?|Range):\s*(\d+)\s*-\s*(\d+)/i);
+    if (rangeMatch) {
+      return `${rangeMatch[1]}-${rangeMatch[2]}`;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Extract default value from description
+ */
+function extractDefault(propSchema: any): string | null {
+  if (propSchema.description) {
+    const defaultMatch = propSchema.description.match(/\(default:?\s*([^)]+)\)/i);
+    if (defaultMatch) {
+      return defaultMatch[1].trim();
+    }
+  }
+  return null;
+}
+
+/**
+ * Collect all enums from tools for deduplication
+ * Returns a map of enum value -> reference name (E1, E2, etc.)
+ */
+function collectEnums(tools: Tool[]): Map<string, string> {
+  const enumCounts = new Map<string, number>();
+
+  // Count occurrences of each enum
+  for (const tool of tools) {
+    if (!tool.inputSchema || typeof tool.inputSchema !== 'object') continue;
+    const schema = tool.inputSchema as any;
+    const properties = schema.properties || {};
+
+    for (const [, prop] of Object.entries(properties)) {
+      const enumValue = extractEnumOrRange(prop as any);
+      // Only track enums with multiple values (contains |)
+      if (enumValue && enumValue.includes('|')) {
+        enumCounts.set(enumValue, (enumCounts.get(enumValue) || 0) + 1);
+      }
+    }
+  }
+
+  // Create references for enums that appear more than once or are long
+  const enumRefs = new Map<string, string>();
+  let refIndex = 1;
+
+  for (const [enumValue, count] of enumCounts.entries()) {
+    // Create reference if used more than once or if it's long (> 20 chars)
+    if (count > 1 || enumValue.length > 20) {
+      enumRefs.set(enumValue, `E${refIndex}`);
+      refIndex++;
+    }
+  }
+
+  return enumRefs;
+}
+
+/**
+ * Format enum legend for output
+ */
+function formatEnumLegend(enumRefs: Map<string, string>): string {
+  if (enumRefs.size === 0) return '';
+
+  const lines: string[] = [];
+  for (const [enumValue, ref] of enumRefs.entries()) {
+    lines.push(`${ref}: ${enumValue}`);
+  }
+  return lines.join('\n') + '\n\n';
+}
+
+/**
  * Extract brief argument summary from tool schema
  * Format: "required_params, optional_params?"
  * @param tool - The tool to extract args from
  * @param description - Tool description to check for existing arg docs
  * @param forceParams - If true, skip the check for args already in description
+ * @param enumRefs - Optional map of enum values to reference names
  */
-function formatBriefArgs(tool: Tool, description?: string, forceParams?: boolean): string {
+function formatBriefArgs(tool: Tool, description?: string, forceParams?: boolean, enumRefs?: Map<string, string>): string {
   if (!tool.inputSchema || typeof tool.inputSchema !== 'object') {
     return '';
   }
@@ -134,28 +226,17 @@ function formatBriefArgs(tool: Tool, description?: string, forceParams?: boolean
       }
     }
 
-    // Handle enums (override type)
-    if (propSchema.enum) {
-      typeStr = propSchema.enum.join('|');
-    } else if (propSchema.description) {
-      // Try to extract enum-like patterns from description
-      // Matches: "Type: a | b | c" or "Enum: a|b|c" or "Options: a | b | c" or similar patterns
-      const enumMatch = propSchema.description.match(/(?:Type|Enum|Options?|Allowed|One of):\s*([a-zA-Z0-9_]+(?:\s*\|\s*[a-zA-Z0-9_]+)+)/i);
-      if (enumMatch) {
-        // Extract the enum values and clean up
-        typeStr = enumMatch[1].replace(/\s+/g, '');
-      } else {
-        // Try to extract range patterns like "Values: 0-4" or "Range: 1-10"
-        const rangeMatch = propSchema.description.match(/(?:Values?|Range):\s*(\d+)\s*-\s*(\d+)/i);
-        if (rangeMatch) {
-          typeStr = `${rangeMatch[1]}-${rangeMatch[2]}`;
-        }
-      }
-      // Extract default value if present: "(default X)" or "(default: X)"
-      const defaultMatch = propSchema.description.match(/\(default:?\s*([^)]+)\)/i);
-      if (defaultMatch) {
-        typeStr = `${typeStr}=${defaultMatch[1].trim()}`;
-      }
+    // Handle enums/ranges (override type)
+    const enumOrRange = extractEnumOrRange(propSchema);
+    if (enumOrRange) {
+      // Use reference if available, otherwise use the full value
+      typeStr = enumRefs?.get(enumOrRange) || enumOrRange;
+    }
+
+    // Extract default value if present
+    const defaultVal = extractDefault(propSchema);
+    if (defaultVal) {
+      typeStr = `${typeStr}=${defaultVal}`;
     }
 
     // Build parameter string: name type (no ? for required, ? for optional)
@@ -642,6 +723,17 @@ export async function executeToolsCommand(
 
         for (const [server, tools] of toolsByServer.entries()) {
           output += `MCP server ${server}:\n`;
+
+          // Collect enum references for this server's tools
+          const enumRefs = args.names ? new Map() : collectEnums(tools);
+
+          // Add enum legend under server header if there are any
+          if (!args.names && enumRefs.size > 0) {
+            for (const [enumValue, ref] of enumRefs.entries()) {
+              output += `  ${ref}: ${enumValue}\n`;
+            }
+          }
+
           for (const tool of tools) {
             if (args.names) {
               output += `  - ${tool.name}\n`;
@@ -653,7 +745,7 @@ export async function executeToolsCommand(
               // --no-args sets showArgs to false
               // forceArgs=true when user explicitly set --args from CLI
               const forceArgs = args.showArgsSource === 'cli';
-              const briefArgs = args.showArgs === false ? '' : formatBriefArgs(tool, description, forceArgs);
+              const briefArgs = args.showArgs === false ? '' : formatBriefArgs(tool, description, forceArgs, enumRefs);
               output += `  - ${tool.name} - ${description}${briefArgs}\n`;
             }
           }
