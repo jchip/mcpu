@@ -11,44 +11,77 @@ Both modes provide on-demand discovery of unlimited MCP servers with zero upfron
 
 \*Example: The Playwright MCP server alone requires ~14,000 tokens upfront for its schema. MCPU reduces this to just a few hundred tokens of instructions.
 
+## Stats
+
+```
+% mcpu-stat
+
+MCPU Schema Size Statistics
+
+| Server     | Tools | MCP Native | MCPU Full | Δ Full | MCPU Compact | Δ Compact |
+|------------|-------|------------|-----------|--------|--------------|-----------|
+| chroma     |    13 |    11.3 KB |    8.3 KB |   -26% |       1.8 KB |      -84% |
+| memory     |     9 |     8.3 KB |    2.1 KB |   -75% |       1.2 KB |      -86% |
+| playwright |    22 |    11.1 KB |    7.4 KB |   -34% |       2.2 KB |      -80% |
+| chrome-dev |    26 |    12.9 KB |    9.3 KB |   -28% |       3.5 KB |      -73% |
+| context7   |     2 |     2.9 KB |    2.7 KB |    -9% |        833 B |      -72% |
+| tasks      |    20 |    25.6 KB |    5.3 KB |   -79% |       2.2 KB |      -91% |
+|------------|-------|------------|-----------|--------|--------------|-----------|
+| TOTAL      |    92 |    72.2 KB |   35.0 KB |   -51% |      11.8 KB |      -84% |
+```
+
 ## 📦 Installation
+
+### Claude CLI
+
+1. Move all your MCP servers in ` ~/.claude.json`.`mcpServers` to `~/.config/mcpu/config.json`
+
+2. Add this MCP Unified to your Claude CLI
+
+```
+claude mcp add --scope=user mcpu -- npx --package=@mcpu/cli -c mcpu-mcp
+```
+
+3. Start Claude CLI and check `/conext` to verify that `mcpu` is the ony MCP server Claude connected.
+
+4. Test by asking Claude to `list my mcp servers`
+
+Something like this:
+
+```
+> list my mcp servers
+
+⏺ mcpu - cli (MCP)(argv: ["servers"])
+  ⎿ disconnected:
+    - chroma - disconnected - Type: stdio - Command: uvx chroma-mcp --client-t
+    ype persistent --data-dir ~/.local/share/chromadb - ENV: {"ANO
+    … +13 lines (ctrl+o to expand)
+
+
+
+⏺ You have 6 MCP servers configured (all disconnected):
+
+  | Server     | Command                                    |
+  |------------|--------------------------------------------|
+  | chroma     | uvx chroma-mcp (persistent chromadb)       |
+  | memory     | npx -y @modelcontextprotocol/server-memory |
+  | playwright | npx playwright run-mcp-server              |
+  | chrome-dev | npx -y chrome-devtools-mcp@latest          |
+  | context7   | npx -y @upstash/context7-mcp@latest        |
+  | tasks      | tasks-mcp                                  |
+
+  To connect to a server, use connect <server>.
+```
+
+### Globally
 
 ```bash
 npm install -g @mcpu/cli
 ```
 
-### As an MCP Server (Claude Desktop, Claude Code, etc.)
-
-**Claude Code:**
-
 ```bash
-# Add to your project's config
-claude mcp add mcpu -- npx -y --package @mcpu/cli -c mcpu-mcp
-
-# or for user level:
-claude mcp add --scope user mcpu -- npx -y --package @mcpu/cli -c mcpu-mcp
-
-# if installed @mcpu/cli globally:
-claude mcp add mcpu -- mcpu-mcp
-claude mcp add --scope user mcpu -- mcpu-mcp  # user scope config
+claude mcp add --scope=user mcpu -- mcpu-mcp
 ```
-
-**Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "mcpu": {
-      "command": "npx",
-      "args": ["-y", "--package", "@mcpu/cli", "-c", "mcpu-mcp"]
-    }
-  }
-}
-```
-
-Or if installed globally, use `"command": "mcpu-mcp"` instead.
-
-This exposes a single `cli` tool that provides access to all your configured MCP servers.
 
 **You don't need this, but in case it can't figure it out, add to your `CLAUDE.md`**:
 
@@ -58,11 +91,9 @@ This exposes a single `cli` tool that provides access to all your configured MCP
 Use the MCPU `cli` to discover and use other MCP servers.
 ```
 
-## 🤖 Using with Claude Code (CLI Mode)
+## 🤖 Bash CLI Mode
 
-Add the content from [setup/AGENT-INSTRUCTIONS.md](setup/AGENT-INSTRUCTIONS.md) to your `.claude/CLAUDE.md` or project's `CLAUDE.md` to enable Claude Code to use MCPU.
-
-Or tell Claude to do it. Pick a prompt appropriate for your need:
+If you want to use MCPU in bash mode, tell Claude to set it up. Pick a prompt appropriate for your need:
 
 - `AGENTS.md` and reference in `CLAUDE.md`
 
@@ -92,9 +123,12 @@ MCPU loads and merges configuration from multiple sources (highest priority firs
 | 2        | `.config/mcpu/config.json`       | Project (shared)  | Commit |
 | 3        | `~/.config/mcpu/config.json`     | User (global)     | N/A    |
 
-- **User config** (`~/.config/mcpu/config.json`) - Your personal MCP servers available in all projects
-- **Project config** (`.config/mcpu/config.json`) - Shared with your team via git
-- **Local config** (`.config/mcpu/config.local.json`) - Your private overrides, not committed
+MCPU follows the [XDG Base Directory](https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html) specification.
+
+1. `--config <file>` - Explicit CLI flag (overrides all)
+2. `.config/mcpu/config.local.json` - Project local (gitignored)
+3. `.config/mcpu/config.json` - Project shared (committed)
+4. `~/.config/mcpu/config.json` - User global
 
 ### Adding MCP Servers
 
@@ -129,9 +163,9 @@ mcpu add --transport http notion https://mcp.notion.com/mcp
 }
 ```
 
-## Daemon Mode
+## MCPU Daemon
 
-The daemon keeps MCP server connections alive for faster repeated tool calls.
+The daemon supports the Bash CLI mode by keeping MCP server connections alive.
 
 ```bash
 # Start daemon (connections stay alive indefinitely by default)
@@ -166,7 +200,9 @@ EOF
 - `--idle-timeout <minutes>` - Idle timeout before disconnecting (default: 5)
 - `--verbose` - Show detailed logging
 
-## Commands
+## Direct Commands
+
+You can use `mcpu` to run commands directly without starting the daemon or Claude CLI.
 
 ### `mcpu add <name> [command]`
 
@@ -245,18 +281,7 @@ mcpu call filesystem read_file --stdin <<< '{"path": "/etc/hosts"}'
 - `--json/--yaml/--raw`: Returns complete MCP response structure with all metadata
 - Follows [MCP specification](https://spec.modelcontextprotocol.io/) for response handling
 
-## File Locations
-
-MCPU follows the [XDG Base Directory](https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html) specification.
-
-### Configuration Files
-
-See [Configuration](#configuration) for details. Files are merged in priority order:
-
-1. `--config <file>` - Explicit CLI flag (overrides all)
-2. `.config/mcpu/config.local.json` - Project local (gitignored)
-3. `.config/mcpu/config.json` - Project shared (committed)
-4. `~/.config/mcpu/config.json` - User global
+## Other File Locations
 
 ### Cache Files:
 
@@ -277,12 +302,6 @@ See [Configuration](#configuration) for details. Files are merged in priority or
 - `--config <file>` - Use specific config file
 - `--verbose` - Detailed logging
 - `--no-cache` - Skip cache
-
-## Troubleshooting
-
-- **No MCP servers configured**: Add servers with `mcpu add` or check config files (see [Configuration](#configuration))
-- **Failed to connect**: Verify MCP server is installed and command path is correct
-- **Unknown option**: Tool arguments must come after `mcpu call <server> <tool>`
 
 ## License
 

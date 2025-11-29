@@ -738,10 +738,10 @@ export async function executeToolsCommand(
             if (args.names) {
               output += `  - ${tool.name}\n`;
             } else {
-              // Show full description by default, first line only if --no-full-desc
-              const description = args.fullDesc === false
-                ? (tool.description || 'No description').split('\n')[0].trim()
-                : (tool.description || 'No description');
+              // Show first line by default, full description if --full-desc
+              const description = args.fullDesc === true
+                ? (tool.description || 'No description')
+                : (tool.description || 'No description').split('\n')[0].trim();
               // --no-args sets showArgs to false
               // forceArgs=true when user explicitly set --args from CLI
               const forceArgs = args.showArgsSource === 'cli';
