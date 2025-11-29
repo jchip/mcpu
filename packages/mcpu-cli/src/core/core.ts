@@ -95,8 +95,8 @@ function createParserCLI() {
             'full-desc': {
               desc: 'Show full multi-line descriptions (default, use --no-full-desc for summary)',
             },
-            params: {
-              desc: 'Show parameter information',
+            'show-args': {
+              desc: 'Show argument information',
             },
           },
         },
@@ -246,11 +246,14 @@ export async function coreExecute(options: CoreExecutionOptions): Promise<Comman
       }
 
       case 'tools': {
+        // Get source of showArgs option to detect if user explicitly set --show-args from CLI
+        const source = commandData.source || {};
         return await executeCommand('tools', {
           servers: args.servers as string[] | undefined,
           names: localOpts.names as boolean | undefined,
           fullDesc: localOpts.fullDesc as boolean | undefined,
-          params: localOpts.params as boolean | undefined,
+          showArgs: localOpts.showArgs as boolean | undefined,
+          showArgsSource: source.showArgs as string | undefined,
         }, globalOptions);
       }
 

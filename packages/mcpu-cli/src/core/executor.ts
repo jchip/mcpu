@@ -69,8 +69,11 @@ function formatObjectType(propSchema: any): string {
 /**
  * Extract brief argument summary from tool schema
  * Format: "required_params, optional_params?"
+ * @param tool - The tool to extract args from
+ * @param description - Tool description to check for existing arg docs
+ * @param forceParams - If true, skip the check for args already in description
  */
-function formatBriefArgs(tool: Tool, description?: string): string {
+function formatBriefArgs(tool: Tool, description?: string, forceParams?: boolean): string {
   if (!tool.inputSchema || typeof tool.inputSchema !== 'object') {
     return '';
   }
@@ -87,7 +90,8 @@ function formatBriefArgs(tool: Tool, description?: string): string {
   }
 
   // If description is multi-line, check if it already documents the args
-  if (description && description.includes('\n')) {
+  // Skip this check if forceParams is true (user explicitly requested --params from CLI)
+  if (!forceParams && description && description.includes('\n')) {
     const allArgNames = Object.keys(properties);
     // If description mentions most of the args (at least 75%), skip our ARGS: section
     const mentionedCount = allArgNames.filter(argName => description.includes(argName)).length;
@@ -133,6 +137,25 @@ function formatBriefArgs(tool: Tool, description?: string): string {
     // Handle enums (override type)
     if (propSchema.enum) {
       typeStr = propSchema.enum.join('|');
+    } else if (propSchema.description) {
+      // Try to extract enum-like patterns from description
+      // Matches: "Type: a | b | c" or "Enum: a|b|c" or "Options: a | b | c" or similar patterns
+      const enumMatch = propSchema.description.match(/(?:Type|Enum|Options?|Allowed|One of):\s*([a-zA-Z0-9_]+(?:\s*\|\s*[a-zA-Z0-9_]+)+)/i);
+      if (enumMatch) {
+        // Extract the enum values and clean up
+        typeStr = enumMatch[1].replace(/\s+/g, '');
+      } else {
+        // Try to extract range patterns like "Values: 0-4" or "Range: 1-10"
+        const rangeMatch = propSchema.description.match(/(?:Values?|Range):\s*(\d+)\s*-\s*(\d+)/i);
+        if (rangeMatch) {
+          typeStr = `${rangeMatch[1]}-${rangeMatch[2]}`;
+        }
+      }
+      // Extract default value if present: "(default X)" or "(default: X)"
+      const defaultMatch = propSchema.description.match(/\(default:?\s*([^)]+)\)/i);
+      if (defaultMatch) {
+        typeStr = `${typeStr}=${defaultMatch[1].trim()}`;
+      }
     }
 
     // Build parameter string: name type (no ? for required, ? for optional)
@@ -151,22 +174,22 @@ function formatBriefArgs(tool: Tool, description?: string): string {
   const requiredParamsStr = requiredArgs.join(', ');
 
   // Check complexity thresholds
-  const isFullComplex = paramCount > 10 || fullParamsStr.length > 160;
-  const isRequiredComplex = requiredArgs.length > 10 || requiredParamsStr.length > 160;
+  const isFullComplex = paramCount > 10 || fullParamsStr.length > 180;
+  const isRequiredComplex = requiredArgs.length > 10 || requiredParamsStr.length > 180;
 
   // If full list is too complex, try showing only required params
   if (isFullComplex) {
     if (isRequiredComplex || requiredArgs.length === 0) {
       // Even required params are too complex, or no required params
-      return ' ARGS: (use info for details)';
+      return ' - ARGS: (use info for details)';
     } else {
       // Show only required params with indicator
-      return ` ARGS: ${requiredParamsStr} (+${optionalArgs.length} optional)`;
+      return ` - ARGS: ${requiredParamsStr} (+${optionalArgs.length} optional)`;
     }
   }
 
   // Show all params
-  return ` ARGS: ${fullParamsStr}`;
+  return ` - ARGS: ${fullParamsStr}`;
 }
 
 
@@ -195,8 +218,10 @@ export interface ToolsCommandArgs {
   names?: boolean;
   /** Show full multi-line descriptions instead of first line only */
   fullDesc?: boolean;
-  /** Show parameter information (use --no-params to hide) */
-  params?: boolean;
+  /** Show argument information (use --no-args to hide) */
+  showArgs?: boolean;
+  /** Source of args option - 'cli' means user explicitly set it */
+  showArgsSource?: string;
 }
 
 export interface InfoCommandArgs {
@@ -625,8 +650,10 @@ export async function executeToolsCommand(
               const description = args.fullDesc === false
                 ? (tool.description || 'No description').split('\n')[0].trim()
                 : (tool.description || 'No description');
-              // --no-params sets params to false
-              const briefArgs = args.params === false ? '' : formatBriefArgs(tool, description);
+              // --no-args sets showArgs to false
+              // forceArgs=true when user explicitly set --args from CLI
+              const forceArgs = args.showArgsSource === 'cli';
+              const briefArgs = args.showArgs === false ? '' : formatBriefArgs(tool, description, forceArgs);
               output += `  - ${tool.name} - ${description}${briefArgs}\n`;
             }
           }

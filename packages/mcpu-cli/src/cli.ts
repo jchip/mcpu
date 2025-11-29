@@ -81,8 +81,8 @@ const nc = new NixClap({
           'full-desc': {
             desc: 'Show full multi-line descriptions (default, use --no-full-desc for summary)',
           },
-          params: {
-            desc: 'Show parameter information',
+          'show-args': {
+            desc: 'Show argument information',
           },
         },
         exec: async () => {
