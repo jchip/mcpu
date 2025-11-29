@@ -185,8 +185,8 @@ export interface ToolsCommandArgs {
   names?: boolean;
   /** Show full multi-line descriptions instead of first line only */
   fullDesc?: boolean;
-  /** Skip parameter information */
-  skipParams?: boolean;
+  /** Show parameter information (use --no-params to hide) */
+  params?: boolean;
 }
 
 export interface InfoCommandArgs {
@@ -611,7 +611,8 @@ export async function executeToolsCommand(
             if (args.names) {
               output += `  - ${tool.name}\n`;
             } else {
-              const briefArgs = args.skipParams ? '' : formatBriefArgs(tool);
+              // --no-params sets params to false
+              const briefArgs = args.params === false ? '' : formatBriefArgs(tool);
               // Show full description or first line only based on flag
               const description = args.fullDesc
                 ? (tool.description || 'No description')
