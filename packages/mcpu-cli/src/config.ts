@@ -75,6 +75,13 @@ export class ConfigDiscovery {
     // MCPU format (direct server configs object)
     const mcpConfig = ProjectMCPConfigSchema.parse(data);
     for (const [name, config] of Object.entries(mcpConfig)) {
+      // Skip disabled servers (enabled: false)
+      if (config.enabled === false) {
+        if (this.options.verbose) {
+          console.error(`Skipping disabled server: ${name}`);
+        }
+        continue;
+      }
       this.configs.set(name, this.normalizeConfig(config));
     }
   }
