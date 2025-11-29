@@ -93,7 +93,7 @@ function createParserCLI() {
               desc: 'Show only tool names, no descriptions',
             },
             'full-desc': {
-              desc: 'Show full multi-line descriptions',
+              desc: 'Show full multi-line descriptions (default, use --no-full-desc for summary)',
             },
             params: {
               desc: 'Show parameter information',

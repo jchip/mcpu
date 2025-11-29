@@ -79,7 +79,7 @@ const nc = new NixClap({
             desc: 'Show only tool names, no descriptions',
           },
           'full-desc': {
-            desc: 'Show full multi-line descriptions instead of first line only',
+            desc: 'Show full multi-line descriptions (default, use --no-full-desc for summary)',
           },
           params: {
             desc: 'Show parameter information',

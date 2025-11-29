@@ -613,10 +613,10 @@ export async function executeToolsCommand(
             } else {
               // --no-params sets params to false
               const briefArgs = args.params === false ? '' : formatBriefArgs(tool);
-              // Show full description or first line only based on flag
-              const description = args.fullDesc
-                ? (tool.description || 'No description')
-                : (tool.description || 'No description').split('\n')[0].trim();
+              // Show full description by default, first line only if --no-full-desc
+              const description = args.fullDesc === false
+                ? (tool.description || 'No description').split('\n')[0].trim()
+                : (tool.description || 'No description');
               output += `  - ${tool.name} - ${description}${briefArgs}\n`;
             }
           }
