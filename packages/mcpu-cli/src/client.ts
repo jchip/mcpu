@@ -6,7 +6,7 @@ import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { jsonSchemaValidator, JsonSchemaType } from '@modelcontextprotocol/sdk/validation/index.js';
 import type { MCPServerConfig, StdioConfig } from './types.ts';
-import { isStdioConfig } from './types.ts';
+import { isStdioConfig, DEFAULT_REQUEST_TIMEOUT_MS } from './types.ts';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 
 /**
@@ -148,16 +148,19 @@ export class MCPClient {
 
   /**
    * Call a tool on a server
+   * @param timeout Request timeout in ms (default: 180000 = 3 min)
    */
   async callTool(
     connection: MCPConnection,
     toolName: string,
-    args?: Record<string, unknown>
+    args?: Record<string, unknown>,
+    timeout: number = DEFAULT_REQUEST_TIMEOUT_MS
   ): Promise<unknown> {
-    const response = await connection.client.callTool({
-      name: toolName,
-      arguments: args,
-    });
+    const response = await connection.client.callTool(
+      { name: toolName, arguments: args },
+      undefined, // use default resultSchema
+      { timeout }
+    );
 
     // Return raw response - let caller decide how to format
     return response;

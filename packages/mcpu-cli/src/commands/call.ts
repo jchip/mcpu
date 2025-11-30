@@ -168,7 +168,7 @@ export async function callCommand(
 
     // Execute the tool
     const result = await client.withConnection(serverName, config, async (conn) => {
-      return await client.callTool(conn, toolName, toolArgs);
+      return await client.callTool(conn, toolName, toolArgs, config.requestTimeout);
     });
 
     // Output result

@@ -1,10 +1,14 @@
 import { z } from 'zod';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 
+// Default request timeout: 3 minutes (in milliseconds)
+export const DEFAULT_REQUEST_TIMEOUT_MS = 180000;
+
 // Common config fields shared by all transport types
 const CommonConfigSchema = z.object({
   enabled: z.boolean().optional(), // Set to false to disable server without removing config
   cacheTTL: z.number().optional(), // Cache TTL in minutes (default: 60)
+  requestTimeout: z.number().optional(), // Request timeout in ms (default: 180000 = 3 min)
 });
 
 // MCP Server Configuration Schema (stdio)

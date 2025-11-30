@@ -1095,7 +1095,7 @@ export async function executeCallCommand(
     const { connection, isPersistent } = await getConnection(args.server, config, client, options.connectionPool);
 
     try {
-      const result = await client.callTool(connection, args.tool, toolArgs);
+      const result = await client.callTool(connection, args.tool, toolArgs, config.requestTimeout);
 
       // Format output
       const ctx = getContext(options);

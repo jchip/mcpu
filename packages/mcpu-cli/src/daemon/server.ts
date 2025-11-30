@@ -3,7 +3,7 @@ import { ConnectionPool, type ConnectionInfo, type ConnectionPoolOptions } from 
 import { PidManager } from './pid-manager.ts';
 import { ConfigDiscovery } from '../config.ts';
 import { coreExecute } from '../core/core.ts';
-import { type MCPServerConfig, isStdioConfig, isHttpConfig } from '../types.ts';
+import { type MCPServerConfig, isStdioConfig, isHttpConfig, DEFAULT_REQUEST_TIMEOUT_MS } from '../types.ts';
 import { type Logger } from './logger.ts';
 
 /**
@@ -585,7 +585,12 @@ export class DaemonServer {
           return;
         }
 
-        const result = await connection.client.callTool({ name: toolName, arguments: params });
+        const timeout = config.requestTimeout ?? DEFAULT_REQUEST_TIMEOUT_MS;
+        const result = await connection.client.callTool(
+          { name: toolName, arguments: params },
+          undefined,
+          { timeout }
+        );
         res.json(successResponse({
           tool: toolName,
           server: serverName,
