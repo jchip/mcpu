@@ -1,17 +1,23 @@
 # MCPU CLI
 
-> **Universal MCP gateway for any AI agent - Zero upfront tokens, unlimited servers**
+> **MCP Unified - Unlimit MCP servers with zero upfront tokens, and 80% token reduction**
 
-MCPU enables AI agents to use MCP servers with minimal token overhead. It can be used in two ways:
+MCPU unifies all your MCP servers for progressive discovery and disclosure, and compresses schemas into compact form to save tokens. It can be used in two ways:
 
-1. **As an MCP Server** (`mcpu-mcp`) - For agents with native MCP support (Claude Desktop, etc.)
-2. **Via CLI** (`mcpu-daemon` + `mcpu-remote`) - For agents with Bash tool support (Claude Code, etc.)
+1. **As an MCP Server** (`mcpu-mcp`) - For clients with native MCP support (Claude Desktop, Cursor, etc.)
+2. **Via CLI** (`mcpu-daemon` + `mcpu-remote`) - For AI agents with bash tool access (Claude Code, etc.)
 
-Both modes provide on-demand discovery of unlimited MCP servers with zero upfront token cost, compressing schemas by 97%\*.
+## Why MCPU?
 
-\*Example: The Playwright MCP server alone requires ~14,000 tokens upfront for its schema. MCPU reduces this to just a few hundred tokens of instructions.
+MCP tool schemas are verbose. A single server like Playwright requires ~11KB of schema data. With multiple servers, this adds up quickly and consumes valuable context window space.
 
-## Stats
+MCPU addresses this by:
+
+- **Progressive discovery and disclosure** - Servers and their tool schemas are revealed and connected only when needed
+- **Compressing tool schemas** - Reduces schema size by up to 84% using a compact format designed for AI consumption
+- **CLI-first design** - Built for AI agents with bash tool access (Claude Code, etc.), not just MCP-native clients
+
+## Schema Compression Stats
 
 ```
 % mcpu-stat

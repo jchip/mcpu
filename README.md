@@ -1,8 +1,8 @@
 # MCPU - MCP Unified
 
-MCP (Model Context Protocol) Unified tools that enhance AI coding assistants through efficient tool schema compression and proxy capabilities.
+> _Unlimit MCP servers with zero upfront tokens, and 80% token reduction_
 
-# Stats
+## Schema Compression Stats
 
 ```
 % mcpu-stat
@@ -21,9 +21,11 @@ MCPU Schema Size Statistics
 | TOTAL      |    92 |    72.2 KB |   35.0 KB |   -51% |      11.8 KB |      -84% |
 ```
 
-# Installation
+The "Compact" format uses abbreviated type notation and omits redundant metadata, reducing 92 tools from 72KB to under 12KB.
 
-## Claude CLI
+## 📦 Installation
+
+### Claude Code
 
 1. Move all your MCP servers in ` ~/.claude.json`.`mcpServers` to `~/.config/mcpu/config.json`
 
@@ -64,8 +66,19 @@ Something like this:
   To connect to a server, use connect <server>.
 ```
 
-# Packages
+## Usage Modes
 
-- Actual packages are in the `packages` folder.
-- `@mcpu/cli` is in `packages/mcpu-cli`
-- npm page at https://www.npmjs.com/package/@mcpu/cli
+MCPU can run in two modes:
+
+1. **MCP Server Mode** (`mcpu-mcp`) - For MCP-native clients like Claude Desktop
+2. **CLI/Daemon Mode** (`mcpu-daemon` + `mcpu-remote`) - For agents with bash access like Claude Code
+
+The CLI mode is useful when your AI agent can execute shell commands but doesn't have native MCP support.
+
+## Packages
+
+| Package                                              | Description             |
+| ---------------------------------------------------- | ----------------------- |
+| [@mcpu/cli](https://www.npmjs.com/package/@mcpu/cli) | Core CLI and MCP server |
+
+Source code is in `packages/mcpu-cli`.

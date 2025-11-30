@@ -19,7 +19,12 @@
     "dist",
     "bin"
   ],
-  "keywords": ["mcp", "proxy", "server", "management"],
+  "keywords": [
+    "mcp",
+    "proxy",
+    "server",
+    "management"
+  ],
   "repository": {
     "type": "git",
     "url": ""
