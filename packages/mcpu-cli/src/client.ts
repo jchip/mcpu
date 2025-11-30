@@ -2,10 +2,58 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { WebSocketClientTransport } from '@modelcontextprotocol/sdk/client/websocket.js';
+import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv-provider.js';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import type { jsonSchemaValidator, JsonSchemaType } from '@modelcontextprotocol/sdk/validation/index.js';
 import type { MCPServerConfig, StdioConfig } from './types.ts';
 import { isStdioConfig } from './types.ts';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
+
+/**
+ * Recursively remove additionalProperties: false from a JSON schema
+ * This relaxes output validation to allow servers to return extra fields
+ */
+export function relaxSchema(schema: Record<string, unknown> | undefined): void {
+  if (!schema || typeof schema !== 'object') return;
+
+  // Remove additionalProperties: false (but leave additionalProperties: true or other values)
+  if (schema.additionalProperties === false) {
+    delete schema.additionalProperties;
+  }
+
+  // Recurse into nested schemas
+  if (schema.properties && typeof schema.properties === 'object') {
+    for (const prop of Object.values(schema.properties as Record<string, unknown>)) {
+      relaxSchema(prop as Record<string, unknown>);
+    }
+  }
+  if (schema.items && typeof schema.items === 'object') {
+    relaxSchema(schema.items as Record<string, unknown>);
+  }
+  if (schema.allOf && Array.isArray(schema.allOf)) {
+    schema.allOf.forEach((s: unknown) => relaxSchema(s as Record<string, unknown>));
+  }
+  if (schema.anyOf && Array.isArray(schema.anyOf)) {
+    schema.anyOf.forEach((s: unknown) => relaxSchema(s as Record<string, unknown>));
+  }
+  if (schema.oneOf && Array.isArray(schema.oneOf)) {
+    schema.oneOf.forEach((s: unknown) => relaxSchema(s as Record<string, unknown>));
+  }
+}
+
+/**
+ * JSON Schema validator that relaxes additionalProperties constraints
+ * Wraps AjvJsonSchemaValidator but strips additionalProperties: false before compiling
+ */
+export class RelaxedAjvJsonSchemaValidator implements jsonSchemaValidator {
+  private inner = new AjvJsonSchemaValidator();
+
+  getValidator<T>(schema: JsonSchemaType) {
+    const relaxed = structuredClone(schema) as Record<string, unknown>;
+    relaxSchema(relaxed);
+    return this.inner.getValidator<T>(relaxed as JsonSchemaType);
+  }
+}
 
 export interface MCPConnection {
   client: Client;
@@ -64,7 +112,8 @@ export class MCPClient {
       name: `mcpu-${serverName}`,
       version: '0.1.0',
     }, {
-      capabilities: {}
+      capabilities: {},
+      jsonSchemaValidator: new RelaxedAjvJsonSchemaValidator(),
     });
 
     // Connect
