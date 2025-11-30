@@ -92,13 +92,12 @@ export class ConfigDiscovery {
       return config;
     }
 
-    // Don't resolve common CLI tools like npx, node, etc
-    const commonCLIs = ['npx', 'node', 'python', 'python3', 'uv', 'uvx'];
-
-    const shouldResolve = !commonCLIs.includes(config.command) &&
-                          !config.command.startsWith('/');
-
-    const command = shouldResolve ? resolve(config.command) : config.command;
+    // Only resolve relative paths (./foo or ../foo)
+    // - ./blah or ../blah → resolve relative to CWD
+    // - /blah → absolute, use as-is
+    // - blah → bare command, let shell find via PATH
+    const isRelativePath = config.command.startsWith('./') || config.command.startsWith('../');
+    const command = isRelativePath ? resolve(config.command) : config.command;
 
     return {
       ...config,
