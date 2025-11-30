@@ -1,6 +1,6 @@
 {
   "name": "xtsjs",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "TypeScript build tool with ESM import extension rewriting",
   "author": "Joel Chen <joel123@gmail.com>",
   "repository": {
