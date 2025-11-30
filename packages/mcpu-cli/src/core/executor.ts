@@ -6,93 +6,12 @@ import type { CommandResult } from '../types/result.ts';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ConnectionPool } from '../daemon/connection-pool.ts';
 import { ExecutionContext } from './context.ts';
-import { formatToolInfo, formatMcpResponse } from '../formatters.ts';
+import { formatToolInfo, formatMcpResponse, abbreviateType, LEGEND_HEADER, TYPES_LINE, collectEnums, formatEnumLegend, extractEnumOrRange, formatParamType } from '../formatters.ts';
 import { isStdioConfig, isUrlConfig, isWebSocketConfig } from '../types.ts';
 
 /**
  * Core command executor - shared logic for CLI and daemon
  */
-
-/**
- * Abbreviate type names to single-letter codes
- */
-function abbreviateType(type: string): string {
-  const abbrevMap: Record<string, string> = {
-    'string': 's',
-    'integer': 'i',
-    'number': 'n',
-    'null': 'z',
-    'boolean': 'b',
-    'object': 'o',
-    'array': 'a',
-  };
-  return abbrevMap[type] || type;
-}
-
-/**
- * Format object type with its properties
- */
-function formatObjectType(propSchema: any): string {
-  if (propSchema.type !== 'object' || !propSchema.properties) {
-    return 'o';
-  }
-
-  const props = propSchema.properties;
-  const required = new Set(propSchema.required || []);
-  const propStrs: string[] = [];
-
-  // Limit to first 4 properties to keep it compact
-  const propEntries = Object.entries(props).slice(0, 4);
-  const hasMore = Object.keys(props).length > 4;
-
-  for (const [name, prop] of propEntries) {
-    const p = prop as any;
-    let typeStr = 'any';
-
-    if (p.type) {
-      if (Array.isArray(p.type)) {
-        typeStr = p.type.map(abbreviateType).join('|');
-      } else {
-        typeStr = abbreviateType(p.type);
-      }
-    }
-
-    const opt = required.has(name) ? '' : '?';
-    propStrs.push(`${name}${opt}:${typeStr}`);
-  }
-
-  const propsStr = propStrs.join(',');
-  const ellipsis = hasMore ? ',...' : '';
-  return `o{${propsStr}${ellipsis}}`;
-}
-
-/**
- * Extract enum/range value from a property schema
- * Returns the extracted value string or null if not found
- */
-function extractEnumOrRange(propSchema: any): string | null {
-  // Check schema enum first
-  if (propSchema.enum) {
-    return propSchema.enum.join('|');
-  }
-
-  if (propSchema.description) {
-    // Try to extract enum-like patterns from description
-    // Allow alphanumeric, underscore, and hyphen in enum values
-    const enumMatch = propSchema.description.match(/(?:Type|Enum|Options?|Allowed|One of):\s*([a-zA-Z0-9_-]+(?:\s*\|\s*[a-zA-Z0-9_-]+)+)/i);
-    if (enumMatch) {
-      return enumMatch[1].replace(/\s+/g, '');
-    }
-
-    // Try to extract range patterns
-    const rangeMatch = propSchema.description.match(/(?:Values?|Range):\s*(\d+)\s*-\s*(\d+)/i);
-    if (rangeMatch) {
-      return `${rangeMatch[1]}-${rangeMatch[2]}`;
-    }
-  }
-
-  return null;
-}
 
 /**
  * Extract default value from description
@@ -105,56 +24,6 @@ function extractDefault(propSchema: any): string | null {
     }
   }
   return null;
-}
-
-/**
- * Collect all enums from tools for deduplication
- * Returns a map of enum value -> reference name (E1, E2, etc.)
- */
-function collectEnums(tools: Tool[]): Map<string, string> {
-  const enumCounts = new Map<string, number>();
-
-  // Count occurrences of each enum
-  for (const tool of tools) {
-    if (!tool.inputSchema || typeof tool.inputSchema !== 'object') continue;
-    const schema = tool.inputSchema as any;
-    const properties = schema.properties || {};
-
-    for (const [, prop] of Object.entries(properties)) {
-      const enumValue = extractEnumOrRange(prop as any);
-      // Only track enums with multiple values (contains |)
-      if (enumValue && enumValue.includes('|')) {
-        enumCounts.set(enumValue, (enumCounts.get(enumValue) || 0) + 1);
-      }
-    }
-  }
-
-  // Create references for enums that appear more than once or are long
-  const enumRefs = new Map<string, string>();
-  let refIndex = 1;
-
-  for (const [enumValue, count] of enumCounts.entries()) {
-    // Create reference if used more than once or if it's long (> 20 chars)
-    if (count > 1 || enumValue.length > 20) {
-      enumRefs.set(enumValue, `E${refIndex}`);
-      refIndex++;
-    }
-  }
-
-  return enumRefs;
-}
-
-/**
- * Format enum legend for output
- */
-function formatEnumLegend(enumRefs: Map<string, string>): string {
-  if (enumRefs.size === 0) return '';
-
-  const lines: string[] = [];
-  for (const [enumValue, ref] of enumRefs.entries()) {
-    lines.push(`${ref}: ${enumValue}`);
-  }
-  return lines.join('\n') + '\n\n';
 }
 
 /**
@@ -198,45 +67,20 @@ function formatBriefArgs(tool: Tool, description?: string, forceParams?: boolean
   for (const [name, prop] of Object.entries(properties)) {
     const propSchema = prop as any;
 
-    // Determine type string
-    let typeStr = 'any';
+    // Use shared formatParamType with depth=1 for tools (no object refs needed at depth=1)
+    let typeStr = formatParamType(propSchema, enumRefs, undefined, 1);
 
-    if (propSchema.type) {
-      // Handle union types (array of types)
-      if (Array.isArray(propSchema.type)) {
-        typeStr = propSchema.type.map(abbreviateType).join('|');
+    // Extract default value if present (not in schema default)
+    if (propSchema.default === undefined) {
+      const defaultVal = extractDefault(propSchema);
+      if (defaultVal) {
+        typeStr = `${typeStr}=${defaultVal}`;
       }
-      // Handle object type with properties
-      else if (propSchema.type === 'object') {
-        typeStr = formatObjectType(propSchema);
-      }
-      // Handle array type
-      else if (propSchema.type === 'array' && propSchema.items) {
-        // Check if array items are objects with properties
-        if (propSchema.items.type === 'object' && propSchema.items.properties) {
-          typeStr = `${formatObjectType(propSchema.items)}[]`;
-        } else {
-          const itemType = Array.isArray(propSchema.items.type)
-            ? propSchema.items.type.map(abbreviateType).join('|')
-            : abbreviateType(propSchema.items.type || 'any');
-          typeStr = `${itemType}[]`;
-        }
-      } else {
-        typeStr = abbreviateType(propSchema.type);
-      }
-    }
-
-    // Handle enums/ranges (override type)
-    const enumOrRange = extractEnumOrRange(propSchema);
-    if (enumOrRange) {
-      // Use reference if available, otherwise use the full value
-      typeStr = enumRefs?.get(enumOrRange) || enumOrRange;
-    }
-
-    // Extract default value if present
-    const defaultVal = extractDefault(propSchema);
-    if (defaultVal) {
-      typeStr = `${typeStr}=${defaultVal}`;
+    } else {
+      const defVal = typeof propSchema.default === 'string'
+        ? propSchema.default
+        : JSON.stringify(propSchema.default);
+      typeStr = `${typeStr}=${defVal}`;
     }
 
     // Build parameter string: name type (no ? for required, ? for optional)
@@ -716,9 +560,9 @@ export async function executeToolsCommand(
           toolsByServer.get(server)!.push(tool);
         }
 
-        // Add type legend if not in names-only mode
+        // Add legend header if not in names-only mode
         if (!args.names) {
-          output += 'Types: s=string, i=integer, n=number, z=null, b=bool, o=object\n\n';
+          output += `${LEGEND_HEADER}\n${TYPES_LINE}\n\n`;
         }
 
         for (const [server, tools] of toolsByServer.entries()) {
@@ -840,7 +684,8 @@ export async function executeInfoCommand(
       ? args.tools
       : availableTools.map(t => t.name);
 
-    const results = [];
+    // Collect tools first to validate all exist
+    const toolsForInfo: Tool[] = [];
     for (const toolName of toolsToShow) {
       const tool = availableTools.find(t => t.name === toolName);
       if (!tool) {
@@ -850,28 +695,19 @@ export async function executeInfoCommand(
           exitCode: 1,
         };
       }
-
-      const ctx = getContext(options);
-
-      // --yaml or --raw flags imply structured output with complete tool object
-      if (ctx.json || ctx.yaml || options.raw) {
-        // Output complete tool object without processing
-        results.push(tool);
-      } else {
-        // Use enhanced text formatter
-        results.push(formatToolInfo(tool, args.server));
-      }
+      toolsForInfo.push(tool);
     }
 
     const ctx = getContext(options);
 
+    // --yaml or --raw flags imply structured output with complete tool object
     if (ctx.json || ctx.yaml || options.raw) {
       // If --raw is used without explicit format, default to JSON (native MCP format)
       const outputCtx = options.raw && !ctx.json && !ctx.yaml
         ? new ExecutionContext({ cwd: ctx.cwd, verbose: ctx.verbose, json: true, yaml: false, raw: ctx.raw, configFile: ctx.configFile, noCache: ctx.noCache })
         : ctx;
 
-      const outputData = results.length === 1 ? results[0] : results;
+      const outputData = toolsForInfo.length === 1 ? toolsForInfo[0] : toolsForInfo;
       // Include cache status in structured output
       const wrappedOutput = fromCache
         ? { ...outputData, _meta: { fromCache: true } }
@@ -884,13 +720,26 @@ export async function executeInfoCommand(
         meta,
       };
     } else {
-      let output = results.join('');
-      if (fromCache) {
-        output += `\n(from cache)\n`;
+      // Text output: collect enums and build header/body/footer
+      const enumRefs = collectEnums(toolsForInfo);
+      const enumLegend = formatEnumLegend(enumRefs);
+
+      // Header: # Legend section with types and enums
+      let header = `${LEGEND_HEADER}\n${TYPES_LINE}`;
+      if (enumLegend) {
+        header += '\n' + enumLegend;
       }
+      header += '\n\n';
+
+      // Body: formatted tools
+      const body = toolsForInfo.map(t => formatToolInfo(t, enumRefs)).join('');
+
+      // Footer: cache status
+      const footer = fromCache ? '(from cache)\n' : '';
+
       return {
         success: true,
-        output,
+        output: header + body + footer,
         exitCode: 0,
         meta,
       };

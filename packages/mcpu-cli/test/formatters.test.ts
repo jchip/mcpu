@@ -1,30 +1,62 @@
 import { describe, it, expect } from 'vitest';
-import { formatParamType, formatToolInfo, formatMcpResponse } from '../src/formatters.js';
+import { formatParamType, formatToolInfo, formatMcpResponse, abbreviateType, LEGEND_HEADER, TYPES_LINE } from '../src/formatters.js';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 
 describe('Formatters', () => {
+  describe('abbreviateType', () => {
+    it('should abbreviate common types', () => {
+      expect(abbreviateType('string')).toBe('S');
+      expect(abbreviateType('integer')).toBe('I');
+      expect(abbreviateType('number')).toBe('N');
+      expect(abbreviateType('null')).toBe('Z');
+      expect(abbreviateType('boolean')).toBe('B');
+      expect(abbreviateType('object')).toBe('O');
+      // Arrays use [] suffix, not abbreviation
+      expect(abbreviateType('array')).toBe('array');
+    });
+
+    it('should pass through unknown types', () => {
+      expect(abbreviateType('custom')).toBe('custom');
+    });
+  });
+
+  describe('Legend constants', () => {
+    it('should have proper header', () => {
+      expect(LEGEND_HEADER).toBe('# Legend');
+    });
+
+    it('should include all type abbreviations', () => {
+      expect(TYPES_LINE).toMatch(/^Types:/);
+      expect(TYPES_LINE).toContain('S=string');
+      expect(TYPES_LINE).toContain('I=integer');
+      expect(TYPES_LINE).toContain('O=object');
+      // Arrays use [] suffix, not A abbreviation
+      expect(TYPES_LINE).not.toContain('A=array');
+    });
+  });
+
   describe('formatParamType', () => {
     it('should format simple string type', () => {
       const result = formatParamType({ type: 'string' });
-      expect(result).toBe('string');
+      expect(result).toBe('S');
     });
 
     it('should format number type', () => {
       const result = formatParamType({ type: 'number' });
-      expect(result).toBe('number');
+      expect(result).toBe('N');
     });
 
     it('should format union types', () => {
       const result = formatParamType({ type: ['string', 'boolean'] });
-      expect(result).toBe('string|boolean');
+      expect(result).toBe('S|B');
     });
 
-    it('should format enum types', () => {
+    it('should format enum types without enum() wrapper', () => {
       const result = formatParamType({
         type: 'string',
         enum: ['option1', 'option2', 'option3'],
       });
-      expect(result).toBe('enum(option1|option2|option3)');
+      expect(result).toBe('option1|option2|option3');
     });
 
     it('should format simple array types', () => {
@@ -32,7 +64,7 @@ describe('Formatters', () => {
         type: 'array',
         items: { type: 'string' },
       });
-      expect(result).toBe('string[]');
+      expect(result).toBe('S[]');
     });
 
     it('should format array of objects with structure', () => {
@@ -48,7 +80,7 @@ describe('Formatters', () => {
           required: ['name', 'age'],
         },
       });
-      expect(result).toBe('array[{name:string, age:number, email?:string}]');
+      expect(result).toBe('O{name:S, age:N, email?:S}[]');
     });
 
     it('should format array of objects with enum fields', () => {
@@ -66,7 +98,7 @@ describe('Formatters', () => {
           required: ['type', 'value'],
         },
       });
-      expect(result).toBe('array[{type:enum(textbox|checkbox|radio), value:string}]');
+      expect(result).toBe('O{type:textbox|checkbox|radio, value:S}[]');
     });
 
     it('should format object with properties', () => {
@@ -78,7 +110,7 @@ describe('Formatters', () => {
         },
         required: ['field1'],
       });
-      expect(result).toBe('{field1:string, field2?:number}');
+      expect(result).toBe('O{field1:S, field2?:N}');
     });
 
     it('should format object with enum properties', () => {
@@ -93,7 +125,7 @@ describe('Formatters', () => {
         },
         required: ['status'],
       });
-      expect(result).toBe('{status:enum(active|inactive), count?:number}');
+      expect(result).toBe('O{status:active|inactive, count?:N}');
     });
 
     it('should handle missing type', () => {
@@ -103,6 +135,7 @@ describe('Formatters', () => {
 
     it('should handle array without items schema', () => {
       const result = formatParamType({ type: 'array' });
+      // Bare array without items - falls through as 'array' (rare case)
       expect(result).toBe('array');
     });
   });
@@ -121,14 +154,15 @@ describe('Formatters', () => {
         },
       };
 
-      const result = formatToolInfo(tool, 'filesystem');
+      const result = formatToolInfo(tool);
 
-      expect(result).toContain('read_file');
+      expect(result).toContain('# read_file');
       expect(result).toContain('Read a file from disk');
-      expect(result).toContain('Parameters:');
-      expect(result).toContain('path: string - File path');
-      expect(result).toContain('Usage:');
-      expect(result).toContain('mcpu call filesystem read_file');
+      expect(result).toContain('ARGS:');
+      expect(result).toContain('path: S - File path');
+      expect(result).not.toContain('Usage:');
+      // Legend is added by caller, not formatToolInfo
+      expect(result).not.toContain(LEGEND_HEADER);
     });
 
     it('should show title when different from name', () => {
@@ -139,10 +173,10 @@ describe('Formatters', () => {
         inputSchema: { type: 'object', properties: {} },
       };
 
-      const result = formatToolInfo(tool, 'playwright');
+      const result = formatToolInfo(tool);
 
-      expect(result).toContain('Fill Form');
-      expect(result).toContain('(browser_fill_form)');
+      expect(result).toContain('# browser_fill_form');
+      expect(result).toContain('(Fill Form)');
     });
 
     it('should show annotations as hints', () => {
@@ -156,7 +190,7 @@ describe('Formatters', () => {
         },
       };
 
-      const result = formatToolInfo(tool, 'filesystem');
+      const result = formatToolInfo(tool);
 
       expect(result).toContain('Hints: destructive');
       expect(result).not.toContain('read-only');
@@ -174,7 +208,7 @@ describe('Formatters', () => {
         },
       };
 
-      const result = formatToolInfo(tool, 'playwright');
+      const result = formatToolInfo(tool);
 
       expect(result).toContain('Hints: destructive, open-world');
     });
@@ -206,9 +240,9 @@ describe('Formatters', () => {
         },
       };
 
-      const result = formatToolInfo(tool, 'playwright');
+      const result = formatToolInfo(tool);
 
-      expect(result).toContain('fields: array[{name:string, type:enum(textbox|checkbox), value:string}]');
+      expect(result).toContain('fields: O{name:S, type:textbox|checkbox, value:S}[]');
     });
 
     it('should show output schema if present', () => {
@@ -219,9 +253,9 @@ describe('Formatters', () => {
         outputSchema: { type: 'object' },
       };
 
-      const result = formatToolInfo(tool, 'server');
+      const result = formatToolInfo(tool);
 
-      expect(result).toContain('Returns: object');
+      expect(result).toContain('-> O');
     });
 
     it('should handle tools with no parameters', () => {
@@ -234,9 +268,9 @@ describe('Formatters', () => {
         },
       };
 
-      const result = formatToolInfo(tool, 'server');
+      const result = formatToolInfo(tool);
 
-      expect(result).toContain('Parameters:');
+      expect(result).toContain('ARGS:');
       expect(result).toContain('(none)');
     });
 
@@ -254,14 +288,14 @@ describe('Formatters', () => {
         },
       };
 
-      const result = formatToolInfo(tool, 'filesystem');
+      const result = formatToolInfo(tool);
 
-      expect(result).toContain('path: string');
+      expect(result).toContain('path: S');
       expect(result).not.toContain('path?');
-      expect(result).toContain('limit?: number');
+      expect(result).toContain('limit?: N');
     });
 
-    it('should show default values', () => {
+    it('should show default values as =value', () => {
       const tool: Tool = {
         name: 'list_files',
         description: 'List files',
@@ -273,9 +307,9 @@ describe('Formatters', () => {
         },
       };
 
-      const result = formatToolInfo(tool, 'filesystem');
+      const result = formatToolInfo(tool);
 
-      expect(result).toContain('(default: 100)');
+      expect(result).toContain('limit?: N=100');
     });
   });
 

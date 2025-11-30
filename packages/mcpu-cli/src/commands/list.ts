@@ -2,6 +2,7 @@ import chalk from 'chalk';
 import { ConfigDiscovery } from '../config.ts';
 import { MCPClient } from '../client.ts';
 import { SchemaCache } from '../cache.ts';
+import { abbreviateType, LEGEND_HEADER, TYPES_LINE } from '../formatters.ts';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 
 export interface ListOptions {
@@ -18,22 +19,6 @@ export interface ListOptions {
  */
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
-}
-
-/**
- * Abbreviate type names to single-letter codes
- */
-function abbreviateType(type: string): string {
-  const abbrevMap: Record<string, string> = {
-    'string': 's',
-    'integer': 'i',
-    'number': 'n',
-    'null': 'z',
-    'boolean': 'b',
-    'object': 'o',
-    'array': 'a',
-  };
-  return abbrevMap[type] || type;
 }
 
 /**
@@ -258,7 +243,7 @@ async function listServerTools(
       }, null, 2));
     } else {
       // Human-readable output
-      console.log(chalk.dim('Types: s=string, i=integer, n=number, z=null, b=bool, o=object\n'));
+      console.log(chalk.dim(`${LEGEND_HEADER}\n${TYPES_LINE}\n`));
       console.log(chalk.bold(`Tools from ${chalk.cyan(serverName)}:\n`));
 
       if (tools.length === 0) {

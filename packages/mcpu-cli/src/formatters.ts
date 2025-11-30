@@ -14,79 +14,250 @@
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 
 /**
- * Format JSON Schema type into a concise type string
- *
- * Examples:
- * - string → "string"
- * - array of strings → "string[]"
- * - enum → "enum(option1|option2|option3)"
- * - object → "{field1:type1, field2:type2}"
- * - array of objects → "array[{field1:type1, field2:type2}]"
+ * Type abbreviation map: full type name -> single letter code
+ * Arrays use [] suffix notation (e.g., S[], O[])
  */
-export function formatParamType(propSchema: any): string {
-  let typeStr = propSchema.type || 'any';
+const TYPE_ABBREV: Record<string, string> = {
+  'string': 'S',
+  'integer': 'I',
+  'number': 'N',
+  'null': 'Z',
+  'boolean': 'B',
+  'object': 'O',
+};
 
-  // Handle union types
-  if (Array.isArray(typeStr)) {
-    typeStr = typeStr.join('|');
+/** Section header for legend */
+export const LEGEND_HEADER = '# Legend';
+
+/** Types abbreviation line */
+export const TYPES_LINE = 'Types: S=string, I=integer, N=number, Z=null, B=bool, O=object';
+
+/**
+ * Abbreviate type names to single-letter codes
+ */
+export function abbreviateType(type: string): string {
+  return TYPE_ABBREV[type] || type;
+}
+
+/**
+ * Extract enum/range value from a property schema
+ * Returns the extracted value string or null if not found
+ */
+export function extractEnumOrRange(propSchema: any): string | null {
+  // Check schema enum first
+  if (propSchema.enum) {
+    return propSchema.enum.join('|');
   }
 
-  // Handle enums
+  if (propSchema.description) {
+    // Try to extract enum-like patterns from description
+    const enumMatch = propSchema.description.match(/(?:Type|Enum|Status|Values?|Options?|Allowed|One of):\s*([a-zA-Z0-9_-]+(?:\s*\|\s*[a-zA-Z0-9_-]+)+)/i);
+    if (enumMatch) {
+      return enumMatch[1].replace(/\s+/g, '');
+    }
+
+    // Try to extract range patterns
+    const rangeMatch = propSchema.description.match(/(?:Values?|Range):\s*(\d+)\s*-\s*(\d+)/i);
+    if (rangeMatch) {
+      return `${rangeMatch[1]}-${rangeMatch[2]}`;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Collect all enums from tools for deduplication
+ * Returns a map of enum value -> reference name (E1, E2, etc.)
+ */
+export function collectEnums(tools: Tool[]): Map<string, string> {
+  const enumCounts = new Map<string, number>();
+
+  // Count occurrences of each enum
+  for (const tool of tools) {
+    if (!tool.inputSchema || typeof tool.inputSchema !== 'object') continue;
+    const schema = tool.inputSchema as any;
+    const properties = schema.properties || {};
+
+    for (const [, prop] of Object.entries(properties)) {
+      const enumValue = extractEnumOrRange(prop as any);
+      // Only track enums with multiple values (contains |)
+      if (enumValue && enumValue.includes('|')) {
+        enumCounts.set(enumValue, (enumCounts.get(enumValue) || 0) + 1);
+      }
+    }
+  }
+
+  // Create references for enums that appear more than once or are long
+  const enumRefs = new Map<string, string>();
+  let refIndex = 1;
+
+  for (const [enumValue, count] of enumCounts.entries()) {
+    // Create reference if used more than once or if it's long (> 20 chars)
+    if (count > 1 || enumValue.length > 20) {
+      enumRefs.set(enumValue, `@E${refIndex}`);
+      refIndex++;
+    }
+  }
+
+  return enumRefs;
+}
+
+/**
+ * Format enum legend for output header
+ */
+export function formatEnumLegend(enumRefs: Map<string, string>): string {
+  if (enumRefs.size === 0) return '';
+
+  const lines: string[] = [];
+  for (const [enumValue, ref] of enumRefs.entries()) {
+    lines.push(`${ref}: ${enumValue}`);
+  }
+  return lines.join('\n');
+}
+
+/**
+ * Generate object shape string from schema properties
+ */
+function generateObjectShape(schema: any, enumRefs?: Map<string, string>, depth: number = 1): string {
+  if (!schema.properties || depth <= 0) return 'O';
+
+  const props = schema.properties;
+  const requiredFields = schema.required || [];
+  const fields = Object.keys(props).map(key => {
+    const req = requiredFields.includes(key) ? '' : '?';
+    const fieldSchema = props[key];
+    return `${key}${req}:${formatParamTypeInternal(fieldSchema, enumRefs, undefined, depth - 1)}`;
+  }).join(', ');
+  return `O{${fields}}`;
+}
+
+/**
+ * Get enum display value - use E1, E2 ref if available, otherwise full value
+ */
+function getEnumDisplay(enumValue: string, enumRefs?: Map<string, string>): string {
+  if (enumRefs) {
+    const ref = enumRefs.get(enumValue);
+    if (ref) return ref;
+  }
+  return enumValue;
+}
+
+/**
+ * Format a type (handles union types and abbreviation)
+ */
+function formatType(type: any): string {
+  if (Array.isArray(type)) {
+    return type.map(abbreviateType).join('|');
+  }
+  return abbreviateType(type || 'any');
+}
+
+/**
+ * Internal implementation of formatParamType
+ */
+function formatParamTypeInternal(
+  propSchema: any,
+  enumRefs?: Map<string, string>,
+  _unused?: any,
+  depth: number = 1
+): string {
+  let typeStr = propSchema.type || 'any';
+
+  // Handle enums from schema - use @E1, @E2 ref if available
   if (propSchema.enum) {
-    return `enum(${propSchema.enum.join('|')})`;
+    const enumValue = propSchema.enum.join('|');
+    return getEnumDisplay(enumValue, enumRefs);
+  }
+
+  // Check for enums/ranges extracted from description (before union types)
+  const extracted = extractEnumOrRange(propSchema);
+  if (extracted) {
+    // If it's a range like "0-4", return it directly
+    if (/^\d+-\d+$/.test(extracted)) {
+      return extracted;
+    }
+    // Use ref if available, otherwise return the extracted enum directly
+    return getEnumDisplay(extracted, enumRefs);
+  }
+
+  // Handle union types - but check for object properties first
+  if (Array.isArray(typeStr)) {
+    // If union includes 'object' and has properties, show them
+    if (typeStr.includes('object') && propSchema.properties && depth > 0) {
+      const shape = generateObjectShape(propSchema, enumRefs, depth);
+      const hasNull = typeStr.includes('null');
+      return hasNull ? `Z|${shape}` : shape;
+    }
+    typeStr = typeStr.map(abbreviateType).join('|');
+    return typeStr;
   }
 
   // Handle arrays with item details
   if (propSchema.type === 'array' && propSchema.items) {
     const items = propSchema.items;
 
+    // Handle union types in array items (e.g., ['null', 'object'])
+    if (Array.isArray(items.type)) {
+      // Nullable array of objects
+      if (items.type.includes('object') && items.type.includes('null')) {
+        if (items.properties && depth > 0) {
+          return `Z|${generateObjectShape(items, enumRefs, depth)}[]`;
+        }
+        return 'Z|O[]';
+      }
+      // Other union - just format the types
+      return `${formatType(items.type)}[]`;
+    }
+
     // Simple array types
     if (items.type && items.type !== 'object') {
-      return `${items.type}[]`;
+      return `${abbreviateType(items.type)}[]`;
     }
 
-    // Array of objects - show structure with enum details
-    if (items.type === 'object' && items.properties) {
-      const props = items.properties;
-      const requiredFields = items.required || [];
-      const fields = Object.keys(props).map(key => {
-        const req = requiredFields.includes(key) ? '' : '?';
-        const fieldSchema = props[key];
-
-        // Show enum if present
-        if (fieldSchema.enum) {
-          return `${key}${req}:enum(${fieldSchema.enum.join('|')})`;
-        }
-
-        const propType = fieldSchema.type || 'any';
-        return `${key}${req}:${propType}`;
-      }).join(', ');
-      return `array[{${fields}}]`;
+    // Array of objects - show structure if depth > 0
+    if (items.type === 'object' && items.properties && depth > 0) {
+      return `${generateObjectShape(items, enumRefs, depth)}[]`;
     }
 
-    return 'object[]';
+    return `${abbreviateType('object')}[]`;
   }
 
-  // Handle objects with properties
-  if (propSchema.type === 'object' && propSchema.properties) {
-    const props = propSchema.properties;
-    const requiredFields = propSchema.required || [];
-    const fields = Object.keys(props).map(key => {
-      const req = requiredFields.includes(key) ? '' : '?';
-      const fieldSchema = props[key];
-
-      // Show enum if present
-      if (fieldSchema.enum) {
-        return `${key}${req}:enum(${fieldSchema.enum.join('|')})`;
-      }
-
-      const propType = fieldSchema.type || 'any';
-      return `${key}${req}:${propType}`;
-    }).join(', ');
-    return `{${fields}}`;
+  // Handle objects with properties - show structure if depth > 0
+  if (propSchema.type === 'object' && propSchema.properties && depth > 0) {
+    return generateObjectShape(propSchema, enumRefs, depth);
   }
 
-  return typeStr;
+  // Object without properties or depth exhausted
+  if (propSchema.type === 'object') {
+    return abbreviateType('object');
+  }
+
+  return abbreviateType(typeStr);
+}
+
+/**
+ * Format JSON Schema type into a concise abbreviated type string
+ *
+ * Examples:
+ * - string → "S"
+ * - array of strings → "S[]"
+ * - enum → "@E1" or "option1|option2|option3"
+ * - object → "O{field1:S, field2:I}"
+ * - array of objects → "O{field1:S, field2:I}[]"
+ *
+ * @param propSchema - JSON Schema property
+ * @param enumRefs - Optional map of enum values to references (@E1, @E2, etc.)
+ * @param _unused - Deprecated, kept for API compatibility
+ * @param depth - How many levels of object properties to show (default 1)
+ */
+export function formatParamType(
+  propSchema: any,
+  enumRefs?: Map<string, string>,
+  _unused?: any,
+  depth: number = 1
+): string {
+  return formatParamTypeInternal(propSchema, enumRefs, undefined, depth);
 }
 
 /**
@@ -100,18 +271,17 @@ export function formatParamType(propSchema: any): string {
  * - annotations (hints like destructive, readOnly, openWorld, idempotent)
  *
  * @param tool - MCP Tool object from tools/list
- * @param serverName - Server name for usage examples
+ * @param enumRefs - Optional map of enum values to references (@E1, @E2, etc.)
  * @returns Human-readable text representation
  */
-export function formatToolInfo(tool: Tool, serverName: string): string {
+export function formatToolInfo(tool: Tool, enumRefs?: Map<string, string>): string {
   const toolAny = tool as any;
   let output = '';
 
-  // Header: use title if available, otherwise name
-  const displayName = toolAny.title || tool.name;
-  output += `\n${displayName}\n`;
+  // Header: # tool_name (with title if different)
+  output += `# ${tool.name}\n`;
   if (toolAny.title && toolAny.title !== tool.name) {
-    output += `(${tool.name})\n`;
+    output += `(${toolAny.title})\n`;
   }
   output += '\n';
 
@@ -139,39 +309,66 @@ export function formatToolInfo(tool: Tool, serverName: string): string {
     const properties = schema.properties;
     const required = schema?.required || [];
 
-    output += 'Parameters:\n';
+    output += 'ARGS:\n';
 
     if (Object.keys(properties).length === 0) {
       output += '  (none)\n';
     } else {
-      for (const [name, prop] of Object.entries(properties)) {
+      // Sort: required args first, then optional
+      const entries = Object.entries(properties);
+      const sortedEntries = [
+        ...entries.filter(([name]) => required.includes(name)),
+        ...entries.filter(([name]) => !required.includes(name)),
+      ];
+
+      for (const [name, prop] of sortedEntries) {
         const propSchema = prop as any;
         const requiredMark = required.includes(name) ? '' : '?';
 
-        // Build type string with nested structure details
-        const typeStr = formatParamType(propSchema);
-        const desc = propSchema.description ? ` - ${propSchema.description}` : '';
-        const defaultVal = propSchema.default !== undefined ? ` (default: ${JSON.stringify(propSchema.default)})` : '';
+        // Build type string with nested structure details (depth=2 for ARGS)
+        const typeStr = formatParamType(propSchema, enumRefs, undefined, 2);
 
-        output += `  ${name}${requiredMark}: ${typeStr}${desc}${defaultVal}\n`;
+        // Get default value from schema or extract from description
+        let defaultStr = '';
+        let description = propSchema.description || '';
+
+        if (propSchema.default !== undefined) {
+          const defVal = typeof propSchema.default === 'string'
+            ? propSchema.default
+            : JSON.stringify(propSchema.default);
+          defaultStr = `=${defVal}`;
+        } else if (description) {
+          // Extract default from description like "(default: xxx)" or "(default xxx)"
+          const defaultMatch = description.match(/\(default:?\s*([^)]+)\)/i);
+          if (defaultMatch) {
+            defaultStr = `=${defaultMatch[1].trim()}`;
+            // Strip the default from description since we show it as =value
+            description = description.replace(/\s*\(default:?\s*[^)]+\)/i, '').trim();
+          }
+        }
+
+        // If we're using an enum (ref or inline) or range, strip redundant patterns from description
+        const hasEnumOrRange = typeStr.startsWith('@E') || /^\d+-\d+$/.test(typeStr) || /^[a-zA-Z0-9_-]+\|[a-zA-Z0-9_|-]+$/.test(typeStr);
+        if (hasEnumOrRange) {
+          // Strip patterns like "Type: a|b|c" or "Status: a|b|c" or "Values: 0-4"
+          description = description.replace(/(?:Type|Enum|Status|Values?|Options?|Allowed|One of|Range):\s*[a-zA-Z0-9_|-]+(\s*\|\s*[a-zA-Z0-9_-]+)*/gi, '').trim();
+          description = description.replace(/(?:Values?|Range):\s*\d+\s*-\s*\d+/gi, '').trim();
+          // Clean up any leftover " - " at start or end
+          description = description.replace(/^-\s*/, '').replace(/\s*-\s*$/, '').trim();
+        }
+
+        const desc = description ? ` - ${description}` : '';
+
+        output += `  ${name}${requiredMark}: ${typeStr}${defaultStr}${desc}\n`;
       }
     }
     output += '\n';
   }
 
-  // Output schema (if specified)
+  // Output schema (if specified) - simplified return type (depth=1)
   if (toolAny.outputSchema) {
-    const outSchema = toolAny.outputSchema;
-    let outType = outSchema.type || 'any';
-    if (Array.isArray(outType)) {
-      outType = outType.join('|');
-    }
-    output += `Returns: ${outType}\n\n`;
+    output += `-> ${formatParamType(toolAny.outputSchema, enumRefs, undefined, 1)}\n\n`;
   }
-
-  // Usage example
-  output += 'Usage:\n';
-  output += `  mcpu call ${serverName} ${tool.name}\n\n`;
 
   return output;
 }
