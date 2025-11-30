@@ -1,3 +1,21 @@
+# 11/30/2025
+
+## Packages
+
+-   `@mcpu/cli@0.2.9` `(0.2.8 => 0.2.9)`
+
+## Commits
+
+-   `packages/mcpu-cli`
+
+    -   update readme [commit](/commit/674af326b49705beb5532d14af05845fede93087)
+    -   Add per-server requestTimeout config, increase default to 3 minutes [commit](/commit/5edc86874db531a96473ed22ad9b0a231c1352a1)
+    -   Add RelaxedAjvJsonSchemaValidator to fix output schema validation errors [commit](/commit/31209eaf49894e9c6d3ae2d1fcbcf554405065ec)
+
+-   `packages/mcpu-proxy`
+
+    -   update readme [commit](/commit/674af326b49705beb5532d14af05845fede93087)
+
 # 11/29/2025
 
 ## Packages
