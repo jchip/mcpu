@@ -66,8 +66,8 @@ function createParserCLI() {
         raw: {
           desc: 'Output raw/unprocessed schema data',
         },
-        noCache: {
-          desc: 'Skip cache, force fresh discovery',
+        cache: {
+          desc: 'Use cache (--no-cache to skip)',
         },
       },
       subCommands: {
@@ -206,7 +206,7 @@ export async function coreExecute(options: CoreExecutionOptions): Promise<Comman
       raw: opts.raw as boolean | undefined,
       config: opts.config as string | undefined,
       verbose: opts.verbose as boolean | undefined,
-      noCache: opts.noCache as boolean | undefined,
+      noCache: opts.cache === false ? true : undefined,
       cwd,
       connectionPool,
       configs,

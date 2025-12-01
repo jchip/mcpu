@@ -33,8 +33,9 @@ function extractDefault(propSchema: any): string | null {
  * @param description - Tool description to check for existing arg docs
  * @param forceParams - If true, skip the check for args already in description
  * @param enumRefs - Optional map of enum values to reference names
+ * @param skipComplexCheck - If true, always show full params (for servers with few tools)
  */
-function formatBriefArgs(tool: Tool, description?: string, forceParams?: boolean, enumRefs?: Map<string, string>): string {
+function formatBriefArgs(tool: Tool, description?: string, forceParams?: boolean, enumRefs?: Map<string, string>, skipComplexCheck = false): string {
   if (!tool.inputSchema || typeof tool.inputSchema !== 'object') {
     return '';
   }
@@ -98,12 +99,12 @@ function formatBriefArgs(tool: Tool, description?: string, forceParams?: boolean
   const fullParamsStr = allArgs.join(', ');
   const requiredParamsStr = requiredArgs.join(', ');
 
-  // Check complexity thresholds
+  // Check complexity thresholds (skip if server has few tools)
   const isFullComplex = paramCount > 10 || fullParamsStr.length > 180;
   const isRequiredComplex = requiredArgs.length > 10 || requiredParamsStr.length > 180;
 
   // If full list is too complex, try showing only required params
-  if (isFullComplex) {
+  if (isFullComplex && !skipComplexCheck) {
     if (isRequiredComplex || requiredArgs.length === 0) {
       // Even required params are too complex, or no required params
       return ' - ARGS: (use info for details)';
@@ -578,6 +579,7 @@ export async function executeToolsCommand(
             }
           }
 
+          const skipComplexCheck = tools.length <= 3;
           for (const tool of tools) {
             if (args.names) {
               output += `  - ${tool.name}\n`;
@@ -589,7 +591,7 @@ export async function executeToolsCommand(
               // --no-args sets showArgs to false
               // forceArgs=true when user explicitly set --args from CLI
               const forceArgs = args.showArgsSource === 'cli';
-              const briefArgs = args.showArgs === false ? '' : formatBriefArgs(tool, description, forceArgs, enumRefs);
+              const briefArgs = args.showArgs === false ? '' : formatBriefArgs(tool, description, forceArgs, enumRefs, skipComplexCheck);
               output += `  - ${tool.name} - ${description}${briefArgs}\n`;
             }
           }

@@ -61,8 +61,10 @@ function formatObjectType(propSchema: any): string {
 /**
  * Extract brief argument summary from tool schema
  * Format: "required_params, optional_params?"
+ * @param tool - The tool to format
+ * @param skipComplexCheck - If true, always show full params (for servers with few tools)
  */
-function formatBriefArgs(tool: Tool): string {
+function formatBriefArgs(tool: Tool, skipComplexCheck = false): string {
   if (!tool.inputSchema || typeof tool.inputSchema !== 'object') {
     return '';
   }
@@ -132,12 +134,12 @@ function formatBriefArgs(tool: Tool): string {
   const fullParamsStr = allArgs.join(', ');
   const requiredParamsStr = requiredArgs.join(', ');
 
-  // Check complexity thresholds
+  // Check complexity thresholds (skip if server has few tools)
   const isFullComplex = paramCount > 10 || fullParamsStr.length > 160;
   const isRequiredComplex = requiredArgs.length > 10 || requiredParamsStr.length > 160;
 
   // If full list is too complex, try showing only required params
-  if (isFullComplex) {
+  if (isFullComplex && !skipComplexCheck) {
     if (isRequiredComplex || requiredArgs.length === 0) {
       // Even required params are too complex, or no required params
       return ' PARAMS: (use info for details)';
@@ -249,8 +251,9 @@ async function listServerTools(
       if (tools.length === 0) {
         console.log(chalk.yellow('  No tools available'));
       } else {
+        const skipComplexCheck = tools.length <= 3;
         for (const tool of tools) {
-          const briefArgs = formatBriefArgs(tool);
+          const briefArgs = formatBriefArgs(tool, skipComplexCheck);
           // Only show first line of description
           const description = (tool.description || 'No description').split('\n')[0].trim();
           console.log(`  - ${chalk.green(tool.name)} - ${description}${chalk.dim(briefArgs)}`);
@@ -344,8 +347,9 @@ async function listAllTools(
       // Display grouped by server
       for (const [server, tools] of toolsByServer.entries()) {
         console.log(chalk.bold(`MCP server ${chalk.cyan(server)}:`));
+        const skipComplexCheck = tools.length <= 3;
         for (const tool of tools) {
-          const briefArgs = formatBriefArgs(tool);
+          const briefArgs = formatBriefArgs(tool, skipComplexCheck);
           // Only show first line of description
           const description = (tool.description || 'No description').split('\n')[0].trim();
           console.log(`  - ${chalk.green(tool.name)} - ${description}${chalk.dim(briefArgs)}`);

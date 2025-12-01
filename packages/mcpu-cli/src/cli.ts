@@ -42,8 +42,8 @@ const nc = new NixClap({
       raw: {
         desc: 'Output raw/unprocessed schema (for info command)',
       },
-      noCache: {
-        desc: 'Skip cache, force fresh discovery',
+      cache: {
+        desc: 'Use cache (--no-cache to skip)',
       },
     },
     subCommands: {
