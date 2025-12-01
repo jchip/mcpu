@@ -2,6 +2,21 @@
 
 ## Packages
 
+-   `@mcpu/cli@0.2.10` `(0.2.9 => 0.2.10)`
+
+## Commits
+
+-   `packages/mcpu-cli`
+
+    -   Improve cache flag and show full params for small tool sets [commit](/commit/d975ecadc227d9cffff56301e6b243d05b410df1)
+    -   Extract enums recursively from nested schema properties [commit](/commit/736bcce522fc1f661102cf8a79de89b55e4fdee3)
+    -   Fix command path resolution: only resolve ./ and ../ prefixes [commit](/commit/9982fbf41c0fefca910860457cac020d1e6708f2)
+    -   Refactor formatters: type abbreviations, enum refs, cleaner output [commit](/commit/16516972caad9878225272cdd0ca5d9ac9744bb6)
+
+# 11/30/2025
+
+## Packages
+
 -   `@mcpu/cli@0.2.9` `(0.2.8 => 0.2.9)`
 
 ## Commits
