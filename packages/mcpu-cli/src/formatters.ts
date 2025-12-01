@@ -67,24 +67,46 @@ export function extractEnumOrRange(propSchema: any): string | null {
 }
 
 /**
+ * Recursively extract all enums from a schema property
+ */
+function extractEnumsFromSchema(schema: any, enumCounts: Map<string, number>): void {
+  if (!schema || typeof schema !== 'object') return;
+
+  // Check this schema for enum
+  const enumValue = extractEnumOrRange(schema);
+  if (enumValue && enumValue.includes('|')) {
+    enumCounts.set(enumValue, (enumCounts.get(enumValue) || 0) + 1);
+  }
+
+  // Recurse into object properties
+  if (schema.properties) {
+    for (const prop of Object.values(schema.properties)) {
+      extractEnumsFromSchema(prop, enumCounts);
+    }
+  }
+
+  // Recurse into array items
+  if (schema.items) {
+    extractEnumsFromSchema(schema.items, enumCounts);
+  }
+}
+
+/**
  * Collect all enums from tools for deduplication
  * Returns a map of enum value -> reference name (E1, E2, etc.)
  */
 export function collectEnums(tools: Tool[]): Map<string, string> {
   const enumCounts = new Map<string, number>();
 
-  // Count occurrences of each enum
+  // Count occurrences of each enum (recursively)
   for (const tool of tools) {
     if (!tool.inputSchema || typeof tool.inputSchema !== 'object') continue;
-    const schema = tool.inputSchema as any;
-    const properties = schema.properties || {};
+    extractEnumsFromSchema(tool.inputSchema, enumCounts);
 
-    for (const [, prop] of Object.entries(properties)) {
-      const enumValue = extractEnumOrRange(prop as any);
-      // Only track enums with multiple values (contains |)
-      if (enumValue && enumValue.includes('|')) {
-        enumCounts.set(enumValue, (enumCounts.get(enumValue) || 0) + 1);
-      }
+    // Also check outputSchema if present
+    const toolAny = tool as any;
+    if (toolAny.outputSchema) {
+      extractEnumsFromSchema(toolAny.outputSchema, enumCounts);
     }
   }
 
