@@ -14,6 +14,24 @@
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 
 /**
+ * Try to compact a JSON string by parsing and re-stringifying without indentation.
+ * Returns the original string if it's not valid JSON.
+ */
+export function compactJson(text: string): string {
+  const trimmed = text.trim();
+  // Quick check: must start with { or [ to be JSON
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+    return text;
+  }
+  try {
+    const parsed = JSON.parse(trimmed);
+    return JSON.stringify(parsed);
+  } catch {
+    return text;
+  }
+}
+
+/**
  * Type abbreviation map: full type name -> single letter code
  * Arrays use [] suffix notation (e.g., S[], O[])
  */
@@ -401,13 +419,15 @@ export function formatToolInfo(tool: Tool, enumRefs?: Map<string, string>): stri
  * Unwraps standard MCP response format and extracts meaningful content
  * according to the MCP spec content types: text, image, resource
  *
+ * JSON text content is automatically compacted to reduce output size.
+ *
  * @param response - MCP response with content array
  * @returns Formatted text output
  */
 export function formatMcpResponse(response: unknown): string {
   // Handle non-object responses
   if (typeof response === 'string') {
-    return response;
+    return compactJson(response);
   }
 
   if (typeof response !== 'object' || response === null) {
@@ -429,13 +449,14 @@ export function formatMcpResponse(response: unknown): string {
 
     for (const item of content) {
       if (item.type === 'text' && item.text) {
-        parts.push(item.text);
+        // Compact JSON text to reduce output size
+        parts.push(compactJson(item.text));
       } else if (item.type === 'image') {
         parts.push(`[Image: ${item.mimeType || 'unknown type'}]`);
       } else if (item.type === 'resource') {
         const resourceInfo = [`[Resource: ${item.uri || 'unknown'}]`];
         if (item.text) {
-          resourceInfo.push(item.text);
+          resourceInfo.push(compactJson(item.text));
         }
         parts.push(resourceInfo.join('\n'));
       }
@@ -444,6 +465,6 @@ export function formatMcpResponse(response: unknown): string {
     return parts.join('\n');
   }
 
-  // Fallback: stringify the response
-  return JSON.stringify(response, null, 2);
+  // Fallback: stringify the response (compact)
+  return JSON.stringify(response);
 }

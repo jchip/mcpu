@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatParamType, formatToolInfo, formatMcpResponse, abbreviateType, LEGEND_HEADER, TYPES_LINE } from '../src/formatters.js';
+import { formatParamType, formatToolInfo, formatMcpResponse, abbreviateType, compactJson, LEGEND_HEADER, TYPES_LINE } from '../src/formatters.js';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 
 describe('Formatters', () => {
@@ -17,6 +17,38 @@ describe('Formatters', () => {
 
     it('should pass through unknown types', () => {
       expect(abbreviateType('custom')).toBe('custom');
+    });
+  });
+
+  describe('compactJson', () => {
+    it('should compact indented JSON objects', () => {
+      const input = `{
+  "name": "test",
+  "value": 123
+}`;
+      expect(compactJson(input)).toBe('{"name":"test","value":123}');
+    });
+
+    it('should compact indented JSON arrays', () => {
+      const input = `[
+  "a",
+  "b",
+  "c"
+]`;
+      expect(compactJson(input)).toBe('["a","b","c"]');
+    });
+
+    it('should return non-JSON text as-is', () => {
+      expect(compactJson('Hello world')).toBe('Hello world');
+      expect(compactJson('not { valid json')).toBe('not { valid json');
+    });
+
+    it('should handle already compact JSON', () => {
+      expect(compactJson('{"name":"test"}')).toBe('{"name":"test"}');
+    });
+
+    it('should preserve leading/trailing content for non-JSON', () => {
+      expect(compactJson('  plain text  ')).toBe('  plain text  ');
     });
   });
 
@@ -378,11 +410,32 @@ describe('Formatters', () => {
       expect(() => formatMcpResponse(response)).toThrow('Error occurred');
     });
 
-    it('should stringify non-standard responses', () => {
+    it('should stringify non-standard responses compactly', () => {
       const response = { custom: 'data', value: 123 };
       const result = formatMcpResponse(response);
-      expect(result).toContain('"custom"');
-      expect(result).toContain('"value"');
+      expect(result).toBe('{"custom":"data","value":123}');
+    });
+
+    it('should compact JSON text content', () => {
+      const response = {
+        content: [
+          { type: 'text', text: '{\n  "name": "test",\n  "value": 123\n}' },
+        ],
+      };
+
+      const result = formatMcpResponse(response);
+      expect(result).toBe('{"name":"test","value":123}');
+    });
+
+    it('should not modify non-JSON text content', () => {
+      const response = {
+        content: [
+          { type: 'text', text: 'Hello, this is plain text' },
+        ],
+      };
+
+      const result = formatMcpResponse(response);
+      expect(result).toBe('Hello, this is plain text');
     });
   });
 });
