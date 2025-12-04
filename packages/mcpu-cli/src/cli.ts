@@ -8,6 +8,7 @@ import { dirname, join } from 'node:path';
 import { coreExecute } from './core/core.ts';
 import { VERSION } from './version.ts';
 import { addServer, addServerJson, parseEnvFlags, parseHeaderFlags, type Scope } from './commands/mcp-add.ts';
+import { executeSetup, createMigrationPlan } from './commands/setup.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -361,6 +362,80 @@ ${agentInstructions}
 2. Update CLAUDE.md (if present, and not the file used in step 1)
 See AGENTS.md for details about using MCPU to talk to MCP servers.
 `);
+        },
+      },
+      setup: {
+        desc: 'Migrate MCP servers from Claude config to MCPU',
+        options: {
+          'dry-run': {
+            desc: 'Show what would be migrated without making changes',
+          },
+          yes: {
+            alias: 'y',
+            desc: 'Skip confirmation prompts',
+          },
+        },
+        exec: async (cmd: any) => {
+          const opts = cmd.jsonMeta.opts;
+          const dryRun = opts['dry-run'] || false;
+
+          if (dryRun) {
+            const plan = createMigrationPlan();
+            if (!plan) {
+              console.error('Could not find Claude config. Is Claude Desktop installed?');
+              process.exit(1);
+            }
+
+            const serverCount = Object.keys(plan.servers).length;
+            if (serverCount === 0) {
+              console.log('No MCP servers found in Claude config.');
+              process.exit(0);
+            }
+
+            console.log(chalk.bold('Migration Plan (dry-run)'));
+            console.log();
+            console.log(`Claude config: ${plan.claudeConfigPath}`);
+            console.log(`MCPU config:   ${plan.mcpuConfigPath}`);
+            console.log();
+            console.log(chalk.bold(`Servers to migrate (${serverCount}):`));
+            for (const [name, config] of Object.entries(plan.servers)) {
+              const type = 'command' in config ? 'stdio' : (config as any).type || 'unknown';
+              console.log(`  ${chalk.green('+')} ${name} (${type})`);
+            }
+
+            if (plan.duplicates.length > 0) {
+              console.log();
+              console.log(chalk.bold('Duplicates resolved:'));
+              for (const dup of plan.duplicates) {
+                console.log(`  ${dup.name}: kept from ${dup.kept}, skipped from ${dup.sources.filter(s => s !== dup.kept).join(', ')}`);
+              }
+            }
+
+            console.log();
+            console.log('Run without --dry-run to apply changes.');
+            process.exit(0);
+          }
+
+          // Execute migration
+          const result = await executeSetup({ dryRun: false, yes: opts.yes });
+
+          if (!result.success) {
+            console.error(result.message);
+            process.exit(1);
+          }
+
+          console.log(chalk.green('✓') + ' ' + result.message);
+          if (result.plan) {
+            console.log();
+            console.log('Migrated servers:');
+            for (const name of Object.keys(result.plan.servers)) {
+              console.log(`  ${chalk.green('+')} ${name}`);
+            }
+            console.log();
+            console.log(`MCPU config: ${result.plan.mcpuConfigPath}`);
+            console.log(`Claude config backup created.`);
+          }
+          process.exit(0);
         },
       },
     },
