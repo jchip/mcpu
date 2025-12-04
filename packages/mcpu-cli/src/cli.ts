@@ -335,8 +335,8 @@ const nc = new NixClap({
           },
         },
       },
-      setup: {
-        desc: 'Print setup instructions for AI agents',
+      'agent-guide': {
+        desc: 'Print bash tool usage guide for AI agents',
         exec: async () => {
           // Read AGENT-INSTRUCTIONS.md from the setup directory
           const setupDir = join(__dirname, '..', 'setup');
