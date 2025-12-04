@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, cpSync } from 'node:fs';
+import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import {
   getClaudeConfigPaths,
   getClaudeDesktopConfigPath,
@@ -16,7 +17,17 @@ import {
   saveMcpuConfig,
   updateClaudeConfig,
   updateClaudeCliConfig,
+  executeSetup,
 } from '../src/commands/setup.ts';
+
+// ============================================================================
+// Fixture Paths
+// ============================================================================
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const FIXTURES_DIR = join(__dirname, 'fixtures');
+const DESKTOP_FIXTURE_DIR = join(FIXTURES_DIR, 'claude-desktop');
+const CLI_FIXTURE_DIR = join(FIXTURES_DIR, 'claude-cli');
 
 describe('setup command', () => {
   const testDir = join(tmpdir(), `mcpu-test-${Date.now()}`);
@@ -353,6 +364,279 @@ describe('setup command', () => {
       const files = require('node:fs').readdirSync(claudeDir);
       const backupFile = files.find((f: string) => f.startsWith('claude.json.backup.'));
       expect(backupFile).toBeDefined();
+    });
+  });
+
+  // ==========================================================================
+  // Integration Tests with Fixtures
+  // ==========================================================================
+
+  describe('integration: Claude Desktop migration', () => {
+    const desktopDir = join(testDir, 'desktop');
+    const mcpuOutputDir = join(testDir, 'mcpu-output');
+
+    beforeEach(() => {
+      mkdirSync(mcpuOutputDir, { recursive: true });
+
+      // Copy Desktop fixture to test directory
+      cpSync(DESKTOP_FIXTURE_DIR, desktopDir, { recursive: true });
+
+      // Set env vars to use test directories
+      vi.stubEnv('CLAUDE_DESKTOP_CONFIG_DIR', desktopDir);
+      vi.stubEnv('CLAUDE_CONFIG_DIR', join(testDir, 'nonexistent-cli')); // No CLI config
+      vi.stubEnv('XDG_CONFIG_HOME', mcpuOutputDir);
+    });
+
+    it('should discover all servers from Desktop config and projects', () => {
+      const result = discoverServers();
+      expect(result).not.toBeNull();
+
+      const { discovered } = result!;
+
+      // Global servers
+      expect(discovered.global).toHaveProperty('playwright');
+      expect(discovered.global).toHaveProperty('filesystem');
+      expect(discovered.global).toHaveProperty('memory');
+
+      // Project servers (prefixed with desktop:)
+      expect(discovered.projects).toHaveProperty('desktop:project-alpha');
+      expect(discovered.projects).toHaveProperty('desktop:project-beta');
+      expect(discovered.projects['desktop:project-alpha']).toHaveProperty('project-db');
+      expect(discovered.projects['desktop:project-beta']).toHaveProperty('project-api');
+      expect(discovered.projects['desktop:project-beta']).toHaveProperty('playwright'); // duplicate
+    });
+
+    it('should deduplicate servers correctly (global wins)', () => {
+      const result = discoverServers();
+      const { servers, duplicates } = deduplicateServers(result!.discovered);
+
+      // Should have 5 unique servers: playwright, filesystem, memory, project-db, project-api
+      expect(Object.keys(servers)).toHaveLength(5);
+
+      // playwright from project-beta should be marked as duplicate
+      expect(duplicates).toHaveLength(1);
+      expect(duplicates[0].name).toBe('playwright');
+      expect(duplicates[0].kept).toBe('global');
+      expect(duplicates[0].sources).toContain('project:desktop:project-beta');
+    });
+
+    it('should execute full migration and update configs', async () => {
+      const result = await executeSetup({ dryRun: false });
+
+      expect(result.success).toBe(true);
+      expect(result.plan).toBeDefined();
+      expect(Object.keys(result.plan!.servers)).toHaveLength(5);
+
+      // Check MCPU config was created
+      const mcpuConfigPath = join(mcpuOutputDir, 'mcpu', 'config.json');
+      expect(existsSync(mcpuConfigPath)).toBe(true);
+
+      const mcpuConfig = JSON.parse(readFileSync(mcpuConfigPath, 'utf-8'));
+      expect(mcpuConfig).toHaveProperty('playwright');
+      expect(mcpuConfig).toHaveProperty('filesystem');
+      expect(mcpuConfig).toHaveProperty('memory');
+      expect(mcpuConfig).toHaveProperty('project-db');
+      expect(mcpuConfig).toHaveProperty('project-api');
+
+      // Check env vars are preserved
+      expect(mcpuConfig['project-db'].env).toEqual({ DATABASE_URL: 'postgres://localhost/alpha' });
+
+      // Check Desktop config was updated to use only MCPU
+      const desktopConfig = JSON.parse(readFileSync(join(desktopDir, 'claude_desktop_config.json'), 'utf-8'));
+      expect(desktopConfig.mcpServers).toEqual({
+        mcpu: { command: 'mcpu', args: ['mcp'] },
+      });
+      // Other settings preserved
+      expect(desktopConfig.theme).toBe('dark');
+      expect(desktopConfig.globalShortcut).toBe('Ctrl+Space');
+
+      // Check backup was created
+      const files = require('node:fs').readdirSync(desktopDir);
+      expect(files.some((f: string) => f.startsWith('claude_desktop_config.json.backup.'))).toBe(true);
+    });
+
+    it('should support dry-run mode', async () => {
+      const result = await executeSetup({ dryRun: true });
+
+      expect(result.success).toBe(true);
+      expect(result.plan).toBeDefined();
+
+      // MCPU config should NOT be created
+      const mcpuConfigPath = join(mcpuOutputDir, 'mcpu', 'config.json');
+      expect(existsSync(mcpuConfigPath)).toBe(false);
+
+      // Desktop config should NOT be modified
+      const desktopConfig = JSON.parse(readFileSync(join(desktopDir, 'claude_desktop_config.json'), 'utf-8'));
+      expect(desktopConfig.mcpServers).toHaveProperty('playwright');
+      expect(desktopConfig.mcpServers).not.toHaveProperty('mcpu');
+    });
+  });
+
+  describe('integration: Claude CLI migration', () => {
+    const cliDir = join(testDir, 'cli');
+    const mcpuOutputDir = join(testDir, 'mcpu-output');
+
+    beforeEach(() => {
+      mkdirSync(mcpuOutputDir, { recursive: true });
+
+      // Copy CLI fixture to test directory
+      cpSync(CLI_FIXTURE_DIR, cliDir, { recursive: true });
+
+      // Set env vars - only CLI, no Desktop
+      vi.stubEnv('CLAUDE_CONFIG_DIR', cliDir);
+      vi.stubEnv('CLAUDE_DESKTOP_CONFIG_DIR', join(testDir, 'nonexistent-desktop'));
+      vi.stubEnv('XDG_CONFIG_HOME', mcpuOutputDir);
+    });
+
+    it('should discover all servers from CLI config', () => {
+      const result = discoverServers();
+      expect(result).not.toBeNull();
+
+      const { discovered, sources } = result!;
+
+      // Check sources
+      expect(sources.cli).toBe(join(cliDir, 'settings.json'));
+      expect(sources.desktop).toBeUndefined();
+
+      // Global servers from CLI
+      expect(discovered.global).toHaveProperty('chroma');
+      expect(discovered.global).toHaveProperty('github');
+
+      // Project servers (prefixed with cli:)
+      expect(discovered.projects).toHaveProperty('cli:webapp');
+      expect(discovered.projects).toHaveProperty('cli:api-service');
+      expect(discovered.projects['cli:webapp']).toHaveProperty('webapp-tools');
+      expect(discovered.projects['cli:api-service']).toHaveProperty('api-tools');
+      expect(discovered.projects['cli:api-service']).toHaveProperty('github'); // duplicate
+    });
+
+    it('should deduplicate CLI servers correctly (user-level wins)', () => {
+      const result = discoverServers();
+      const { servers, duplicates } = deduplicateServers(result!.discovered);
+
+      // Should have 4 unique servers: chroma, github, webapp-tools, api-tools
+      expect(Object.keys(servers)).toHaveLength(4);
+
+      // github from api-service should be marked as duplicate
+      expect(duplicates).toHaveLength(1);
+      expect(duplicates[0].name).toBe('github');
+      expect(duplicates[0].kept).toBe('global');
+    });
+
+    it('should execute full migration and update CLI config', async () => {
+      const result = await executeSetup({ dryRun: false });
+
+      expect(result.success).toBe(true);
+      expect(Object.keys(result.plan!.servers)).toHaveLength(4);
+
+      // Check MCPU config
+      const mcpuConfigPath = join(mcpuOutputDir, 'mcpu', 'config.json');
+      const mcpuConfig = JSON.parse(readFileSync(mcpuConfigPath, 'utf-8'));
+      expect(mcpuConfig).toHaveProperty('chroma');
+      expect(mcpuConfig).toHaveProperty('github');
+      expect(mcpuConfig).toHaveProperty('webapp-tools');
+      expect(mcpuConfig).toHaveProperty('api-tools');
+
+      // Check env vars preserved
+      expect(mcpuConfig.chroma.env).toEqual({ CHROMA_DATA_DIR: '~/.local/share/chromadb' });
+      expect(mcpuConfig.github.env).toEqual({ GITHUB_TOKEN: 'ghp_xxxx' });
+
+      // Check CLI config was updated - mcpServers cleared
+      const cliConfig = JSON.parse(readFileSync(join(cliDir, 'settings.json'), 'utf-8'));
+      expect(cliConfig.mcpServers).toEqual({});
+      expect(cliConfig.projects['/Users/dev/webapp'].mcpServers).toEqual({});
+      expect(cliConfig.projects['/Users/dev/api-service'].mcpServers).toEqual({});
+
+      // Other settings preserved
+      expect(cliConfig.installMethod).toBe('global');
+      expect(cliConfig.autoUpdates).toBe(true);
+      expect(cliConfig.userID).toBe('test-user-id');
+      expect(cliConfig.projects['/Users/dev/webapp'].hasTrustDialogAccepted).toBe(true);
+      expect(cliConfig.projects['/Users/dev/api-service'].exampleFiles).toEqual(['main.py', 'server.py']);
+    });
+  });
+
+  describe('integration: Combined Desktop + CLI migration', () => {
+    const desktopDir = join(testDir, 'desktop');
+    const cliDir = join(testDir, 'cli');
+    const mcpuOutputDir = join(testDir, 'mcpu-output');
+
+    beforeEach(() => {
+      mkdirSync(mcpuOutputDir, { recursive: true });
+
+      // Copy Desktop fixture to test directory
+      cpSync(DESKTOP_FIXTURE_DIR, desktopDir, { recursive: true });
+
+      // Copy CLI fixture and add a duplicate server (playwright exists in both)
+      cpSync(CLI_FIXTURE_DIR, cliDir, { recursive: true });
+      const cliConfig = JSON.parse(readFileSync(join(cliDir, 'settings.json'), 'utf-8'));
+      cliConfig.mcpServers.playwright = {
+        command: 'npx',
+        args: ['-y', '@anthropic/mcp-playwright', '--cli-mode'],
+      };
+      writeFileSync(join(cliDir, 'settings.json'), JSON.stringify(cliConfig, null, 2));
+
+      vi.stubEnv('CLAUDE_DESKTOP_CONFIG_DIR', desktopDir);
+      vi.stubEnv('CLAUDE_CONFIG_DIR', cliDir);
+      vi.stubEnv('XDG_CONFIG_HOME', mcpuOutputDir);
+    });
+
+    it('should discover from both sources', () => {
+      const result = discoverServers();
+      expect(result).not.toBeNull();
+
+      const { sources } = result!;
+      expect(sources.desktop).toBe(join(desktopDir, 'claude_desktop_config.json'));
+      expect(sources.cli).toBe(join(cliDir, 'settings.json'));
+    });
+
+    it('should prefer Desktop over CLI for duplicates', () => {
+      const result = discoverServers();
+      const { servers, duplicates } = deduplicateServers(result!.discovered);
+
+      // playwright should come from Desktop (no --cli-mode flag)
+      expect(servers.playwright.args).not.toContain('--cli-mode');
+      expect(servers.playwright.args).toEqual(['-y', '@anthropic/mcp-playwright']);
+
+      // Check duplicates include playwright
+      const playwrightDup = duplicates.find(d => d.name === 'playwright');
+      expect(playwrightDup).toBeDefined();
+    });
+
+    it('should merge unique servers from both sources', () => {
+      const result = discoverServers();
+      const { servers } = deduplicateServers(result!.discovered);
+
+      // From Desktop
+      expect(servers).toHaveProperty('playwright');
+      expect(servers).toHaveProperty('filesystem');
+      expect(servers).toHaveProperty('memory');
+
+      // From CLI
+      expect(servers).toHaveProperty('chroma');
+      expect(servers).toHaveProperty('github');
+    });
+
+    it('should update both configs during migration', async () => {
+      const result = await executeSetup({ dryRun: false });
+
+      expect(result.success).toBe(true);
+
+      // Desktop config updated
+      const desktopConfig = JSON.parse(readFileSync(join(desktopDir, 'claude_desktop_config.json'), 'utf-8'));
+      expect(desktopConfig.mcpServers).toEqual({
+        mcpu: { command: 'mcpu', args: ['mcp'] },
+      });
+
+      // CLI config updated
+      const cliConfig = JSON.parse(readFileSync(join(cliDir, 'settings.json'), 'utf-8'));
+      expect(cliConfig.mcpServers).toEqual({});
+
+      // Both have backups
+      const desktopFiles = require('node:fs').readdirSync(desktopDir);
+      const cliFiles = require('node:fs').readdirSync(cliDir);
+      expect(desktopFiles.some((f: string) => f.includes('.backup.'))).toBe(true);
+      expect(cliFiles.some((f: string) => f.includes('.backup.'))).toBe(true);
     });
   });
 });

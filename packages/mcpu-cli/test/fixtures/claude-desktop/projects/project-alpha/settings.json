@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "project-db": {
+      "command": "uvx",
+      "args": ["mcp-postgres"],
+      "env": {
+        "DATABASE_URL": "postgres://localhost/alpha"
+      }
+    }
+  },
+  "allowedTools": ["read_file", "write_file"]
+}

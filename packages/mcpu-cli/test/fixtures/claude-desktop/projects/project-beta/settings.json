@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "project-api": {
+      "command": "node",
+      "args": ["./api-server.js"]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-playwright", "--headless"]
+    }
+  }
+}

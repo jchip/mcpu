@@ -1,0 +1,46 @@
+{
+  "installMethod": "global",
+  "autoUpdates": true,
+  "mcpServers": {
+    "chroma": {
+      "command": "uvx",
+      "args": ["chroma-mcp", "--client-type", "persistent"],
+      "env": {
+        "CHROMA_DATA_DIR": "~/.local/share/chromadb"
+      }
+    },
+    "github": {
+      "command": "uvx",
+      "args": ["mcp-server-github"],
+      "env": {
+        "GITHUB_TOKEN": "ghp_xxxx"
+      }
+    }
+  },
+  "projects": {
+    "/Users/dev/webapp": {
+      "mcpServers": {
+        "webapp-tools": {
+          "command": "node",
+          "args": ["./tools/mcp-server.js"]
+        }
+      },
+      "allowedTools": [],
+      "hasTrustDialogAccepted": true
+    },
+    "/Users/dev/api-service": {
+      "mcpServers": {
+        "api-tools": {
+          "command": "python",
+          "args": ["-m", "api_mcp_server"]
+        },
+        "github": {
+          "command": "uvx",
+          "args": ["mcp-server-github", "--org", "myorg"]
+        }
+      },
+      "exampleFiles": ["main.py", "server.py"]
+    }
+  },
+  "userID": "test-user-id"
+}
