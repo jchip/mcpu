@@ -21,7 +21,10 @@ export interface MigrationPlan {
     sources: string[];
     kept: string;
   }>;
-  claudeConfigPath: string;
+  sources: {
+    desktop?: string;
+    cli?: string;
+  };
   mcpuConfigPath: string;
 }
 
@@ -32,24 +35,17 @@ export interface SetupResult {
 }
 
 /**
- * Get Claude Desktop's config directory path based on platform and environment
- * Note: CLAUDE_DESKTOP_CONFIG_DIR can override the location (different from CLAUDE_CONFIG_DIR which is for Claude Code CLI)
+ * Get Claude Desktop's config path based on platform
  */
-export function getClaudeConfigPaths(): ClaudeConfigPaths | null {
-  // Honor CLAUDE_DESKTOP_CONFIG_DIR environment variable (for overriding Claude Desktop config location)
+export function getClaudeDesktopConfigPath(): string | null {
+  // Honor CLAUDE_DESKTOP_CONFIG_DIR environment variable
   if (process.env.CLAUDE_DESKTOP_CONFIG_DIR) {
-    const configDir = process.env.CLAUDE_DESKTOP_CONFIG_DIR;
-    return {
-      configDir,
-      configFile: join(configDir, 'claude_desktop_config.json'),
-      projectsDir: join(configDir, 'projects'),
-    };
+    return join(process.env.CLAUDE_DESKTOP_CONFIG_DIR, 'claude_desktop_config.json');
   }
 
   const home = homedir();
   const os = platform();
 
-  // Claude Desktop uses standard app config locations, NOT CLAUDE_CONFIG_DIR (which is for Claude Code CLI)
   let configDir: string;
   switch (os) {
     case 'darwin':
@@ -62,15 +58,37 @@ export function getClaudeConfigPaths(): ClaudeConfigPaths | null {
       configDir = join(process.env.XDG_CONFIG_HOME || join(home, '.config'), 'Claude');
   }
 
+  return join(configDir, 'claude_desktop_config.json');
+}
+
+/**
+ * Get Claude CLI (Code) config path
+ */
+export function getClaudeCliConfigPath(): string {
+  // Honor CLAUDE_CONFIG_DIR environment variable
+  if (process.env.CLAUDE_CONFIG_DIR) {
+    return join(process.env.CLAUDE_CONFIG_DIR, 'settings.json');
+  }
+  return join(homedir(), '.claude.json');
+}
+
+/**
+ * Legacy function for backwards compatibility
+ */
+export function getClaudeConfigPaths(): ClaudeConfigPaths | null {
+  const desktopPath = getClaudeDesktopConfigPath();
+  if (!desktopPath) return null;
+
+  const configDir = dirname(desktopPath);
   return {
     configDir,
-    configFile: join(configDir, 'claude_desktop_config.json'),
+    configFile: desktopPath,
     projectsDir: join(configDir, 'projects'),
   };
 }
 
 /**
- * Read and parse Claude's main config file
+ * Read and parse Claude Desktop's config file
  */
 export function readClaudeConfig(configPath: string): Record<string, MCPServerConfig> | null {
   if (!existsSync(configPath)) {
@@ -88,7 +106,58 @@ export function readClaudeConfig(configPath: string): Record<string, MCPServerCo
 }
 
 /**
- * Read project-level MCP server configs from Claude's projects directory
+ * Read Claude CLI (Code) config and extract MCP servers
+ * CLI format: { mcpServers: {...}, projects: { "/path": { mcpServers: {...} } } }
+ */
+export function readClaudeCliConfig(configPath: string): DiscoveredServers | null {
+  if (!existsSync(configPath)) {
+    return null;
+  }
+
+  try {
+    const content = readFileSync(configPath, 'utf-8');
+    const data = JSON.parse(content);
+
+    const global: Record<string, MCPServerConfig> = {};
+    const projects: Record<string, Record<string, MCPServerConfig>> = {};
+
+    // Read top-level mcpServers (user-level)
+    if (data.mcpServers && typeof data.mcpServers === 'object') {
+      for (const [name, config] of Object.entries(data.mcpServers)) {
+        if (config && typeof config === 'object' && 'command' in config) {
+          global[name] = config as MCPServerConfig;
+        }
+      }
+    }
+
+    // Read project-level mcpServers
+    if (data.projects && typeof data.projects === 'object') {
+      for (const [projectPath, projectData] of Object.entries(data.projects)) {
+        const proj = projectData as Record<string, unknown>;
+        if (proj.mcpServers && typeof proj.mcpServers === 'object') {
+          const projectServers: Record<string, MCPServerConfig> = {};
+          for (const [name, config] of Object.entries(proj.mcpServers as Record<string, unknown>)) {
+            if (config && typeof config === 'object' && 'command' in config) {
+              projectServers[name] = config as MCPServerConfig;
+            }
+          }
+          if (Object.keys(projectServers).length > 0) {
+            // Use last path segment as project name for display
+            const projectName = projectPath.split('/').pop() || projectPath;
+            projects[`cli:${projectName}`] = projectServers;
+          }
+        }
+      }
+    }
+
+    return { global, projects };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Read project-level MCP server configs from Claude Desktop's projects directory
  */
 export function readProjectConfigs(projectsDir: string): Record<string, Record<string, MCPServerConfig>> {
   const projects: Record<string, Record<string, MCPServerConfig>> = {};
@@ -113,7 +182,7 @@ export function readProjectConfigs(projectsDir: string): Record<string, Record<s
         const parsed = ClaudeSettingsSchema.parse(data);
 
         if (parsed.mcpServers && Object.keys(parsed.mcpServers).length > 0) {
-          projects[entry.name] = parsed.mcpServers;
+          projects[`desktop:${entry.name}`] = parsed.mcpServers;
         }
       } catch {
         // Skip invalid project configs
@@ -127,18 +196,52 @@ export function readProjectConfigs(projectsDir: string): Record<string, Record<s
 }
 
 /**
- * Discover all MCP servers from Claude's config
+ * Discover all MCP servers from both Claude Desktop and Claude CLI
  */
-export function discoverServers(): DiscoveredServers | null {
-  const paths = getClaudeConfigPaths();
-  if (!paths) {
+export function discoverServers(): { discovered: DiscoveredServers; sources: { desktop?: string; cli?: string } } | null {
+  const global: Record<string, MCPServerConfig> = {};
+  const projects: Record<string, Record<string, MCPServerConfig>> = {};
+  const sources: { desktop?: string; cli?: string } = {};
+
+  // Read Claude Desktop config
+  const desktopPath = getClaudeDesktopConfigPath();
+  if (desktopPath && existsSync(desktopPath)) {
+    sources.desktop = desktopPath;
+    const desktopServers = readClaudeConfig(desktopPath);
+    if (desktopServers) {
+      for (const [name, config] of Object.entries(desktopServers)) {
+        global[name] = config;
+      }
+    }
+
+    // Read Desktop project configs
+    const projectsDir = join(dirname(desktopPath), 'projects');
+    const desktopProjects = readProjectConfigs(projectsDir);
+    Object.assign(projects, desktopProjects);
+  }
+
+  // Read Claude CLI config
+  const cliPath = getClaudeCliConfigPath();
+  if (existsSync(cliPath)) {
+    sources.cli = cliPath;
+    const cliData = readClaudeCliConfig(cliPath);
+    if (cliData) {
+      // CLI global servers (merge, Desktop wins on conflict)
+      for (const [name, config] of Object.entries(cliData.global)) {
+        if (!global[name]) {
+          global[name] = config;
+        }
+      }
+      // CLI project servers
+      Object.assign(projects, cliData.projects);
+    }
+  }
+
+  if (Object.keys(global).length === 0 && Object.keys(projects).length === 0) {
     return null;
   }
 
-  const global = readClaudeConfig(paths.configFile) || {};
-  const projects = readProjectConfigs(paths.projectsDir);
-
-  return { global, projects };
+  return { discovered: { global, projects }, sources };
 }
 
 /**
@@ -204,22 +307,18 @@ export function getMcpuConfigPath(): string {
  * Create migration plan
  */
 export function createMigrationPlan(): MigrationPlan | null {
-  const paths = getClaudeConfigPaths();
-  if (!paths) {
+  const result = discoverServers();
+  if (!result) {
     return null;
   }
 
-  const discovered = discoverServers();
-  if (!discovered) {
-    return null;
-  }
-
+  const { discovered, sources } = result;
   const { servers, duplicates } = deduplicateServers(discovered);
 
   return {
     servers,
     duplicates,
-    claudeConfigPath: paths.configFile,
+    sources,
     mcpuConfigPath: getMcpuConfigPath(),
   };
 }
@@ -257,9 +356,9 @@ export function saveMcpuConfig(servers: Record<string, MCPServerConfig>, configP
 }
 
 /**
- * Update Claude config to use only MCPU
+ * Update Claude Desktop config to use only MCPU
  */
-export function updateClaudeConfig(configPath: string): void {
+export function updateClaudeDesktopConfig(configPath: string): void {
   if (!existsSync(configPath)) {
     return;
   }
@@ -284,6 +383,48 @@ export function updateClaudeConfig(configPath: string): void {
 }
 
 /**
+ * Update Claude CLI config to use only MCPU
+ * Clears top-level mcpServers and all project mcpServers
+ */
+export function updateClaudeCliConfig(configPath: string): void {
+  if (!existsSync(configPath)) {
+    return;
+  }
+
+  // Create backup
+  const backupPath = `${configPath}.backup.${Date.now()}`;
+  copyFileSync(configPath, backupPath);
+
+  // Read existing config
+  const content = readFileSync(configPath, 'utf-8');
+  const data = JSON.parse(content);
+
+  // Clear top-level mcpServers - CLI uses `claude mcp add` so we don't add mcpu here
+  if (data.mcpServers) {
+    data.mcpServers = {};
+  }
+
+  // Clear project-level mcpServers
+  if (data.projects && typeof data.projects === 'object') {
+    for (const projectData of Object.values(data.projects)) {
+      const proj = projectData as Record<string, unknown>;
+      if (proj.mcpServers) {
+        proj.mcpServers = {};
+      }
+    }
+  }
+
+  writeFileSync(configPath, JSON.stringify(data, null, 2) + '\n');
+}
+
+/**
+ * Legacy alias for backwards compatibility
+ */
+export function updateClaudeConfig(configPath: string): void {
+  updateClaudeDesktopConfig(configPath);
+}
+
+/**
  * Execute the setup/migration
  */
 export async function executeSetup(options: {
@@ -296,7 +437,7 @@ export async function executeSetup(options: {
   if (!plan) {
     return {
       success: false,
-      message: 'Could not find Claude config. Is Claude Desktop installed?',
+      message: 'Could not find Claude config. Is Claude Desktop or Claude CLI installed?',
     };
   }
 
@@ -319,7 +460,14 @@ export async function executeSetup(options: {
 
   // Execute migration
   saveMcpuConfig(plan.servers, plan.mcpuConfigPath);
-  updateClaudeConfig(plan.claudeConfigPath);
+
+  // Update both Desktop and CLI configs if they exist
+  if (plan.sources.desktop) {
+    updateClaudeDesktopConfig(plan.sources.desktop);
+  }
+  if (plan.sources.cli) {
+    updateClaudeCliConfig(plan.sources.cli);
+  }
 
   return {
     success: true,

@@ -4,7 +4,10 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   getClaudeConfigPaths,
+  getClaudeDesktopConfigPath,
+  getClaudeCliConfigPath,
   readClaudeConfig,
+  readClaudeCliConfig,
   readProjectConfigs,
   discoverServers,
   deduplicateServers,
@@ -12,6 +15,7 @@ import {
   createMigrationPlan,
   saveMcpuConfig,
   updateClaudeConfig,
+  updateClaudeCliConfig,
 } from '../src/commands/setup.ts';
 
 describe('setup command', () => {
@@ -95,7 +99,7 @@ describe('setup command', () => {
       expect(result).toEqual({});
     });
 
-    it('should read project configs with mcpServers', () => {
+    it('should read project configs with mcpServers (prefixed with desktop:)', () => {
       const projectsDir = join(claudeDir, 'projects');
       const projectDir = join(projectsDir, 'my-project');
       mkdirSync(projectDir, { recursive: true });
@@ -109,7 +113,7 @@ describe('setup command', () => {
       }));
 
       const result = readProjectConfigs(projectsDir);
-      expect(result['my-project']).toEqual({
+      expect(result['desktop:my-project']).toEqual({
         'project-server': { command: 'project-cmd' },
       });
     });
@@ -124,7 +128,46 @@ describe('setup command', () => {
       }));
 
       const result = readProjectConfigs(projectsDir);
-      expect(result['empty-project']).toBeUndefined();
+      expect(result['desktop:empty-project']).toBeUndefined();
+    });
+  });
+
+  describe('readClaudeCliConfig', () => {
+    it('should return null for missing file', () => {
+      const result = readClaudeCliConfig(join(claudeDir, 'nonexistent.json'));
+      expect(result).toBeNull();
+    });
+
+    it('should read top-level mcpServers', () => {
+      const configPath = join(claudeDir, 'claude.json');
+      writeFileSync(configPath, JSON.stringify({
+        mcpServers: {
+          'cli-server': { command: 'cli-cmd' },
+        },
+      }));
+
+      const result = readClaudeCliConfig(configPath);
+      expect(result).not.toBeNull();
+      expect(result!.global['cli-server']).toEqual({ command: 'cli-cmd' });
+    });
+
+    it('should read project-level mcpServers', () => {
+      const configPath = join(claudeDir, 'claude.json');
+      writeFileSync(configPath, JSON.stringify({
+        projects: {
+          '/path/to/my-project': {
+            mcpServers: {
+              'project-server': { command: 'project-cmd' },
+            },
+          },
+        },
+      }));
+
+      const result = readClaudeCliConfig(configPath);
+      expect(result).not.toBeNull();
+      expect(result!.projects['cli:my-project']).toEqual({
+        'project-server': { command: 'project-cmd' },
+      });
     });
   });
 
@@ -269,6 +312,47 @@ describe('setup command', () => {
     it('should handle missing config file gracefully', () => {
       const configPath = join(claudeDir, 'nonexistent.json');
       expect(() => updateClaudeConfig(configPath)).not.toThrow();
+    });
+  });
+
+  describe('updateClaudeCliConfig', () => {
+    it('should clear mcpServers but preserve other settings', () => {
+      const configPath = join(claudeDir, 'claude.json');
+      writeFileSync(configPath, JSON.stringify({
+        mcpServers: {
+          'old-server': { command: 'old-cmd' },
+        },
+        projects: {
+          '/path/to/project': {
+            mcpServers: {
+              'project-server': { command: 'project-cmd' },
+            },
+            otherSetting: true,
+          },
+        },
+        userSetting: 'preserved',
+      }));
+
+      updateClaudeCliConfig(configPath);
+
+      const updated = JSON.parse(readFileSync(configPath, 'utf-8'));
+      expect(updated.mcpServers).toEqual({});
+      expect(updated.projects['/path/to/project'].mcpServers).toEqual({});
+      expect(updated.projects['/path/to/project'].otherSetting).toBe(true);
+      expect(updated.userSetting).toBe('preserved');
+    });
+
+    it('should create backup before updating', () => {
+      const configPath = join(claudeDir, 'claude.json');
+      writeFileSync(configPath, JSON.stringify({
+        mcpServers: { 'old-server': { command: 'old-cmd' } },
+      }));
+
+      updateClaudeCliConfig(configPath);
+
+      const files = require('node:fs').readdirSync(claudeDir);
+      const backupFile = files.find((f: string) => f.startsWith('claude.json.backup.'));
+      expect(backupFile).toBeDefined();
     });
   });
 });

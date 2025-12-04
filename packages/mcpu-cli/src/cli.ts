@@ -382,7 +382,7 @@ See AGENTS.md for details about using MCPU to talk to MCP servers.
           if (dryRun) {
             const plan = createMigrationPlan();
             if (!plan) {
-              console.error('Could not find Claude config. Is Claude Desktop installed?');
+              console.error('Could not find Claude config. Is Claude Desktop or Claude CLI installed?');
               process.exit(1);
             }
 
@@ -394,8 +394,14 @@ See AGENTS.md for details about using MCPU to talk to MCP servers.
 
             console.log(chalk.bold('Migration Plan (dry-run)'));
             console.log();
-            console.log(`Claude config: ${plan.claudeConfigPath}`);
-            console.log(`MCPU config:   ${plan.mcpuConfigPath}`);
+            console.log(chalk.bold('Sources:'));
+            if (plan.sources.desktop) {
+              console.log(`  Desktop: ${plan.sources.desktop}`);
+            }
+            if (plan.sources.cli) {
+              console.log(`  CLI:     ${plan.sources.cli}`);
+            }
+            console.log(`  Output:  ${plan.mcpuConfigPath}`);
             console.log();
             console.log(chalk.bold(`Servers to migrate (${serverCount}):`));
             for (const [name, config] of Object.entries(plan.servers)) {
@@ -433,7 +439,9 @@ See AGENTS.md for details about using MCPU to talk to MCP servers.
             }
             console.log();
             console.log(`MCPU config: ${result.plan.mcpuConfigPath}`);
-            console.log(`Claude config backup created.`);
+            if (result.plan.sources.desktop || result.plan.sources.cli) {
+              console.log('Backup(s) created for modified config(s).');
+            }
           }
           process.exit(0);
         },
