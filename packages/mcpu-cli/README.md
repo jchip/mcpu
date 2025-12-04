@@ -40,17 +40,28 @@ MCPU Schema Size Statistics
 
 ### Claude CLI
 
-1. Move all your MCP servers in ` ~/.claude.json`.`mcpServers` to `~/.config/mcpu/config.json`
+1. Install MCPU globally (or use npx):
 
-2. Add this MCP Unified to your Claude CLI
-
-```
-claude mcp add --scope=user mcpu -- npx --package=@mcpu/cli -c mcpu-mcp
+```bash
+npm install -g @mcpu/cli
 ```
 
-3. Start Claude CLI and check `/conext` to verify that `mcpu` is the ony MCP server Claude connected.
+2. Migrate your existing MCP servers from Claude Desktop:
 
-4. Test by asking Claude to `list my mcp servers`
+```bash
+mcpu setup --dry-run  # Preview changes
+mcpu setup            # Run migration
+```
+
+3. Add MCPU to Claude CLI:
+
+```bash
+claude mcp add --scope=user mcpu -- mcpu-mcp
+```
+
+4. Start Claude CLI and check `/context` to verify that `mcpu` is the only MCP server Claude connected.
+
+5. Test by asking Claude to `list my mcp servers`
 
 Something like this:
 
@@ -79,17 +90,20 @@ Something like this:
   To connect to a server, use connect <server>.
 ```
 
-### Globally
+### Without Global Install (npx)
+
+If you prefer not to install globally:
 
 ```bash
-npm install -g @mcpu/cli
+# Run setup with npx
+npx @mcpu/cli setup --dry-run
+npx @mcpu/cli setup
+
+# Add to Claude CLI with npx
+claude mcp add --scope=user mcpu -- npx --package=@mcpu/cli -c mcpu-mcp
 ```
 
-```bash
-claude mcp add --scope=user mcpu -- mcpu-mcp
-```
-
-**You don't need this, but in case it can't figure it out, add to your `CLAUDE.md`**:
+**You don't need this, but in case Claude can't figure it out, add to your `CLAUDE.md`**:
 
 ```markdown
 ## MCP Servers
@@ -104,19 +118,19 @@ If you want to use MCPU in bash mode, tell Claude to set it up. Pick a prompt ap
 - `AGENTS.md` and reference in `CLAUDE.md`
 
 ```
-run `mcpu setup` and follow the instructions
+run `mcpu agent-guide` and follow the instructions
 ```
 
 - Project `CLAUDE.md`
 
 ```
-run `mcpu setup` and follow the instrctuions to setup only my project CLAUDE.md
+run `mcpu agent-guide` and follow the instructions to setup only my project CLAUDE.md
 ```
 
 - User level `CLAUDE.md`
 
 ```
-run `mcpu setup` and follow the instrctuions to setup only my user CLAUDE.md
+run `mcpu agent-guide` and follow the instructions to setup only my user CLAUDE.md
 ```
 
 ## Configuration
@@ -209,6 +223,35 @@ EOF
 ## Direct Commands
 
 You can use `mcpu` to run commands directly without starting the daemon or Claude CLI.
+
+### `mcpu setup`
+
+Migrate MCP servers from Claude Desktop config to MCPU. This automates the initial setup:
+
+1. Discovers MCP servers from Claude Desktop's `claude_desktop_config.json`
+2. Reads project-level MCP configs (deduplicates, global wins)
+3. Saves servers to `~/.config/mcpu/config.json`
+4. Updates Claude config to use only MCPU
+
+```bash
+# Preview what would be migrated
+mcpu setup --dry-run
+
+# Run migration (creates backups automatically)
+mcpu setup
+
+# Skip confirmation prompts
+mcpu setup -y
+```
+
+**Options:**
+
+- `--dry-run` - Show migration plan without making changes
+- `-y, --yes` - Skip confirmation prompts
+
+### `mcpu agent-guide`
+
+Print bash tool usage guide for AI agents. Use this to set up MCPU instructions in your agent files.
 
 ### `mcpu add <name> [command]`
 
