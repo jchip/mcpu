@@ -118,6 +118,57 @@ function formatBriefArgs(tool: Tool, description?: string, forceParams?: boolean
   return ` - ARGS: ${fullParamsStr}`;
 }
 
+// Track servers where tools listing has been shown (explicitly or via error)
+const toolsShownForServer = new Set<string>();
+
+/**
+ * Mark that tools have been shown for a server
+ */
+export function markToolsShown(serverName: string): void {
+  toolsShownForServer.add(serverName);
+}
+
+/**
+ * Check if tools have been shown for a server
+ */
+export function hasToolsBeenShown(serverName: string): boolean {
+  return toolsShownForServer.has(serverName);
+}
+
+/**
+ * Format a compact tools list for inclusion in error messages
+ * Returns empty string if tools already shown for this server
+ * Marks server as "tools shown" when returning usage
+ */
+function formatToolsForError(tools: Tool[], serverName: string): string {
+  if (toolsShownForServer.has(serverName)) {
+    return '';
+  }
+
+  // Mark as shown
+  toolsShownForServer.add(serverName);
+
+  const enumRefs = collectEnums(tools);
+  const skipComplexCheck = tools.length <= 3;
+
+  let output = `\n\nUsage: Available tools on "${serverName}":\n`;
+  output += `${TYPES_LINE}\n`;
+
+  // Add enum legend if any
+  if (enumRefs.size > 0) {
+    for (const [enumValue, ref] of enumRefs.entries()) {
+      output += `${ref}: ${enumValue}\n`;
+    }
+  }
+
+  for (const tool of tools) {
+    const description = (tool.description || 'No description').split('\n')[0].trim();
+    const briefArgs = formatBriefArgs(tool, description, true, enumRefs, skipComplexCheck);
+    output += `- ${tool.name} - ${description}${briefArgs}\n`;
+  }
+
+  return output;
+}
 
 export interface ExecuteOptions {
   json?: boolean;
@@ -514,6 +565,9 @@ export async function executeToolsCommand(
           cachedServers.push(serverName);
         }
 
+        // Mark that tools have been shown for this server
+        markToolsShown(serverName);
+
         for (const tool of tools) {
           allTools.push({ server: serverName, tool });
         }
@@ -907,9 +961,10 @@ export async function executeCallCommand(
 
     const tool = tools.find(t => t.name === args.tool);
     if (!tool) {
+      const toolsList = formatToolsForError(tools, args.server);
       return {
         success: false,
-        error: `Tool "${args.tool}" not found on server "${args.server}".`,
+        error: `Error: Tool "${args.tool}" not found on server "${args.server}".${toolsList}`,
         exitCode: 1,
       };
     }
@@ -969,6 +1024,15 @@ export async function executeCallCommand(
         output,
         exitCode: 0,
         meta,
+      };
+    } catch (callError: any) {
+      const errorMsg = callError.message || String(callError);
+      const toolsList = formatToolsForError(tools, args.server);
+
+      return {
+        success: false,
+        error: `Error: ${errorMsg}${toolsList}`,
+        exitCode: 1,
       };
     } finally {
       // Only disconnect if not using persistent connection
