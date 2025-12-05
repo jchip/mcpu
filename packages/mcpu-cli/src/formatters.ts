@@ -480,61 +480,204 @@ export interface AutoSaveResult {
   saved: boolean;
   /** The output to return (truncated preview or original) */
   output: string;
-  /** Path to saved file (if saved) */
-  filePath?: string;
+  /** Path to manifest file (if saved) */
+  manifestPath?: string;
+  /** Paths to all extracted files */
+  extractedFiles?: string[];
 }
 
 /**
- * Check if response exceeds threshold and auto-save if needed
+ * Get file extension from MIME type
+ */
+function getExtensionFromMimeType(mimeType: string): string {
+  const mimeToExt: Record<string, string> = {
+    'image/png': 'png',
+    'image/jpeg': 'jpg',
+    'image/gif': 'gif',
+    'image/webp': 'webp',
+    'image/svg+xml': 'svg',
+    'image/bmp': 'bmp',
+    'image/tiff': 'tiff',
+  };
+  return mimeToExt[mimeType] || 'bin';
+}
+
+/**
+ * Check if text content is valid JSON
+ */
+function isJsonContent(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+    return false;
+  }
+  try {
+    JSON.parse(trimmed);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Extract and save MCP response content to files
  *
- * @param response - The formatted response string
+ * @param response - Raw MCP response object
  * @param server - Server name
  * @param tool - Tool name
  * @param config - Resolved auto-save configuration
  * @param cwd - Working directory for relative paths
- * @returns AutoSaveResult with output and file path if saved
+ * @returns AutoSaveResult with formatted output and file paths
  */
 export async function autoSaveResponse(
-  response: string,
+  response: unknown,
   server: string,
   tool: string,
   config: ResolvedAutoSaveConfig,
   cwd: string
 ): Promise<AutoSaveResult> {
-  const responseSize = Buffer.byteLength(response, 'utf-8');
+  // Format response for size check
+  const formattedResponse = formatMcpResponse(response);
+  const responseSize = Buffer.byteLength(formattedResponse, 'utf-8');
 
   // Check if response exceeds threshold
   if (responseSize <= config.thresholdSize) {
-    return { saved: false, output: response };
+    return { saved: false, output: formattedResponse };
   }
 
-  // Generate filename with timestamp
+  const mcpResponse = response as any;
+
+  // Check for standard MCP response with content array
+  if (!mcpResponse?.content || !Array.isArray(mcpResponse.content)) {
+    // Not a standard MCP response, save as plain text
+    return await saveSimpleResponse(formattedResponse, server, tool, config, cwd);
+  }
+
   const timestamp = Date.now();
-  const filename = `${server}-${tool}-${timestamp}.json`;
+  const baseFilename = `${server}-${tool}-${timestamp}`;
   const responseDir = join(cwd, config.dir);
-  const filePath = join(responseDir, filename);
 
   // Ensure directory exists
   await mkdir(responseDir, { recursive: true });
 
-  // Save full response
-  await writeFile(filePath, response, 'utf-8');
+  const extractedFiles: string[] = [];
+  const manifest = { ...mcpResponse, content: [] as any[] };
 
-  // Generate truncated output with preview
+  // Track content type counts for multi-item indexing
+  const typeCounts: Record<string, number> = { text: 0, image: 0 };
+
+  for (const item of mcpResponse.content) {
+    if (item.type === 'text' && item.text) {
+      // Extract text content
+      const index = typeCounts.text++;
+      const suffix = typeCounts.text > 1 || mcpResponse.content.filter((i: any) => i.type === 'text').length > 1 ? `-${index}` : '';
+
+      // Determine if JSON and format accordingly
+      const isJson = isJsonContent(item.text);
+      const ext = isJson ? 'json' : 'txt';
+      const filename = `${baseFilename}${suffix}.${ext}`;
+      const filePath = join(responseDir, filename);
+
+      // Pretty-print JSON, save text as-is
+      const content = isJson ? JSON.stringify(JSON.parse(item.text), null, 2) : item.text;
+      await writeFile(filePath, content, 'utf-8');
+
+      extractedFiles.push(filePath);
+      manifest.content.push({ type: 'text', _extracted: filename });
+
+    } else if (item.type === 'image' && item.data) {
+      // Extract and decode image content
+      const index = typeCounts.image++;
+      const suffix = typeCounts.image > 1 || mcpResponse.content.filter((i: any) => i.type === 'image').length > 1 ? `-${index}` : '';
+
+      const ext = getExtensionFromMimeType(item.mimeType || 'application/octet-stream');
+      const filename = `${baseFilename}${suffix}.${ext}`;
+      const filePath = join(responseDir, filename);
+
+      // Decode base64 and save binary
+      const buffer = Buffer.from(item.data, 'base64');
+      await writeFile(filePath, buffer);
+
+      extractedFiles.push(filePath);
+      manifest.content.push({
+        type: 'image',
+        mimeType: item.mimeType,
+        _extracted: filename
+      });
+
+    } else {
+      // Resource or other types - keep as-is in manifest
+      manifest.content.push(item);
+    }
+  }
+
+  // Save manifest JSON
+  const manifestFilename = `${baseFilename}.json`;
+  const manifestPath = join(responseDir, manifestFilename);
+  await writeFile(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
+
+  // Generate preview output
   const sizeKB = (responseSize / 1024).toFixed(1);
-  const preview = response.slice(0, config.previewSize);
-  const relativePath = join(config.dir, filename);
+  const relativeDir = config.dir;
 
-  const truncatedOutput = `[Response truncated - ${sizeKB}KB saved to ${relativePath}]
+  const fileList = extractedFiles.map(f => `  - ${join(relativeDir, f.split('/').pop()!)}`).join('\n');
+  const preview = formattedResponse.slice(0, config.previewSize);
+
+  const truncatedOutput = `[Response ${sizeKB}KB - extracted to ${relativeDir}/]
+
+Files:
+  - ${manifestFilename} (manifest)
+${fileList}
 
 Preview (first ${config.previewSize} chars):
-${preview}${response.length > config.previewSize ? '...' : ''}
+${preview}${formattedResponse.length > config.previewSize ? '...' : ''}
 
-Use \`grep\` or \`read\` to explore the full response.`;
+Use \`grep\` or \`read\` to explore the files.`;
 
   return {
     saved: true,
     output: truncatedOutput,
-    filePath,
+    manifestPath,
+    extractedFiles,
+  };
+}
+
+/**
+ * Save a simple (non-MCP structured) response
+ */
+async function saveSimpleResponse(
+  content: string,
+  server: string,
+  tool: string,
+  config: ResolvedAutoSaveConfig,
+  cwd: string
+): Promise<AutoSaveResult> {
+  const timestamp = Date.now();
+  const isJson = isJsonContent(content);
+  const ext = isJson ? 'json' : 'txt';
+  const filename = `${server}-${tool}-${timestamp}.${ext}`;
+  const responseDir = join(cwd, config.dir);
+  const filePath = join(responseDir, filename);
+
+  await mkdir(responseDir, { recursive: true });
+
+  // Pretty-print JSON, save text as-is
+  const toSave = isJson ? JSON.stringify(JSON.parse(content), null, 2) : content;
+  await writeFile(filePath, toSave, 'utf-8');
+
+  const sizeKB = (Buffer.byteLength(content, 'utf-8') / 1024).toFixed(1);
+  const preview = content.slice(0, config.previewSize);
+  const relativePath = join(config.dir, filename);
+
+  const truncatedOutput = `[Response ${sizeKB}KB saved to ${relativePath}]
+
+Preview (first ${config.previewSize} chars):
+${preview}${content.length > config.previewSize ? '...' : ''}
+
+Use \`grep\` or \`read\` to explore the file.`;
+
+  return {
+    saved: true,
+    output: truncatedOutput,
+    extractedFiles: [filePath],
   };
 }

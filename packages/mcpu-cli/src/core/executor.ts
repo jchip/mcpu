@@ -1013,17 +1013,20 @@ export async function executeCallCommand(
           : ctx;
         output = formatOutput(result, outputCtx);
       } else {
-        // Default: unwrap MCP response to extract meaningful content (like Claude CLI does)
-        output = formatMcpResponse(result);
-      }
-
-      // Auto-save large responses if enabled
-      if (options.configDiscovery) {
-        const autoSaveConfig = options.configDiscovery.getAutoSaveConfig(args.server, args.tool);
-        if (autoSaveConfig.enabled) {
-          const workingDir = ctx.cwd || process.cwd();
-          const autoSaveResult = await autoSaveResponse(output, args.server, args.tool, autoSaveConfig, workingDir);
-          output = autoSaveResult.output;
+        // Check for auto-save first (needs raw result for content extraction)
+        if (options.configDiscovery) {
+          const autoSaveConfig = options.configDiscovery.getAutoSaveConfig(args.server, args.tool);
+          if (autoSaveConfig.enabled) {
+            const workingDir = ctx.cwd || process.cwd();
+            const autoSaveResult = await autoSaveResponse(result, args.server, args.tool, autoSaveConfig, workingDir);
+            output = autoSaveResult.output;
+          } else {
+            // Auto-save disabled, just format normally
+            output = formatMcpResponse(result);
+          }
+        } else {
+          // No config discovery, just format normally
+          output = formatMcpResponse(result);
         }
       }
 
