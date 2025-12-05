@@ -50,18 +50,12 @@ npm install -g @mcpu/cli
 
 ```bash
 mcpu setup --dry-run  # Preview changes
-mcpu setup            # Run migration
+mcpu setup            # Run migration (also adds MCPU to Claude CLI)
 ```
 
-3. Add MCPU to Claude CLI:
+3. Start Claude CLI and check `/context` to verify that `mcpu` is the only MCP server Claude connected.
 
-```bash
-claude mcp add --scope=user mcpu -- mcpu-mcp
-```
-
-4. Start Claude CLI and check `/context` to verify that `mcpu` is the only MCP server Claude connected.
-
-5. Test by asking Claude to `list my mcp servers`
+4. Test by asking Claude to `list my mcp servers`
 
 Something like this:
 
@@ -92,14 +86,14 @@ Something like this:
 
 ### Without Global Install (npx)
 
-If you prefer not to install globally:
+If you prefer not to install globally, you'll need to manually add MCPU to Claude CLI:
 
 ```bash
-# Run setup with npx
+# Run setup with npx (migrates servers to ~/.config/mcpu/config.json)
 npx @mcpu/cli setup --dry-run
 npx @mcpu/cli setup
 
-# Add to Claude CLI with npx
+# Manually add MCPU to Claude CLI (since mcpu-mcp isn't globally available)
 claude mcp add --scope=user mcpu -- npx --package=@mcpu/cli -c mcpu-mcp
 ```
 

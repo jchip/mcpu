@@ -710,10 +710,11 @@ describe('Daemon Server', () => {
           error: null,
         });
 
-        expect(mockConnection.client.callTool).toHaveBeenCalledWith({
-          name: 'test_tool',
-          arguments: { arg1: 'value1' },
-        });
+        expect(mockConnection.client.callTool).toHaveBeenCalledWith(
+          { name: 'test_tool', arguments: { arg1: 'value1' } },
+          undefined,
+          { timeout: 180000 }
+        );
       });
 
       it('should handle tool execution error', async () => {

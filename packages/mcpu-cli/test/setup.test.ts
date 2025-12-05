@@ -327,7 +327,7 @@ describe('setup command', () => {
   });
 
   describe('updateClaudeCliConfig', () => {
-    it('should clear mcpServers but preserve other settings', () => {
+    it('should replace mcpServers with mcpu and preserve other settings', () => {
       const configPath = join(claudeDir, 'claude.json');
       writeFileSync(configPath, JSON.stringify({
         mcpServers: {
@@ -347,7 +347,7 @@ describe('setup command', () => {
       updateClaudeCliConfig(configPath);
 
       const updated = JSON.parse(readFileSync(configPath, 'utf-8'));
-      expect(updated.mcpServers).toEqual({});
+      expect(updated.mcpServers).toEqual({ mcpu: { command: 'mcpu-mcp', args: [] } });
       expect(updated.projects['/path/to/project'].mcpServers).toEqual({});
       expect(updated.projects['/path/to/project'].otherSetting).toBe(true);
       expect(updated.userSetting).toBe('preserved');
@@ -541,9 +541,9 @@ describe('setup command', () => {
       expect(mcpuConfig.chroma.env).toEqual({ CHROMA_DATA_DIR: '~/.local/share/chromadb' });
       expect(mcpuConfig.github.env).toEqual({ GITHUB_TOKEN: 'ghp_xxxx' });
 
-      // Check CLI config was updated - mcpServers cleared
+      // Check CLI config was updated - mcpServers replaced with mcpu
       const cliConfig = JSON.parse(readFileSync(join(cliDir, 'settings.json'), 'utf-8'));
-      expect(cliConfig.mcpServers).toEqual({});
+      expect(cliConfig.mcpServers).toEqual({ mcpu: { command: 'mcpu-mcp', args: [] } });
       expect(cliConfig.projects['/Users/dev/webapp'].mcpServers).toEqual({});
       expect(cliConfig.projects['/Users/dev/api-service'].mcpServers).toEqual({});
 
@@ -630,7 +630,7 @@ describe('setup command', () => {
 
       // CLI config updated
       const cliConfig = JSON.parse(readFileSync(join(cliDir, 'settings.json'), 'utf-8'));
-      expect(cliConfig.mcpServers).toEqual({});
+      expect(cliConfig.mcpServers).toEqual({ mcpu: { command: 'mcpu-mcp', args: [] } });
 
       // Both have backups
       const desktopFiles = require('node:fs').readdirSync(desktopDir);

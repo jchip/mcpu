@@ -384,7 +384,7 @@ export function updateClaudeDesktopConfig(configPath: string): void {
 
 /**
  * Update Claude CLI config to use only MCPU
- * Clears top-level mcpServers and all project mcpServers
+ * Replaces top-level mcpServers with MCPU and clears all project mcpServers
  */
 export function updateClaudeCliConfig(configPath: string): void {
   if (!existsSync(configPath)) {
@@ -399,10 +399,13 @@ export function updateClaudeCliConfig(configPath: string): void {
   const content = readFileSync(configPath, 'utf-8');
   const data = JSON.parse(content);
 
-  // Clear top-level mcpServers - CLI uses `claude mcp add` so we don't add mcpu here
-  if (data.mcpServers) {
-    data.mcpServers = {};
-  }
+  // Replace mcpServers with just MCPU
+  data.mcpServers = {
+    mcpu: {
+      command: 'mcpu-mcp',
+      args: [],
+    },
+  };
 
   // Clear project-level mcpServers
   if (data.projects && typeof data.projects === 'object') {
