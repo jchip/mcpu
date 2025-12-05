@@ -620,17 +620,32 @@ export async function autoSaveResponse(
   const sizeKB = (responseSize / 1024).toFixed(1);
   const relativeDir = config.dir;
 
-  // Build file list with sizes and types
-  const manifestSize = formatFileSize(Buffer.byteLength(manifestContent, 'utf-8'));
+  // Build file list with sizes, types, and previews for text
+  const manifestBytes = Buffer.byteLength(manifestContent, 'utf-8');
+  const manifestSize = formatFileSize(manifestBytes);
   const fileLines: string[] = [`  - ${manifestFilename} (manifest, ${manifestSize})`];
+
+  // If manifest is small enough, dump it inline as compact JSON
+  if (manifestBytes <= config.previewSize) {
+    fileLines.push(JSON.stringify(manifest));
+  }
 
   for (const filePath of extractedFiles) {
     const filename = filePath.split('/').pop()!;
     const stats = await import('fs/promises').then(fs => fs.stat(filePath));
     const size = formatFileSize(stats.size);
     const ext = filename.split('.').pop();
+    const isText = ext === 'txt' || ext === 'json';
     const type = ext === 'txt' ? 'text' : ext === 'json' ? 'json' : 'image';
     fileLines.push(`  - ${filename} (${type}, ${size})`);
+
+    // Add preview for text files
+    if (isText) {
+      const content = await import('fs/promises').then(fs => fs.readFile(filePath, 'utf-8'));
+      const preview = content.slice(0, config.previewSize);
+      const truncated = content.length > config.previewSize;
+      fileLines.push(truncated ? preview + '...' : preview);
+    }
   }
 
   const truncatedOutput = `[Response ${sizeKB}KB extracted to ${relativeDir}/]
@@ -684,10 +699,15 @@ async function saveSimpleResponse(
   const fileSize = formatFileSize(Buffer.byteLength(toSave, 'utf-8'));
   const type = isJson ? 'json' : 'text';
 
+  // Build preview
+  const preview = toSave.slice(0, config.previewSize);
+  const truncated = toSave.length > config.previewSize;
+
   const truncatedOutput = `[Response ${sizeKB}KB extracted to ${config.dir}/]
 
 Files:
-  - ${filename} (${type}, ${fileSize})`;
+  - ${filename} (${type}, ${fileSize})
+${truncated ? preview + '...' : preview}`;
 
   return {
     saved: true,
