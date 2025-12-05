@@ -248,11 +248,8 @@ function formatOutput(data: any, ctx: ExecutionContext): string {
   if (ctx.yaml) {
     return stringifyYaml(data);
   }
-  if (ctx.json) {
-    return JSON.stringify(data, null, 2);
-  }
-  // Fallback to JSON for structured data
-  return JSON.stringify(data, null, 2);
+  // Compact JSON for AI context efficiency (~40% smaller than pretty-printed)
+  return JSON.stringify(data);
 }
 
 /**
