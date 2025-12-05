@@ -613,25 +613,30 @@ export async function autoSaveResponse(
   // Save manifest JSON
   const manifestFilename = `${baseFilename}.json`;
   const manifestPath = join(responseDir, manifestFilename);
-  await writeFile(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
+  const manifestContent = JSON.stringify(manifest, null, 2);
+  await writeFile(manifestPath, manifestContent, 'utf-8');
 
-  // Generate preview output
+  // Generate output with file sizes
   const sizeKB = (responseSize / 1024).toFixed(1);
   const relativeDir = config.dir;
 
-  const fileList = extractedFiles.map(f => `  - ${join(relativeDir, f.split('/').pop()!)}`).join('\n');
-  const preview = formattedResponse.slice(0, config.previewSize);
+  // Build file list with sizes and types
+  const manifestSize = formatFileSize(Buffer.byteLength(manifestContent, 'utf-8'));
+  const fileLines: string[] = [`  - ${manifestFilename} (manifest, ${manifestSize})`];
 
-  const truncatedOutput = `[Response ${sizeKB}KB - extracted to ${relativeDir}/]
+  for (const filePath of extractedFiles) {
+    const filename = filePath.split('/').pop()!;
+    const stats = await import('fs/promises').then(fs => fs.stat(filePath));
+    const size = formatFileSize(stats.size);
+    const ext = filename.split('.').pop();
+    const type = ext === 'txt' ? 'text' : ext === 'json' ? 'json' : 'image';
+    fileLines.push(`  - ${filename} (${type}, ${size})`);
+  }
+
+  const truncatedOutput = `[Response ${sizeKB}KB extracted to ${relativeDir}/]
 
 Files:
-  - ${manifestFilename} (manifest)
-${fileList}
-
-Preview (first ${config.previewSize} chars):
-${preview}${formattedResponse.length > config.previewSize ? '...' : ''}
-
-Use \`grep\` or \`read\` to explore the files.`;
+${fileLines.join('\n')}`;
 
   return {
     saved: true,
@@ -639,6 +644,17 @@ Use \`grep\` or \`read\` to explore the files.`;
     manifestPath,
     extractedFiles,
   };
+}
+
+/**
+ * Format file size in human-readable form
+ */
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(1)}KB`;
+  const mb = kb / 1024;
+  return `${mb.toFixed(1)}MB`;
 }
 
 /**
@@ -665,15 +681,13 @@ async function saveSimpleResponse(
   await writeFile(filePath, toSave, 'utf-8');
 
   const sizeKB = (Buffer.byteLength(content, 'utf-8') / 1024).toFixed(1);
-  const preview = content.slice(0, config.previewSize);
-  const relativePath = join(config.dir, filename);
+  const fileSize = formatFileSize(Buffer.byteLength(toSave, 'utf-8'));
+  const type = isJson ? 'json' : 'text';
 
-  const truncatedOutput = `[Response ${sizeKB}KB saved to ${relativePath}]
+  const truncatedOutput = `[Response ${sizeKB}KB extracted to ${config.dir}/]
 
-Preview (first ${config.previewSize} chars):
-${preview}${content.length > config.previewSize ? '...' : ''}
-
-Use \`grep\` or \`read\` to explore the file.`;
+Files:
+  - ${filename} (${type}, ${fileSize})`;
 
   return {
     saved: true,
