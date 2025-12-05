@@ -11,7 +11,10 @@
  * - Consistent formatting across all MCP types
  */
 
+import { mkdir, writeFile } from 'fs/promises';
+import { join } from 'path';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import type { ResolvedAutoSaveConfig } from './config.ts';
 
 /**
  * Try to compact a JSON string by parsing and re-stringifying without indentation.
@@ -467,4 +470,71 @@ export function formatMcpResponse(response: unknown): string {
 
   // Fallback: stringify the response (compact)
   return JSON.stringify(response);
+}
+
+/**
+ * Result of auto-save response check
+ */
+export interface AutoSaveResult {
+  /** Whether the response was saved to file */
+  saved: boolean;
+  /** The output to return (truncated preview or original) */
+  output: string;
+  /** Path to saved file (if saved) */
+  filePath?: string;
+}
+
+/**
+ * Check if response exceeds threshold and auto-save if needed
+ *
+ * @param response - The formatted response string
+ * @param server - Server name
+ * @param tool - Tool name
+ * @param config - Resolved auto-save configuration
+ * @param cwd - Working directory for relative paths
+ * @returns AutoSaveResult with output and file path if saved
+ */
+export async function autoSaveResponse(
+  response: string,
+  server: string,
+  tool: string,
+  config: ResolvedAutoSaveConfig,
+  cwd: string
+): Promise<AutoSaveResult> {
+  const responseSize = Buffer.byteLength(response, 'utf-8');
+
+  // Check if response exceeds threshold
+  if (responseSize <= config.thresholdSize) {
+    return { saved: false, output: response };
+  }
+
+  // Generate filename with timestamp
+  const timestamp = Date.now();
+  const filename = `${server}-${tool}-${timestamp}.json`;
+  const responseDir = join(cwd, config.dir);
+  const filePath = join(responseDir, filename);
+
+  // Ensure directory exists
+  await mkdir(responseDir, { recursive: true });
+
+  // Save full response
+  await writeFile(filePath, response, 'utf-8');
+
+  // Generate truncated output with preview
+  const sizeKB = (responseSize / 1024).toFixed(1);
+  const preview = response.slice(0, config.previewSize);
+  const relativePath = join(config.dir, filename);
+
+  const truncatedOutput = `[Response truncated - ${sizeKB}KB saved to ${relativePath}]
+
+Preview (first ${config.previewSize} chars):
+${preview}${response.length > config.previewSize ? '...' : ''}
+
+Use \`grep\` or \`read\` to explore the full response.`;
+
+  return {
+    saved: true,
+    output: truncatedOutput,
+    filePath,
+  };
 }

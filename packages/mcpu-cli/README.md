@@ -177,6 +177,52 @@ mcpu add --transport http notion https://mcp.notion.com/mcp
 }
 ```
 
+### Auto-Save Large Responses
+
+Large MCP tool responses can consume valuable context. MCPU can auto-save responses exceeding a threshold to files, returning a truncated preview with a file path for the agent to explore.
+
+```json
+{
+  "autoSaveResponse": {
+    "enabled": true,
+    "thresholdSize": 10240,
+    "dir": ".temp/mcpu-responses",
+    "previewSize": 500
+  },
+
+  "playwright": {
+    "command": "npx",
+    "args": ["-y", "@anthropic/mcp-playwright"],
+    "autoSaveResponse": {
+      "enabled": false
+    }
+  },
+
+  "chroma": {
+    "command": "uvx",
+    "args": ["chroma-mcp"],
+    "autoSaveResponse": {
+      "thresholdSize": 5120,
+      "byTools": {
+        "query_documents": { "thresholdSize": 1024 },
+        "add_documents": { "enabled": false }
+      }
+    }
+  }
+}
+```
+
+**Settings (all optional):**
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `enabled` | `true` | Enable/disable auto-save |
+| `thresholdSize` | `10240` | Size in bytes to trigger save (10KB) |
+| `dir` | `.temp/mcpu-responses` | Directory for saved responses |
+| `previewSize` | `500` | Characters to show in preview |
+
+**Hierarchy:** Settings merge from `global` ← `server` ← `byTools[tool]` (inner wins).
+
 ## MCPU Daemon
 
 The daemon supports the Bash CLI mode by keeping MCP server connections alive.

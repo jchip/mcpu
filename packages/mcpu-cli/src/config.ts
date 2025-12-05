@@ -2,7 +2,34 @@ import { readFile } from 'fs/promises';
 import { homedir } from 'os';
 import { join, resolve } from 'path';
 import { existsSync } from 'fs';
-import { ProjectMCPConfigSchema, type MCPServerConfig, isStdioConfig, type StdioConfig } from './types.ts';
+import { ProjectMCPConfigSchema, type MCPServerConfig, isStdioConfig, type StdioConfig, type ServerAutoSaveConfig, type ToolAutoSaveConfig } from './types.ts';
+
+/**
+ * Resolved auto-save config (all fields required after merge)
+ */
+export interface ResolvedAutoSaveConfig {
+  enabled: boolean;
+  thresholdSize: number;
+  dir: string;
+  previewSize: number;
+}
+
+/**
+ * Response auto-save configuration defaults
+ */
+export const AUTO_SAVE_DEFAULTS: ResolvedAutoSaveConfig = {
+  enabled: true,
+  thresholdSize: 10240, // 10KB
+  dir: '.temp/mcpu-responses',
+  previewSize: 500,
+};
+
+/**
+ * Extended server config with autoSaveResponse
+ */
+export type ExtendedServerConfig = MCPServerConfig & {
+  autoSaveResponse?: ServerAutoSaveConfig;
+};
 
 /**
  * Discovers MCP server configurations from multiple sources:
@@ -14,7 +41,9 @@ import { ProjectMCPConfigSchema, type MCPServerConfig, isStdioConfig, type Stdio
  * Configs are merged with higher priority sources overwriting lower priority.
  */
 export class ConfigDiscovery {
-  private configs: Map<string, MCPServerConfig> = new Map();
+  private configs: Map<string, ExtendedServerConfig> = new Map();
+  private globalAutoSave: Partial<ResolvedAutoSaveConfig> = {};
+  private resolvedCache: Map<string, ResolvedAutoSaveConfig> = new Map(); // memoize: "server:tool" -> config
   private options: {
     configFile?: string;
     verbose?: boolean;
@@ -72,8 +101,25 @@ export class ConfigDiscovery {
     const content = await readFile(filepath, 'utf-8');
     const data = JSON.parse(content);
 
+    // Extract global autoSaveResponse config (if present)
+    if (data.autoSaveResponse && typeof data.autoSaveResponse === 'object') {
+      const global = data.autoSaveResponse;
+      if (typeof global.enabled === 'boolean') this.globalAutoSave.enabled = global.enabled;
+      if (typeof global.thresholdSize === 'number') this.globalAutoSave.thresholdSize = global.thresholdSize;
+      if (typeof global.dir === 'string') this.globalAutoSave.dir = global.dir;
+      if (typeof global.previewSize === 'number') this.globalAutoSave.previewSize = global.previewSize;
+    }
+
     // MCPU format (direct server configs object)
-    const mcpConfig = ProjectMCPConfigSchema.parse(data);
+    // Filter out global config key before parsing servers
+    const serverData: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (key !== 'autoSaveResponse') {
+        serverData[key] = value;
+      }
+    }
+
+    const mcpConfig = ProjectMCPConfigSchema.parse(serverData);
     for (const [name, config] of Object.entries(mcpConfig)) {
       // Skip disabled servers (enabled: false)
       if (config.enabled === false) {
@@ -82,7 +128,13 @@ export class ConfigDiscovery {
         }
         continue;
       }
-      this.configs.set(name, this.normalizeConfig(config));
+      // Preserve autoSaveResponse from original data if present
+      const extConfig = this.normalizeConfig(config) as ExtendedServerConfig;
+      const originalServer = data[name] as any;
+      if (originalServer?.autoSaveResponse !== undefined) {
+        extConfig.autoSaveResponse = originalServer.autoSaveResponse;
+      }
+      this.configs.set(name, extConfig);
     }
   }
 
@@ -108,7 +160,7 @@ export class ConfigDiscovery {
   /**
    * Get a specific server config by name
    */
-  getServer(name: string): MCPServerConfig | undefined {
+  getServer(name: string): ExtendedServerConfig | undefined {
     return this.configs.get(name);
   }
 
@@ -122,8 +174,52 @@ export class ConfigDiscovery {
   /**
    * Get all server configs
    */
-  getAllServers(): Map<string, MCPServerConfig> {
+  getAllServers(): Map<string, ExtendedServerConfig> {
     return this.configs;
+  }
+
+  /**
+   * Get resolved auto-save config for a server/tool combination.
+   * Merges: defaults <- global <- server <- tool (byTools)
+   * Results are memoized per server:tool key.
+   */
+  getAutoSaveConfig(server: string, tool: string): ResolvedAutoSaveConfig {
+    const cacheKey = `${server}:${tool}`;
+
+    // Return memoized result if available
+    const cached = this.resolvedCache.get(cacheKey);
+    if (cached) return cached;
+
+    // Start with defaults
+    const resolved: ResolvedAutoSaveConfig = { ...AUTO_SAVE_DEFAULTS };
+
+    // Merge global config
+    if (this.globalAutoSave.enabled !== undefined) resolved.enabled = this.globalAutoSave.enabled;
+    if (this.globalAutoSave.thresholdSize !== undefined) resolved.thresholdSize = this.globalAutoSave.thresholdSize;
+    if (this.globalAutoSave.dir !== undefined) resolved.dir = this.globalAutoSave.dir;
+    if (this.globalAutoSave.previewSize !== undefined) resolved.previewSize = this.globalAutoSave.previewSize;
+
+    // Merge server-level config
+    const serverConfig = this.configs.get(server)?.autoSaveResponse;
+    if (serverConfig) {
+      if (serverConfig.enabled !== undefined) resolved.enabled = serverConfig.enabled;
+      if (serverConfig.thresholdSize !== undefined) resolved.thresholdSize = serverConfig.thresholdSize;
+      if (serverConfig.dir !== undefined) resolved.dir = serverConfig.dir;
+      if (serverConfig.previewSize !== undefined) resolved.previewSize = serverConfig.previewSize;
+
+      // Merge tool-level config (byTools)
+      const toolConfig = serverConfig.byTools?.[tool];
+      if (toolConfig) {
+        if (toolConfig.enabled !== undefined) resolved.enabled = toolConfig.enabled;
+        if (toolConfig.thresholdSize !== undefined) resolved.thresholdSize = toolConfig.thresholdSize;
+        if (toolConfig.dir !== undefined) resolved.dir = toolConfig.dir;
+        if (toolConfig.previewSize !== undefined) resolved.previewSize = toolConfig.previewSize;
+      }
+    }
+
+    // Memoize and return
+    this.resolvedCache.set(cacheKey, resolved);
+    return resolved;
   }
 }
 

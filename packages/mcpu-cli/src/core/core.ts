@@ -9,6 +9,7 @@
 
 import { NixClap } from 'nix-clap';
 import { executeCommand } from './executor.ts';
+import { ConfigDiscovery } from '../config.ts';
 import type { CommandResult } from '../types/result.ts';
 import type { ConnectionPool } from '../daemon/connection-pool.ts';
 
@@ -19,6 +20,7 @@ export interface CoreExecutionOptions {
   cwd?: string;
   connectionPool?: ConnectionPool;
   configs?: Map<string, any>;  // Runtime config map from daemon
+  configDiscovery?: ConfigDiscovery;  // Config discovery for response auto-save settings
 }
 
 /**
@@ -151,7 +153,7 @@ function createParserCLI() {
  * Core execution - parse and execute command
  */
 export async function coreExecute(options: CoreExecutionOptions): Promise<CommandResult> {
-  const { argv, params, mcpServerConfig, cwd, connectionPool, configs } = options;
+  const { argv, params, mcpServerConfig, cwd, connectionPool, configs, configDiscovery } = options;
 
   try {
     // Parse command line with custom output/exit handlers
@@ -210,6 +212,7 @@ export async function coreExecute(options: CoreExecutionOptions): Promise<Comman
       cwd,
       connectionPool,
       configs,
+      configDiscovery,
     };
 
     // Get the sub-command data from parsed result

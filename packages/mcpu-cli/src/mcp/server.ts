@@ -25,6 +25,7 @@ export class McpuMcpServer {
   private server: McpServer;
   private pool: ConnectionPool;
   private configs: Map<string, MCPServerConfig>;
+  private configDiscovery: ConfigDiscovery | undefined;
   private options: McpuMcpServerOptions;
 
   constructor(options: McpuMcpServerOptions = {}) {
@@ -97,6 +98,7 @@ params: tool args for call. --yaml/--json: full MCP response.`;
             cwd,
             connectionPool: this.pool,
             configs: this.configs,
+            configDiscovery: this.configDiscovery,
           });
 
           this.log("Command result", {
@@ -139,6 +141,7 @@ params: tool args for call. --yaml/--json: full MCP response.`;
       verbose: this.options.verbose,
     });
     this.configs = await discovery.loadConfigs();
+    this.configDiscovery = discovery;
 
     this.log("Loaded configs", { servers: Array.from(this.configs.keys()) });
 

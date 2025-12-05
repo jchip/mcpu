@@ -16,7 +16,19 @@ vi.mock('../../src/config.js', () => ({
         ['anotherServer', { command: 'another-command', args: [] }],
       ])
     ),
+    getAutoSaveConfig: vi.fn().mockReturnValue({
+      enabled: false,
+      thresholdSize: 10240,
+      dir: '.temp/mcpu-responses',
+      previewSize: 500,
+    }),
   })),
+  AUTO_SAVE_DEFAULTS: {
+    enabled: true,
+    thresholdSize: 10240,
+    dir: '.temp/mcpu-responses',
+    previewSize: 500,
+  },
 }));
 
 vi.mock('../../src/daemon/connection-pool.js', () => ({

@@ -630,6 +630,7 @@ export class DaemonServer {
           cwd,
           connectionPool: this.pool,
           configs: this.configs,  // Pass mutable config map
+          configDiscovery: this.configDiscovery,
         });
 
         res.json(result);

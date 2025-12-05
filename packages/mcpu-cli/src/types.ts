@@ -74,6 +74,32 @@ export const ClaudeSettingsSchema = z.object({
 
 export type ClaudeSettings = z.infer<typeof ClaudeSettingsSchema>;
 
+// Auto-save response config - consistent shape at all levels
+// All fields optional, inherit from parent level if not specified
+const AutoSaveConfigBaseSchema = z.object({
+  enabled: z.boolean().optional(),
+  thresholdSize: z.number().optional(),
+  dir: z.string().optional(),
+  previewSize: z.number().optional(),
+});
+
+// Tool-level config (no byTools nesting)
+export const ToolAutoSaveConfigSchema = AutoSaveConfigBaseSchema;
+export type ToolAutoSaveConfig = z.infer<typeof ToolAutoSaveConfigSchema>;
+
+// Server-level config (adds byTools for per-tool overrides)
+export const ServerAutoSaveConfigSchema = AutoSaveConfigBaseSchema.extend({
+  byTools: z.record(ToolAutoSaveConfigSchema).optional(),
+});
+export type ServerAutoSaveConfig = z.infer<typeof ServerAutoSaveConfigSchema>;
+
+// Global config schema
+export const GlobalConfigSchema = z.object({
+  autoSaveResponse: AutoSaveConfigBaseSchema.optional(),
+}).passthrough(); // Allow server configs at top level
+
+export type GlobalConfig = z.infer<typeof GlobalConfigSchema>;
+
 // Project .mcp.json schema
 export const ProjectMCPConfigSchema = z.record(MCPServerConfigSchema);
 

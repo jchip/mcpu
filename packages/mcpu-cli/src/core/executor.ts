@@ -6,7 +6,7 @@ import type { CommandResult } from '../types/result.ts';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ConnectionPool } from '../daemon/connection-pool.ts';
 import { ExecutionContext } from './context.ts';
-import { formatToolInfo, formatMcpResponse, abbreviateType, LEGEND_HEADER, TYPES_LINE, collectEnums, formatEnumLegend, extractEnumOrRange, formatParamType } from '../formatters.ts';
+import { formatToolInfo, formatMcpResponse, abbreviateType, LEGEND_HEADER, TYPES_LINE, collectEnums, formatEnumLegend, extractEnumOrRange, formatParamType, autoSaveResponse } from '../formatters.ts';
 import { isStdioConfig, isUrlConfig, isWebSocketConfig } from '../types.ts';
 
 /**
@@ -182,6 +182,7 @@ export interface ExecuteOptions {
   cwd?: string;  // Client's working directory for resolving paths
   context?: ExecutionContext;  // Execution context (preferred over individual options)
   configs?: Map<string, any>;  // Runtime config map from daemon (mutable)
+  configDiscovery?: ConfigDiscovery;  // Config discovery instance for response settings
 }
 
 export interface ServersCommandArgs {
@@ -1014,6 +1015,16 @@ export async function executeCallCommand(
       } else {
         // Default: unwrap MCP response to extract meaningful content (like Claude CLI does)
         output = formatMcpResponse(result);
+      }
+
+      // Auto-save large responses if enabled
+      if (options.configDiscovery) {
+        const autoSaveConfig = options.configDiscovery.getAutoSaveConfig(args.server, args.tool);
+        if (autoSaveConfig.enabled) {
+          const workingDir = ctx.cwd || process.cwd();
+          const autoSaveResult = await autoSaveResponse(output, args.server, args.tool, autoSaveConfig, workingDir);
+          output = autoSaveResult.output;
+        }
       }
 
       return {

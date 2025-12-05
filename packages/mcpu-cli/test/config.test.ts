@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { ConfigDiscovery } from '../src/config.js';
+import { ConfigDiscovery, AUTO_SAVE_DEFAULTS } from '../src/config.js';
 import { writeFile, mkdir, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -290,6 +290,193 @@ describe('ConfigDiscovery', () => {
       expect(allServers.get('playwright')).toMatchObject({
         command: 'node',
         args: ['server.js'],
+      });
+    });
+  });
+
+  describe('getAutoSaveConfig', () => {
+    it('should return defaults when no config specified', async () => {
+      const configPath = join(testDir, 'test-config.json');
+      const config = {
+        filesystem: { command: 'npx', args: [] },
+      };
+
+      await writeFile(configPath, JSON.stringify(config));
+
+      const discovery = new ConfigDiscovery({ configFile: configPath });
+      await discovery.loadConfigs();
+
+      const result = discovery.getAutoSaveConfig('filesystem', 'read_file');
+      expect(result).toEqual(AUTO_SAVE_DEFAULTS);
+    });
+
+    it('should merge global autoSaveResponse config', async () => {
+      const configPath = join(testDir, 'test-config.json');
+      const config = {
+        autoSaveResponse: {
+          enabled: false,
+          thresholdSize: 5120,
+          dir: '.custom/responses',
+          previewSize: 200,
+        },
+        filesystem: { command: 'npx', args: [] },
+      };
+
+      await writeFile(configPath, JSON.stringify(config));
+
+      const discovery = new ConfigDiscovery({ configFile: configPath });
+      await discovery.loadConfigs();
+
+      const result = discovery.getAutoSaveConfig('filesystem', 'read_file');
+      expect(result).toEqual({
+        enabled: false,
+        thresholdSize: 5120,
+        dir: '.custom/responses',
+        previewSize: 200,
+      });
+    });
+
+    it('should merge server-level autoSaveResponse', async () => {
+      const configPath = join(testDir, 'test-config.json');
+      const config = {
+        autoSaveResponse: {
+          enabled: true,
+          thresholdSize: 10240,
+        },
+        playwright: {
+          command: 'node',
+          args: [],
+          autoSaveResponse: {
+            enabled: false,
+            thresholdSize: 2048,
+          },
+        },
+      };
+
+      await writeFile(configPath, JSON.stringify(config));
+
+      const discovery = new ConfigDiscovery({ configFile: configPath });
+      await discovery.loadConfigs();
+
+      const result = discovery.getAutoSaveConfig('playwright', 'browser_snapshot');
+      expect(result.enabled).toBe(false);
+      expect(result.thresholdSize).toBe(2048);
+    });
+
+    it('should merge tool-level config via byTools', async () => {
+      const configPath = join(testDir, 'test-config.json');
+      const config = {
+        autoSaveResponse: {
+          enabled: true,
+          thresholdSize: 10240,
+        },
+        chroma: {
+          command: 'node',
+          args: [],
+          autoSaveResponse: {
+            enabled: true,
+            thresholdSize: 5120,
+            byTools: {
+              add_documents: {
+                enabled: false,
+              },
+              query_documents: {
+                thresholdSize: 1024,
+              },
+            },
+          },
+        },
+      };
+
+      await writeFile(configPath, JSON.stringify(config));
+
+      const discovery = new ConfigDiscovery({ configFile: configPath });
+      await discovery.loadConfigs();
+
+      // Tool with enabled=false override
+      const addResult = discovery.getAutoSaveConfig('chroma', 'add_documents');
+      expect(addResult.enabled).toBe(false);
+      expect(addResult.thresholdSize).toBe(5120); // inherits from server
+
+      // Tool with custom threshold
+      const queryResult = discovery.getAutoSaveConfig('chroma', 'query_documents');
+      expect(queryResult.enabled).toBe(true);
+      expect(queryResult.thresholdSize).toBe(1024);
+
+      // Tool not in byTools, uses server level
+      const getResult = discovery.getAutoSaveConfig('chroma', 'get_documents');
+      expect(getResult.enabled).toBe(true);
+      expect(getResult.thresholdSize).toBe(5120);
+    });
+
+    it('should memoize results', async () => {
+      const configPath = join(testDir, 'test-config.json');
+      const config = {
+        autoSaveResponse: { enabled: true, thresholdSize: 1000 },
+        filesystem: { command: 'npx', args: [] },
+      };
+
+      await writeFile(configPath, JSON.stringify(config));
+
+      const discovery = new ConfigDiscovery({ configFile: configPath });
+      await discovery.loadConfigs();
+
+      const result1 = discovery.getAutoSaveConfig('filesystem', 'read_file');
+      const result2 = discovery.getAutoSaveConfig('filesystem', 'read_file');
+
+      // Should return same object (memoized)
+      expect(result1).toBe(result2);
+    });
+
+    it('should use defaults for unknown servers', async () => {
+      const configPath = join(testDir, 'test-config.json');
+      const config = {
+        autoSaveResponse: { thresholdSize: 8192 },
+        filesystem: { command: 'npx', args: [] },
+      };
+
+      await writeFile(configPath, JSON.stringify(config));
+
+      const discovery = new ConfigDiscovery({ configFile: configPath });
+      await discovery.loadConfigs();
+
+      const result = discovery.getAutoSaveConfig('unknown_server', 'some_tool');
+      expect(result.enabled).toBe(true); // default
+      expect(result.thresholdSize).toBe(8192); // from global
+    });
+
+    it('should allow partial overrides at each level', async () => {
+      const configPath = join(testDir, 'test-config.json');
+      const config = {
+        autoSaveResponse: {
+          thresholdSize: 10000,
+          dir: '/global/dir',
+        },
+        playwright: {
+          command: 'node',
+          args: [],
+          autoSaveResponse: {
+            previewSize: 300,
+            byTools: {
+              browser_snapshot: {
+                enabled: false,
+              },
+            },
+          },
+        },
+      };
+
+      await writeFile(configPath, JSON.stringify(config));
+
+      const discovery = new ConfigDiscovery({ configFile: configPath });
+      await discovery.loadConfigs();
+
+      const result = discovery.getAutoSaveConfig('playwright', 'browser_snapshot');
+      expect(result).toEqual({
+        enabled: false,           // from byTools
+        thresholdSize: 10000,     // from global
+        dir: '/global/dir',       // from global
+        previewSize: 300,         // from server
       });
     });
   });
