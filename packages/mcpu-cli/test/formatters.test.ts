@@ -1,6 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { formatParamType, formatToolInfo, formatMcpResponse, abbreviateType, compactJson, LEGEND_HEADER, TYPES_LINE } from '../src/formatters.js';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { formatParamType, formatToolInfo, formatMcpResponse, abbreviateType, compactJson, LEGEND_HEADER, TYPES_LINE, autoSaveResponse } from '../src/formatters.js';
+import { AUTO_SAVE_DEFAULTS } from '../src/config.js';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import { mkdir, rm, readFile, readdir } from 'fs/promises';
+import { join } from 'path';
+import { tmpdir } from 'os';
+import { existsSync } from 'fs';
 
 describe('Formatters', () => {
   describe('abbreviateType', () => {
@@ -436,6 +441,159 @@ describe('Formatters', () => {
 
       const result = formatMcpResponse(response);
       expect(result).toBe('Hello, this is plain text');
+    });
+  });
+
+  describe('autoSaveResponse', () => {
+    let testDir: string;
+
+    beforeEach(async () => {
+      testDir = join(tmpdir(), `mcpu-autosave-test-${Date.now()}`);
+      await mkdir(testDir, { recursive: true });
+    });
+
+    afterEach(async () => {
+      if (existsSync(testDir)) {
+        await rm(testDir, { recursive: true, force: true });
+      }
+    });
+
+    it('should not save response below threshold', async () => {
+      const response = {
+        content: [{ type: 'text', text: 'Short response' }],
+      };
+      const config = { ...AUTO_SAVE_DEFAULTS, thresholdSize: 1000 };
+
+      const result = await autoSaveResponse(response, 'test', 'tool', config, testDir);
+
+      expect(result.saved).toBe(false);
+      expect(result.output).toBe('Short response');
+      expect(result.manifestPath).toBeUndefined();
+    });
+
+    it('should save text response above threshold', async () => {
+      const longText = 'A'.repeat(2000);
+      const response = {
+        content: [{ type: 'text', text: longText }],
+      };
+      const config = { ...AUTO_SAVE_DEFAULTS, thresholdSize: 100, dir: '.temp' };
+
+      const result = await autoSaveResponse(response, 'test', 'tool', config, testDir);
+
+      expect(result.saved).toBe(true);
+      expect(result.output).toContain('[Response');
+      expect(result.output).toContain('extracted to');
+      expect(result.extractedFiles).toHaveLength(1);
+
+      // Verify file was created
+      const extractedFile = result.extractedFiles![0];
+      expect(existsSync(extractedFile)).toBe(true);
+      const savedContent = await readFile(extractedFile, 'utf-8');
+      expect(savedContent).toBe(longText);
+    });
+
+    it('should save JSON content to .json file with pretty printing', async () => {
+      const jsonData = { name: 'test', value: 123, nested: { key: 'value' } };
+      const response = {
+        content: [{ type: 'text', text: JSON.stringify(jsonData) }],
+      };
+      const config = { ...AUTO_SAVE_DEFAULTS, thresholdSize: 10, dir: '.temp' };
+
+      const result = await autoSaveResponse(response, 'server', 'tool', config, testDir);
+
+      expect(result.saved).toBe(true);
+      const extractedFile = result.extractedFiles![0];
+      expect(extractedFile).toMatch(/\.json$/);
+
+      const savedContent = await readFile(extractedFile, 'utf-8');
+      expect(JSON.parse(savedContent)).toEqual(jsonData);
+      // Check pretty-printed (has indentation)
+      expect(savedContent).toContain('\n');
+    });
+
+    it('should extract image content to binary file', async () => {
+      // Create a small PNG-like binary data
+      const pngData = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A]).toString('base64');
+      const response = {
+        content: [
+          { type: 'text', text: 'A'.repeat(100) },
+          { type: 'image', data: pngData, mimeType: 'image/png' },
+        ],
+      };
+      const config = { ...AUTO_SAVE_DEFAULTS, thresholdSize: 10, dir: '.temp' };
+
+      const result = await autoSaveResponse(response, 'playwright', 'snapshot', config, testDir);
+
+      expect(result.saved).toBe(true);
+      expect(result.extractedFiles).toHaveLength(2);
+
+      // Find the image file
+      const imageFile = result.extractedFiles!.find(f => f.endsWith('.png'));
+      expect(imageFile).toBeDefined();
+
+      // Verify binary content
+      const savedContent = await readFile(imageFile!, null);
+      expect(savedContent.toString('base64')).toBe(pngData);
+    });
+
+    it('should create manifest with _extracted references', async () => {
+      const response = {
+        content: [
+          { type: 'text', text: 'A'.repeat(100) },
+        ],
+      };
+      const config = { ...AUTO_SAVE_DEFAULTS, thresholdSize: 10, dir: '.temp' };
+
+      const result = await autoSaveResponse(response, 'server', 'tool', config, testDir);
+
+      expect(result.manifestPath).toBeDefined();
+      const manifest = JSON.parse(await readFile(result.manifestPath!, 'utf-8'));
+
+      expect(manifest.content).toHaveLength(1);
+      expect(manifest.content[0].type).toBe('text');
+      expect(manifest.content[0]._extracted).toBeDefined();
+      expect(manifest.content[0]._extracted).toMatch(/\.txt$/);
+    });
+
+    it('should show preview of text content in output', async () => {
+      const longText = 'START' + 'X'.repeat(600) + 'END';
+      const response = {
+        content: [{ type: 'text', text: longText }],
+      };
+      const config = { ...AUTO_SAVE_DEFAULTS, thresholdSize: 10, previewSize: 100, dir: '.temp' };
+
+      const result = await autoSaveResponse(response, 'server', 'tool', config, testDir);
+
+      expect(result.output).toContain('START');
+      expect(result.output).toContain('...');
+      expect(result.output).not.toContain('END');
+    });
+
+    it('should handle multiple text items with indexed filenames', async () => {
+      const response = {
+        content: [
+          { type: 'text', text: 'A'.repeat(50) },
+          { type: 'text', text: 'B'.repeat(50) },
+        ],
+      };
+      const config = { ...AUTO_SAVE_DEFAULTS, thresholdSize: 10, dir: '.temp' };
+
+      const result = await autoSaveResponse(response, 'server', 'tool', config, testDir);
+
+      expect(result.extractedFiles).toHaveLength(2);
+      // Check files have different names
+      expect(result.extractedFiles![0]).not.toBe(result.extractedFiles![1]);
+    });
+
+    it('should save simple non-MCP response as plain file', async () => {
+      const longText = 'A'.repeat(200);
+      const config = { ...AUTO_SAVE_DEFAULTS, thresholdSize: 10, dir: '.temp' };
+
+      const result = await autoSaveResponse(longText, 'server', 'tool', config, testDir);
+
+      expect(result.saved).toBe(true);
+      expect(result.extractedFiles).toHaveLength(1);
+      expect(result.extractedFiles![0]).toMatch(/\.txt$/);
     });
   });
 });

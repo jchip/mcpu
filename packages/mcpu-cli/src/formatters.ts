@@ -610,8 +610,8 @@ export async function autoSaveResponse(
     }
   }
 
-  // Save manifest JSON
-  const manifestFilename = `${baseFilename}.json`;
+  // Save manifest JSON (use .manifest.json to avoid collision with extracted .json files)
+  const manifestFilename = `${baseFilename}.manifest.json`;
   const manifestPath = join(responseDir, manifestFilename);
   const manifestContent = JSON.stringify(manifest, null, 2);
   await writeFile(manifestPath, manifestContent, 'utf-8');
