@@ -1,3 +1,28 @@
+# 12/5/2025
+
+## Packages
+
+-   `@mcpu/cli@0.2.11` `(0.2.10 => 0.2.11)`
+
+## Commits
+
+-   `packages/mcpu-cli`
+
+    -   MCU-49: Fix manifest/JSON collision and add autoSaveResponse tests [commit](/commit/83eca7e750d12bbad8214219e53da0dd1800fdef)
+    -   MCU-49: Add text preview under file lines in auto-save output [commit](/commit/874b578472ce72d18ad3dbca65104b640bb5efcd)
+    -   MCU-49: Clean up auto-save output format with file sizes [commit](/commit/d471913692f784c881cdbe6ec0980b0e0a9b9b42)
+    -   MCU-49: Extract text/image content to separate files for better grep-ability [commit](/commit/2fdd43eb7bf6e68fbc9ccfcea9e89998e6d6a92d)
+    -   MCU-49: Auto-save large responses to file with 3-level config hierarchy [commit](/commit/fc30e5fbec6a28c0f6fb6353e30a4b1acb4131a8)
+    -   MCU-48: Auto-add MCPU to Claude CLI during setup [commit](/commit/cfe0880f1b7be28913431afba66f13d06ea985c7)
+    -   MCU-1: Return compact JSON for --json flag [commit](/commit/a312c0f081fcbc102e182e5e2214934451f201e0)
+    -   MCU-3: Add elaborate fixture-based integration tests [commit](/commit/a51212be1d742b93676af210a3a7a732c5b936cf)
+    -   MCU-3: Add Claude CLI support to setup command [commit](/commit/070de5fd86a05e8cf7afebf28a9830aa10ebeba4)
+    -   MCU-3: Update README for agent-guide rename and setup command [commit](/commit/263288d21f47b6b11c423ccc5ad70e4d6cdfa50c)
+    -   MCU-3: Add setup command for migrating MCP servers from Claude [commit](/commit/51fa4fc045aeea75822ab726a8d26dee87b071c0)
+    -   MCU-13: Rename setup command to agent-guide [commit](/commit/8a406093d688458af70f012bcd3d7d6b195369c7)
+    -   Include tools list in error responses when tools not yet shown for server [commit](/commit/6fc83661bb37a773ef78dbaaa11c44f951b00b77)
+    -   Compact JSON output by default for MCP responses [commit](/commit/950a7fded09ea34a3ca917bf55adca497a32b1ee)
+
 # 11/30/2025
 
 ## Packages
