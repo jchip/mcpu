@@ -18,6 +18,9 @@ import {
   updateClaudeConfig,
   updateClaudeCliConfig,
   executeSetup,
+  isMcpuMcpAvailable,
+  isRunningViaNpx,
+  getMcpuServerConfig,
 } from '../src/commands/setup.ts';
 
 // ============================================================================
@@ -628,15 +631,70 @@ describe('setup command', () => {
         mcpu: { command: 'mcpu', args: ['mcp'] },
       });
 
-      // CLI config updated
+      // CLI config updated (with dynamic mcpu config based on install method)
       const cliConfig = JSON.parse(readFileSync(join(cliDir, 'settings.json'), 'utf-8'));
-      expect(cliConfig.mcpServers).toEqual({ mcpu: { command: 'mcpu-mcp', args: [] } });
+      expect(cliConfig.mcpServers.mcpu).toBeDefined();
+      expect(cliConfig.mcpServers.mcpu.command).toBeDefined();
 
       // Both have backups
       const desktopFiles = require('node:fs').readdirSync(desktopDir);
       const cliFiles = require('node:fs').readdirSync(cliDir);
       expect(desktopFiles.some((f: string) => f.includes('.backup.'))).toBe(true);
       expect(cliFiles.some((f: string) => f.includes('.backup.'))).toBe(true);
+    });
+  });
+
+  describe('npx detection', () => {
+    it('isRunningViaNpx should detect npx via npm_execpath', () => {
+      const originalExecPath = process.env.npm_execpath;
+      try {
+        process.env.npm_execpath = '/usr/local/lib/node_modules/npm/bin/npx-cli.js';
+        expect(isRunningViaNpx()).toBe(true);
+
+        process.env.npm_execpath = '/usr/local/lib/node_modules/npm/bin/npm-cli.js';
+        expect(isRunningViaNpx()).toBe(false);
+      } finally {
+        if (originalExecPath !== undefined) {
+          process.env.npm_execpath = originalExecPath;
+        } else {
+          delete process.env.npm_execpath;
+        }
+      }
+    });
+
+    it('getMcpuServerConfig should return npx config when not globally installed and running via npx', () => {
+      const originalExecPath = process.env.npm_execpath;
+      const originalArgv1 = process.argv[1];
+      try {
+        // Simulate npx execution with mcpu-mcp not available
+        process.env.npm_execpath = '/path/to/npx-cli.js';
+        process.argv[1] = '/tmp/_npx/12345/node_modules/.bin/mcpu';
+
+        const config = getMcpuServerConfig();
+
+        // Should use npx wrapper if mcpu-mcp not globally available
+        if (!isMcpuMcpAvailable()) {
+          expect(config.command).toBe('npx');
+          expect(config.args).toContain('--package=@mcpu/cli');
+          expect(config.args).toContain('mcpu-mcp');
+        }
+      } finally {
+        if (originalExecPath !== undefined) {
+          process.env.npm_execpath = originalExecPath;
+        } else {
+          delete process.env.npm_execpath;
+        }
+        process.argv[1] = originalArgv1;
+      }
+    });
+
+    it('getMcpuServerConfig should return direct mcpu-mcp when globally installed', () => {
+      // This test verifies the logic - if mcpu-mcp is available, use it directly
+      if (isMcpuMcpAvailable()) {
+        const config = getMcpuServerConfig();
+        expect(config.command).toBe('mcpu-mcp');
+        expect(config.args).toEqual([]);
+      }
     });
   });
 });

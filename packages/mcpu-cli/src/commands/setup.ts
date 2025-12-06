@@ -1,7 +1,68 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync } from 'node:fs';
 import { homedir, platform } from 'node:os';
 import { join, dirname } from 'node:path';
+import { execSync } from 'node:child_process';
 import { ClaudeSettingsSchema, type MCPServerConfig } from '../types.ts';
+
+/**
+ * Check if mcpu-mcp command is available globally
+ */
+export function isMcpuMcpAvailable(): boolean {
+  try {
+    // Use 'which' on Unix, 'where' on Windows
+    const cmd = platform() === 'win32' ? 'where mcpu-mcp' : 'which mcpu-mcp';
+    execSync(cmd, { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Detect if currently running via npx
+ */
+export function isRunningViaNpx(): boolean {
+  // Check npm_execpath for npx
+  const execPath = process.env.npm_execpath || '';
+  if (execPath.includes('npx')) {
+    return true;
+  }
+
+  // Check if running from a temp npx cache directory
+  const scriptPath = process.argv[1] || '';
+  if (scriptPath.includes('_npx') || scriptPath.includes('.npm/_cacache')) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Get the appropriate MCP server config for Claude CLI
+ */
+export function getMcpuServerConfig(): MCPServerConfig {
+  // If mcpu-mcp is globally available, use it directly
+  if (isMcpuMcpAvailable()) {
+    return {
+      command: 'mcpu-mcp',
+      args: [],
+    };
+  }
+
+  // If running via npx, use npx command
+  if (isRunningViaNpx()) {
+    return {
+      command: 'npx',
+      args: ['--package=@mcpu/cli', '-c', 'mcpu-mcp'],
+    };
+  }
+
+  // Fallback: assume global install (will fail if not installed)
+  return {
+    command: 'mcpu-mcp',
+    args: [],
+  };
+}
 
 export interface ClaudeConfigPaths {
   configDir: string;
@@ -385,6 +446,7 @@ export function updateClaudeDesktopConfig(configPath: string): void {
 /**
  * Update Claude CLI config to use only MCPU
  * Replaces top-level mcpServers with MCPU and clears all project mcpServers
+ * Automatically detects if mcpu-mcp is globally installed or if running via npx
  */
 export function updateClaudeCliConfig(configPath: string): void {
   if (!existsSync(configPath)) {
@@ -399,12 +461,12 @@ export function updateClaudeCliConfig(configPath: string): void {
   const content = readFileSync(configPath, 'utf-8');
   const data = JSON.parse(content);
 
+  // Get appropriate MCPU server config (detects global install vs npx)
+  const mcpuConfig = getMcpuServerConfig();
+
   // Replace mcpServers with just MCPU
   data.mcpServers = {
-    mcpu: {
-      command: 'mcpu-mcp',
-      args: [],
-    },
+    mcpu: mcpuConfig,
   };
 
   // Clear project-level mcpServers
