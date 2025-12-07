@@ -388,7 +388,7 @@ See AGENTS.md for details about using MCPU to talk to MCP servers.
 
             const serverCount = Object.keys(plan.servers).length;
             if (serverCount === 0) {
-              console.log('No MCP servers found in Claude config.');
+              console.log('No MCP servers found in any config.');
               process.exit(0);
             }
 
@@ -400,6 +400,9 @@ See AGENTS.md for details about using MCPU to talk to MCP servers.
             }
             if (plan.sources.cli) {
               console.log(`  CLI:     ${plan.sources.cli}`);
+            }
+            if (plan.sources.gemini) {
+              console.log(`  Gemini:  ${plan.sources.gemini}`);
             }
             console.log(`  Output:  ${plan.mcpuConfigPath}`);
             console.log();

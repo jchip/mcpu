@@ -7,8 +7,11 @@ import {
   getClaudeConfigPaths,
   getClaudeDesktopConfigPath,
   getClaudeCliConfigPath,
+  getGeminiCliConfigPath,
+  getGeminiConfigDir,
   readClaudeConfig,
   readClaudeCliConfig,
+  readGeminiCliConfig,
   readProjectConfigs,
   discoverServers,
   deduplicateServers,
@@ -17,6 +20,7 @@ import {
   saveMcpuConfig,
   updateClaudeConfig,
   updateClaudeCliConfig,
+  updateGeminiCliConfig,
   executeSetup,
   isMcpuMcpAvailable,
   isRunningViaNpx,
@@ -31,6 +35,7 @@ const __dirname = dirname(__filename);
 const FIXTURES_DIR = join(__dirname, 'fixtures');
 const DESKTOP_FIXTURE_DIR = join(FIXTURES_DIR, 'claude-desktop');
 const CLI_FIXTURE_DIR = join(FIXTURES_DIR, 'claude-cli');
+const GEMINI_FIXTURE_DIR = join(FIXTURES_DIR, 'gemini-cli');
 
 describe('setup command', () => {
   const testDir = join(tmpdir(), `mcpu-test-${Date.now()}`);
@@ -286,7 +291,7 @@ describe('setup command', () => {
 
       // Check that a backup was created
       const files = require('node:fs').readdirSync(mcpuDir);
-      const backupFile = files.find((f: string) => f.startsWith('config.json.backup.'));
+      const backupFile = files.find((f: string) => f=== 'config.json.mcpu.bak');
       expect(backupFile).toBeDefined();
     });
   });
@@ -319,7 +324,7 @@ describe('setup command', () => {
       updateClaudeConfig(configPath);
 
       const files = require('node:fs').readdirSync(claudeDir);
-      const backupFile = files.find((f: string) => f.startsWith('claude_desktop_config.json.backup.'));
+      const backupFile = files.find((f: string) => f=== 'claude_desktop_config.json.mcpu.bak');
       expect(backupFile).toBeDefined();
     });
 
@@ -365,7 +370,7 @@ describe('setup command', () => {
       updateClaudeCliConfig(configPath);
 
       const files = require('node:fs').readdirSync(claudeDir);
-      const backupFile = files.find((f: string) => f.startsWith('claude.json.backup.'));
+      const backupFile = files.find((f: string) => f === 'claude.json.mcpu.bak');
       expect(backupFile).toBeDefined();
     });
   });
@@ -384,9 +389,10 @@ describe('setup command', () => {
       // Copy Desktop fixture to test directory
       cpSync(DESKTOP_FIXTURE_DIR, desktopDir, { recursive: true });
 
-      // Set env vars to use test directories
+      // Set env vars to use test directories - no CLI or Gemini config
       vi.stubEnv('CLAUDE_DESKTOP_CONFIG_DIR', desktopDir);
-      vi.stubEnv('CLAUDE_CONFIG_DIR', join(testDir, 'nonexistent-cli')); // No CLI config
+      vi.stubEnv('CLAUDE_CONFIG_DIR', join(testDir, 'nonexistent-cli'));
+      vi.stubEnv('GEMINI_CONFIG_DIR', join(testDir, 'nonexistent-gemini'));
       vi.stubEnv('XDG_CONFIG_HOME', mcpuOutputDir);
     });
 
@@ -455,7 +461,7 @@ describe('setup command', () => {
 
       // Check backup was created
       const files = require('node:fs').readdirSync(desktopDir);
-      expect(files.some((f: string) => f.startsWith('claude_desktop_config.json.backup.'))).toBe(true);
+      expect(files.some((f: string) => f=== 'claude_desktop_config.json.mcpu.bak')).toBe(true);
     });
 
     it('should support dry-run mode', async () => {
@@ -485,9 +491,10 @@ describe('setup command', () => {
       // Copy CLI fixture to test directory
       cpSync(CLI_FIXTURE_DIR, cliDir, { recursive: true });
 
-      // Set env vars - only CLI, no Desktop
+      // Set env vars - only CLI, no Desktop or Gemini
       vi.stubEnv('CLAUDE_CONFIG_DIR', cliDir);
       vi.stubEnv('CLAUDE_DESKTOP_CONFIG_DIR', join(testDir, 'nonexistent-desktop'));
+      vi.stubEnv('GEMINI_CONFIG_DIR', join(testDir, 'nonexistent-gemini'));
       vi.stubEnv('XDG_CONFIG_HOME', mcpuOutputDir);
     });
 
@@ -581,6 +588,7 @@ describe('setup command', () => {
 
       vi.stubEnv('CLAUDE_DESKTOP_CONFIG_DIR', desktopDir);
       vi.stubEnv('CLAUDE_CONFIG_DIR', cliDir);
+      vi.stubEnv('GEMINI_CONFIG_DIR', join(testDir, 'nonexistent-gemini'));
       vi.stubEnv('XDG_CONFIG_HOME', mcpuOutputDir);
     });
 
@@ -639,8 +647,8 @@ describe('setup command', () => {
       // Both have backups
       const desktopFiles = require('node:fs').readdirSync(desktopDir);
       const cliFiles = require('node:fs').readdirSync(cliDir);
-      expect(desktopFiles.some((f: string) => f.includes('.backup.'))).toBe(true);
-      expect(cliFiles.some((f: string) => f.includes('.backup.'))).toBe(true);
+      expect(desktopFiles.some((f: string) => f.includes('.mcpu.bak'))).toBe(true);
+      expect(cliFiles.some((f: string) => f.includes('.mcpu.bak'))).toBe(true);
     });
   });
 
@@ -695,6 +703,301 @@ describe('setup command', () => {
         expect(config.command).toBe('mcpu-mcp');
         expect(config.args).toEqual([]);
       }
+    });
+  });
+
+  // ==========================================================================
+  // Gemini CLI Tests
+  // ==========================================================================
+
+  describe('getGeminiConfigDir', () => {
+    it('should use GEMINI_CONFIG_DIR when set', () => {
+      const customDir = join(testDir, 'custom-gemini');
+      vi.stubEnv('GEMINI_CONFIG_DIR', customDir);
+      expect(getGeminiConfigDir()).toBe(customDir);
+    });
+
+    it('should return default ~/.gemini when env not set', () => {
+      vi.stubEnv('GEMINI_CONFIG_DIR', '');
+      const result = getGeminiConfigDir();
+      expect(result).toContain('.gemini');
+    });
+  });
+
+  describe('readGeminiCliConfig', () => {
+    it('should return null for missing file', () => {
+      const result = readGeminiCliConfig(join(testDir, 'nonexistent.json'));
+      expect(result).toBeNull();
+    });
+
+    it('should parse valid config with mcpServers', () => {
+      const geminiDir = join(testDir, 'gemini');
+      mkdirSync(geminiDir, { recursive: true });
+      const configPath = join(geminiDir, 'settings.json');
+      writeFileSync(configPath, JSON.stringify({
+        mcpServers: {
+          'test-server': {
+            command: 'test-cmd',
+            args: ['--arg1'],
+          },
+        },
+        general: { previewFeatures: true },
+      }));
+
+      const result = readGeminiCliConfig(configPath);
+      expect(result).not.toBeNull();
+      expect(result!['test-server']).toEqual({
+        command: 'test-cmd',
+        args: ['--arg1'],
+      });
+    });
+
+    it('should handle SSE transport config', () => {
+      const geminiDir = join(testDir, 'gemini');
+      mkdirSync(geminiDir, { recursive: true });
+      const configPath = join(geminiDir, 'settings.json');
+      writeFileSync(configPath, JSON.stringify({
+        mcpServers: {
+          'sse-server': {
+            url: 'http://localhost:8080/sse',
+            headers: { 'Authorization': 'Bearer token' },
+          },
+        },
+      }));
+
+      const result = readGeminiCliConfig(configPath);
+      expect(result).not.toBeNull();
+      expect(result!['sse-server']).toEqual({
+        url: 'http://localhost:8080/sse',
+        headers: { 'Authorization': 'Bearer token' },
+      });
+    });
+
+    it('should return empty object for config without mcpServers', () => {
+      const geminiDir = join(testDir, 'gemini');
+      mkdirSync(geminiDir, { recursive: true });
+      const configPath = join(geminiDir, 'settings.json');
+      writeFileSync(configPath, JSON.stringify({ general: { previewFeatures: true } }));
+
+      const result = readGeminiCliConfig(configPath);
+      expect(result).toEqual({});
+    });
+
+    it('should return null for invalid JSON', () => {
+      const geminiDir = join(testDir, 'gemini');
+      mkdirSync(geminiDir, { recursive: true });
+      const configPath = join(geminiDir, 'settings.json');
+      writeFileSync(configPath, 'not valid json');
+
+      const result = readGeminiCliConfig(configPath);
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('updateGeminiCliConfig', () => {
+    it('should replace mcpServers with only MCPU', () => {
+      const geminiDir = join(testDir, 'gemini');
+      mkdirSync(geminiDir, { recursive: true });
+      const configPath = join(geminiDir, 'settings.json');
+      writeFileSync(configPath, JSON.stringify({
+        mcpServers: {
+          'old-server': { command: 'old-cmd' },
+        },
+        general: { previewFeatures: true },
+        security: { auth: { selectedType: 'oauth-personal' } },
+      }));
+
+      updateGeminiCliConfig(configPath);
+
+      const updated = JSON.parse(readFileSync(configPath, 'utf-8'));
+      expect(updated.mcpServers.mcpu).toBeDefined();
+      expect(updated.mcpServers.mcpu.command).toBeDefined();
+      expect(updated.mcpServers['old-server']).toBeUndefined();
+      expect(updated.general.previewFeatures).toBe(true);
+      expect(updated.security.auth.selectedType).toBe('oauth-personal');
+    });
+
+    it('should create backup before updating', () => {
+      const geminiDir = join(testDir, 'gemini');
+      mkdirSync(geminiDir, { recursive: true });
+      const configPath = join(geminiDir, 'settings.json');
+      writeFileSync(configPath, JSON.stringify({
+        mcpServers: { 'old-server': { command: 'old-cmd' } },
+      }));
+
+      updateGeminiCliConfig(configPath);
+
+      const files = require('node:fs').readdirSync(geminiDir);
+      const backupFile = files.find((f: string) => f === 'settings.json.mcpu.bak');
+      expect(backupFile).toBeDefined();
+    });
+
+    it('should handle missing config file gracefully', () => {
+      const configPath = join(testDir, 'nonexistent.json');
+      expect(() => updateGeminiCliConfig(configPath)).not.toThrow();
+    });
+  });
+
+  describe('integration: Gemini CLI migration', () => {
+    const geminiDir = join(testDir, 'gemini');
+    const mcpuOutputDir = join(testDir, 'mcpu-output');
+
+    beforeEach(() => {
+      mkdirSync(mcpuOutputDir, { recursive: true });
+
+      // Copy Gemini fixture to test directory
+      cpSync(GEMINI_FIXTURE_DIR, geminiDir, { recursive: true });
+
+      // Set env vars - only Gemini, no Desktop or Claude CLI
+      vi.stubEnv('GEMINI_CONFIG_DIR', geminiDir);
+      vi.stubEnv('CLAUDE_DESKTOP_CONFIG_DIR', join(testDir, 'nonexistent-desktop'));
+      vi.stubEnv('CLAUDE_CONFIG_DIR', join(testDir, 'nonexistent-cli'));
+      vi.stubEnv('XDG_CONFIG_HOME', mcpuOutputDir);
+    });
+
+    it('should discover all servers from Gemini CLI config', () => {
+      const result = discoverServers();
+      expect(result).not.toBeNull();
+
+      const { discovered, sources } = result!;
+
+      // Check sources
+      expect(sources.gemini).toBe(join(geminiDir, 'settings.json'));
+      expect(sources.desktop).toBeUndefined();
+      expect(sources.cli).toBeUndefined();
+
+      // Global servers from Gemini
+      expect(discovered.global).toHaveProperty('sqlite');
+      expect(discovered.global).toHaveProperty('brave-search');
+    });
+
+    it('should execute full migration and update Gemini config', async () => {
+      const result = await executeSetup({ dryRun: false });
+
+      expect(result.success).toBe(true);
+      expect(Object.keys(result.plan!.servers)).toHaveLength(2);
+
+      // Check MCPU config
+      const mcpuConfigPath = join(mcpuOutputDir, 'mcpu', 'config.json');
+      expect(existsSync(mcpuConfigPath)).toBe(true);
+      const mcpuConfig = JSON.parse(readFileSync(mcpuConfigPath, 'utf-8'));
+      expect(mcpuConfig).toHaveProperty('sqlite');
+      expect(mcpuConfig).toHaveProperty('brave-search');
+
+      // Check env vars preserved
+      expect(mcpuConfig['sqlite'].env).toEqual({ DATABASE_PATH: '~/data/app.db' });
+      expect(mcpuConfig['brave-search'].env).toEqual({ BRAVE_API_KEY: 'bsk_xxxx' });
+
+      // Check Gemini config was updated - mcpServers replaced with mcpu
+      const geminiConfig = JSON.parse(readFileSync(join(geminiDir, 'settings.json'), 'utf-8'));
+      expect(geminiConfig.mcpServers.mcpu).toBeDefined();
+      expect(geminiConfig.mcpServers['sqlite']).toBeUndefined();
+      expect(geminiConfig.mcpServers['brave-search']).toBeUndefined();
+
+      // Other settings preserved
+      expect(geminiConfig.general.previewFeatures).toBe(true);
+      expect(geminiConfig.security.auth.selectedType).toBe('oauth-personal');
+
+      // Check backup was created
+      const files = require('node:fs').readdirSync(geminiDir);
+      expect(files.some((f: string) => f === 'settings.json.mcpu.bak')).toBe(true);
+    });
+
+    it('should support dry-run mode', async () => {
+      const result = await executeSetup({ dryRun: true });
+
+      expect(result.success).toBe(true);
+      expect(result.plan).toBeDefined();
+
+      // MCPU config should NOT be created
+      const mcpuConfigPath = join(mcpuOutputDir, 'mcpu', 'config.json');
+      expect(existsSync(mcpuConfigPath)).toBe(false);
+
+      // Gemini config should NOT be modified
+      const geminiConfig = JSON.parse(readFileSync(join(geminiDir, 'settings.json'), 'utf-8'));
+      expect(geminiConfig.mcpServers).toHaveProperty('sqlite');
+      expect(geminiConfig.mcpServers).not.toHaveProperty('mcpu');
+    });
+  });
+
+  describe('integration: Combined Claude + Gemini migration', () => {
+    const desktopDir = join(testDir, 'desktop');
+    const geminiDir = join(testDir, 'gemini');
+    const mcpuOutputDir = join(testDir, 'mcpu-output');
+
+    beforeEach(() => {
+      mkdirSync(mcpuOutputDir, { recursive: true });
+
+      // Copy Desktop fixture to test directory
+      cpSync(DESKTOP_FIXTURE_DIR, desktopDir, { recursive: true });
+
+      // Copy Gemini fixture with a duplicate server (playwright exists in Desktop)
+      cpSync(GEMINI_FIXTURE_DIR, geminiDir, { recursive: true });
+      const geminiConfig = JSON.parse(readFileSync(join(geminiDir, 'settings.json'), 'utf-8'));
+      geminiConfig.mcpServers.playwright = {
+        command: 'npx',
+        args: ['-y', '@anthropic/mcp-playwright', '--gemini-mode'],
+      };
+      writeFileSync(join(geminiDir, 'settings.json'), JSON.stringify(geminiConfig, null, 2));
+
+      vi.stubEnv('CLAUDE_DESKTOP_CONFIG_DIR', desktopDir);
+      vi.stubEnv('CLAUDE_CONFIG_DIR', join(testDir, 'nonexistent-cli'));
+      vi.stubEnv('GEMINI_CONFIG_DIR', geminiDir);
+      vi.stubEnv('XDG_CONFIG_HOME', mcpuOutputDir);
+    });
+
+    it('should discover from both sources', () => {
+      const result = discoverServers();
+      expect(result).not.toBeNull();
+
+      const { sources } = result!;
+      expect(sources.desktop).toBe(join(desktopDir, 'claude_desktop_config.json'));
+      expect(sources.gemini).toBe(join(geminiDir, 'settings.json'));
+    });
+
+    it('should prefer Claude Desktop over Gemini for duplicates', () => {
+      const result = discoverServers();
+      const { servers } = deduplicateServers(result!.discovered);
+
+      // playwright should come from Desktop (no --gemini-mode flag)
+      expect(servers.playwright.args).not.toContain('--gemini-mode');
+      expect(servers.playwright.args).toEqual(['-y', '@anthropic/mcp-playwright']);
+    });
+
+    it('should merge unique servers from both sources', () => {
+      const result = discoverServers();
+      const { servers } = deduplicateServers(result!.discovered);
+
+      // From Desktop
+      expect(servers).toHaveProperty('playwright');
+      expect(servers).toHaveProperty('filesystem');
+      expect(servers).toHaveProperty('memory');
+
+      // From Gemini
+      expect(servers).toHaveProperty('sqlite');
+      expect(servers).toHaveProperty('brave-search');
+    });
+
+    it('should update both configs during migration', async () => {
+      const result = await executeSetup({ dryRun: false });
+
+      expect(result.success).toBe(true);
+
+      // Desktop config updated
+      const desktopConfig = JSON.parse(readFileSync(join(desktopDir, 'claude_desktop_config.json'), 'utf-8'));
+      expect(desktopConfig.mcpServers).toEqual({
+        mcpu: { command: 'mcpu', args: ['mcp'] },
+      });
+
+      // Gemini config updated
+      const geminiConfig = JSON.parse(readFileSync(join(geminiDir, 'settings.json'), 'utf-8'));
+      expect(geminiConfig.mcpServers.mcpu).toBeDefined();
+
+      // Both have backups
+      const desktopFiles = require('node:fs').readdirSync(desktopDir);
+      const geminiFiles = require('node:fs').readdirSync(geminiDir);
+      expect(desktopFiles.some((f: string) => f.includes('.mcpu.bak'))).toBe(true);
+      expect(geminiFiles.some((f: string) => f.includes('.mcpu.bak'))).toBe(true);
     });
   });
 });

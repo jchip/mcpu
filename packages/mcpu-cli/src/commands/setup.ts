@@ -4,6 +4,10 @@ import { join, dirname } from 'node:path';
 import { execSync } from 'node:child_process';
 import { ClaudeSettingsSchema, type MCPServerConfig } from '../types.ts';
 
+// Gemini CLI constants
+const GEMINI_DIR = '.gemini';
+const GEMINI_SETTINGS_FILE = 'settings.json';
+
 /**
  * Check if mcpu-mcp command is available globally
  */
@@ -85,6 +89,7 @@ export interface MigrationPlan {
   sources: {
     desktop?: string;
     cli?: string;
+    gemini?: string;
   };
   mcpuConfigPath: string;
 }
@@ -131,6 +136,24 @@ export function getClaudeCliConfigPath(): string {
     return join(process.env.CLAUDE_CONFIG_DIR, 'settings.json');
   }
   return join(homedir(), '.claude.json');
+}
+
+/**
+ * Get Gemini CLI config directory based on platform
+ */
+export function getGeminiConfigDir(): string {
+  // Honor GEMINI_CONFIG_DIR environment variable
+  if (process.env.GEMINI_CONFIG_DIR) {
+    return process.env.GEMINI_CONFIG_DIR;
+  }
+  return join(homedir(), GEMINI_DIR);
+}
+
+/**
+ * Get Gemini CLI user settings path
+ */
+export function getGeminiCliConfigPath(): string {
+  return join(getGeminiConfigDir(), GEMINI_SETTINGS_FILE);
 }
 
 /**
@@ -218,6 +241,40 @@ export function readClaudeCliConfig(configPath: string): DiscoveredServers | nul
 }
 
 /**
+ * Read Gemini CLI config and extract MCP servers
+ * Gemini CLI format: { mcpServers: {...}, ... }
+ */
+export function readGeminiCliConfig(configPath: string): Record<string, MCPServerConfig> | null {
+  if (!existsSync(configPath)) {
+    return null;
+  }
+
+  try {
+    const content = readFileSync(configPath, 'utf-8');
+    const data = JSON.parse(content);
+
+    const servers: Record<string, MCPServerConfig> = {};
+
+    // Read mcpServers
+    if (data.mcpServers && typeof data.mcpServers === 'object') {
+      for (const [name, config] of Object.entries(data.mcpServers)) {
+        if (config && typeof config === 'object') {
+          // Gemini uses 'command' for stdio, 'url' for SSE, 'httpUrl' for HTTP
+          const cfg = config as Record<string, unknown>;
+          if ('command' in cfg || 'url' in cfg || 'httpUrl' in cfg) {
+            servers[name] = config as MCPServerConfig;
+          }
+        }
+      }
+    }
+
+    return servers;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Read project-level MCP server configs from Claude Desktop's projects directory
  */
 export function readProjectConfigs(projectsDir: string): Record<string, Record<string, MCPServerConfig>> {
@@ -257,12 +314,12 @@ export function readProjectConfigs(projectsDir: string): Record<string, Record<s
 }
 
 /**
- * Discover all MCP servers from both Claude Desktop and Claude CLI
+ * Discover all MCP servers from Claude Desktop, Claude CLI, and Gemini CLI
  */
-export function discoverServers(): { discovered: DiscoveredServers; sources: { desktop?: string; cli?: string } } | null {
+export function discoverServers(): { discovered: DiscoveredServers; sources: { desktop?: string; cli?: string; gemini?: string } } | null {
   const global: Record<string, MCPServerConfig> = {};
   const projects: Record<string, Record<string, MCPServerConfig>> = {};
-  const sources: { desktop?: string; cli?: string } = {};
+  const sources: { desktop?: string; cli?: string; gemini?: string } = {};
 
   // Read Claude Desktop config
   const desktopPath = getClaudeDesktopConfigPath();
@@ -295,6 +352,21 @@ export function discoverServers(): { discovered: DiscoveredServers; sources: { d
       }
       // CLI project servers
       Object.assign(projects, cliData.projects);
+    }
+  }
+
+  // Read Gemini CLI config
+  const geminiPath = getGeminiCliConfigPath();
+  if (existsSync(geminiPath)) {
+    sources.gemini = geminiPath;
+    const geminiServers = readGeminiCliConfig(geminiPath);
+    if (geminiServers) {
+      // Gemini servers (merge, Desktop and Claude CLI win on conflict)
+      for (const [name, config] of Object.entries(geminiServers)) {
+        if (!global[name]) {
+          global[name] = config;
+        }
+      }
     }
   }
 
@@ -399,7 +471,7 @@ export function saveMcpuConfig(servers: Record<string, MCPServerConfig>, configP
   let existing: Record<string, MCPServerConfig> = {};
   if (existsSync(configPath)) {
     // Create backup
-    const backupPath = `${configPath}.backup.${Date.now()}`;
+    const backupPath = `${configPath}.mcpu.bak`;
     copyFileSync(configPath, backupPath);
 
     try {
@@ -425,7 +497,7 @@ export function updateClaudeDesktopConfig(configPath: string): void {
   }
 
   // Create backup
-  const backupPath = `${configPath}.backup.${Date.now()}`;
+  const backupPath = `${configPath}.mcpu.bak`;
   copyFileSync(configPath, backupPath);
 
   // Read existing config
@@ -454,7 +526,7 @@ export function updateClaudeCliConfig(configPath: string): void {
   }
 
   // Create backup
-  const backupPath = `${configPath}.backup.${Date.now()}`;
+  const backupPath = `${configPath}.mcpu.bak`;
   copyFileSync(configPath, backupPath);
 
   // Read existing config
@@ -483,6 +555,35 @@ export function updateClaudeCliConfig(configPath: string): void {
 }
 
 /**
+ * Update Gemini CLI config to use only MCPU
+ * Replaces mcpServers with MCPU
+ * Automatically detects if mcpu-mcp is globally installed or if running via npx
+ */
+export function updateGeminiCliConfig(configPath: string): void {
+  if (!existsSync(configPath)) {
+    return;
+  }
+
+  // Create backup
+  const backupPath = `${configPath}.mcpu.bak`;
+  copyFileSync(configPath, backupPath);
+
+  // Read existing config
+  const content = readFileSync(configPath, 'utf-8');
+  const data = JSON.parse(content);
+
+  // Get appropriate MCPU server config (detects global install vs npx)
+  const mcpuConfig = getMcpuServerConfig();
+
+  // Replace mcpServers with just MCPU
+  data.mcpServers = {
+    mcpu: mcpuConfig,
+  };
+
+  writeFileSync(configPath, JSON.stringify(data, null, 2) + '\n');
+}
+
+/**
  * Legacy alias for backwards compatibility
  */
 export function updateClaudeConfig(configPath: string): void {
@@ -502,7 +603,7 @@ export async function executeSetup(options: {
   if (!plan) {
     return {
       success: false,
-      message: 'Could not find Claude config. Is Claude Desktop or Claude CLI installed?',
+      message: 'Could not find any CLI config. Is Claude Desktop, Claude CLI, or Gemini CLI installed?',
     };
   }
 
@@ -511,7 +612,7 @@ export async function executeSetup(options: {
   if (serverCount === 0) {
     return {
       success: false,
-      message: 'No MCP servers found in Claude config.',
+      message: 'No MCP servers found in any config.',
     };
   }
 
@@ -526,12 +627,15 @@ export async function executeSetup(options: {
   // Execute migration
   saveMcpuConfig(plan.servers, plan.mcpuConfigPath);
 
-  // Update both Desktop and CLI configs if they exist
+  // Update Desktop, CLI, and Gemini configs if they exist
   if (plan.sources.desktop) {
     updateClaudeDesktopConfig(plan.sources.desktop);
   }
   if (plan.sources.cli) {
     updateClaudeCliConfig(plan.sources.cli);
+  }
+  if (plan.sources.gemini) {
+    updateGeminiCliConfig(plan.sources.gemini);
   }
 
   return {
