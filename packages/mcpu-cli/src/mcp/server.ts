@@ -59,7 +59,7 @@ export class McpuMcpServer {
   private registerTools(): void {
     const description = `MCPU CLI proxy for MCP servers.
 
-argv: servers | tools [svr..] | info <svr> [tools..] | call <svr> <tool> | connect/disconnect <svr> | connections | config <svr>
+argv: servers | tools [svr..] | info <svr> [tools..] | call <svr> <tool> | connect/disconnect <svr> | connections | config <svr> | reload
 
 params: tool args for call. --yaml/--json: full MCP response.`;
 

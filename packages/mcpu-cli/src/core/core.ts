@@ -139,6 +139,9 @@ function createParserCLI() {
           desc: 'Configure MCP server runtime settings',
           args: '<server string>',
         },
+        reload: {
+          desc: 'Reload config from disk (daemon/MCP mode)',
+        },
       },
     });
 
@@ -319,6 +322,10 @@ export async function coreExecute(options: CoreExecutionOptions): Promise<Comman
           server: args.server as string,
           mcpServerConfig,
         }, globalOptions);
+      }
+
+      case 'reload': {
+        return await executeCommand('reload', {}, globalOptions);
       }
 
       default:

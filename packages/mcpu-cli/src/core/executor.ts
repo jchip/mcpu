@@ -242,6 +242,10 @@ export interface ConnectionsCommandArgs {
   // No args needed
 }
 
+export interface ReloadCommandArgs {
+  // No args needed
+}
+
 /**
  * Format data as JSON or YAML based on context
  */
@@ -1339,6 +1343,85 @@ async function executeConnectionsCommand(
   }
 }
 
+/**
+ * Reload command - reload config from disk and disconnect removed servers
+ */
+async function executeReloadCommand(
+  args: ReloadCommandArgs,
+  options: ExecuteOptions
+): Promise<CommandResult> {
+  const { connectionPool, configs, configDiscovery } = options;
+
+  if (!connectionPool || !configs) {
+    return {
+      success: false,
+      error: 'Connection pool or configs not available. This command requires daemon or MCP mode.',
+      exitCode: 1,
+    };
+  }
+
+  try {
+    const ctx = getContext(options);
+
+    // Always create a fresh ConfigDiscovery to ensure clean state
+    const discovery = new ConfigDiscovery({
+      configFile: ctx.configFile,
+      verbose: ctx.verbose,
+    });
+
+    // Reload configs from disk (cwd=undefined to avoid project-specific paths)
+    const newConfigs = await discovery.loadConfigs();
+
+    // Get current active connections
+    const activeConnections = connectionPool.listConnections();
+
+    // Find servers to disconnect (in active connections but not in new config)
+    const serversToDisconnect: string[] = [];
+    for (const conn of activeConnections) {
+      if (!newConfigs.has(conn.server)) {
+        serversToDisconnect.push(conn.server);
+      }
+    }
+
+    // Disconnect removed servers
+    for (const server of serversToDisconnect) {
+      await connectionPool.disconnect(server);
+    }
+
+    // Update the configs map (clear and repopulate to handle removals)
+    configs.clear();
+    for (const [name, config] of newConfigs.entries()) {
+      configs.set(name, config);
+    }
+
+    // Build result message
+    const lines: string[] = [];
+    lines.push(`Config reloaded: ${newConfigs.size} server(s) configured`);
+
+    if (serversToDisconnect.length > 0) {
+      lines.push(`Disconnected ${serversToDisconnect.length} removed server(s): ${serversToDisconnect.join(', ')}`);
+    }
+
+    // Show current connection status
+    const remainingConnections = connectionPool.listConnections();
+    if (remainingConnections.length > 0) {
+      lines.push(`Active connections: ${remainingConnections.map(c => c.server).join(', ')}`);
+    }
+
+    return {
+      success: true,
+      output: lines.join('\n'),
+      exitCode: 0,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: `Failed to reload config: ${error.message || error}`,
+      exitCode: 1,
+    };
+  }
+}
+
 export async function executeCommand(
   command: string,
   args: any,
@@ -1363,6 +1446,8 @@ export async function executeCommand(
       return executeConnectionsCommand(args, options);
     case 'config':
       return executeConfigCommand(args, options);
+    case 'reload':
+      return executeReloadCommand(args, options);
     default:
       return {
         success: false,
