@@ -1,0 +1,54 @@
+{
+  "name": "@mcpu/tacks",
+  "version": "0.1.4",
+  "description": "simple todo mcp server for Claude, Gemini, Codex",
+  "keywords": [
+    "todo",
+    "task",
+    "issue",
+    "tracker",
+    "mcp",
+    "claude",
+    "gemini",
+    "codex",
+    "ai",
+    "agent"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jchip/tacks.git"
+  },
+  "homepage": "https://github.com/jchip/tacks#readme",
+  "bugs": {
+    "url": "https://github.com/jchip/tacks/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "src"
+  ],
+  "main": "src/index.ts",
+  "bin": {
+    "tacks": "src/tacks-cli.ts"
+  },
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "sqlite": "^4.2.1",
+    "sqlite3": "^5.1.7",
+    "zod": "^3.22.4",
+    "@modelcontextprotocol/sdk": "^0.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@vitest/coverage-v8": "^4.0.15",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3",
+    "vitest": "^4.0.15"
+  }
+}

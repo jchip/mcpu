@@ -1,0 +1,18 @@
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# Config with secrets
+config.yaml
+
+# Temp/build artifacts
+.temp/
+
+*.log
+.config
+*.out
+
+node_modules
+
+coverage
