@@ -17,11 +17,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jchip/tacks.git"
+    "url": "git+https://github.com/jchip/mcpu.git",
+    "directory": "packages/tacks"
   },
-  "homepage": "https://github.com/jchip/tacks#readme",
+  "homepage": "https://github.com/jchip/mcpu/tree/main/packages/tacks#readme",
   "bugs": {
-    "url": "https://github.com/jchip/tacks/issues"
+    "url": "https://github.com/jchip/mcpu/issues"
   },
   "publishConfig": {
     "access": "public"

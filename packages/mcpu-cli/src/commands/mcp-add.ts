@@ -96,9 +96,10 @@ export async function addServer(options: AddServerOptions): Promise<{ success: b
 
     const [command, ...args] = options.command;
     serverConfig = {
+      type: 'stdio',
       command,
       ...(args.length > 0 && { args }),
-      ...(options.env && Object.keys(options.env).length > 0 && { env: options.env }),
+      env: options.env ?? {},
     };
   } else if (options.transport === 'http' || options.transport === 'sse') {
     if (!options.url) {

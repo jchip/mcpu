@@ -2,7 +2,7 @@
 
 > **MCP Unified - Unlimit MCP servers with zero upfront tokens, and 80% token reduction**
 
-MCPU unifies all your MCP servers for progressive discovery and disclosure, and compresses schemas into compact form to save tokens. It can be used in two ways:
+MCPU manages all your mcp servers for multiple AI Assistants for progressive discovery and disclosure and reduce token usage by up to 84%. It can be used in two ways:
 
 1. **As an MCP Server** (`mcpu-mcp`) - For clients with native MCP support (Claude Desktop, Cursor, etc.)
 2. **Via CLI** (`mcpu-daemon` + `mcpu-remote`) - For AI agents with bash tool access (Claude Code, etc.)
@@ -214,12 +214,12 @@ Large MCP tool responses can consume valuable context. MCPU can auto-save respon
 
 **Settings (all optional):**
 
-| Field | Default | Description |
-|-------|---------|-------------|
-| `enabled` | `true` | Enable/disable auto-save |
-| `thresholdSize` | `10240` | Size in bytes to trigger save (10KB) |
-| `dir` | `.temp/mcpu-responses` | Directory for saved responses |
-| `previewSize` | `500` | Characters to show in preview |
+| Field           | Default                | Description                          |
+| --------------- | ---------------------- | ------------------------------------ |
+| `enabled`       | `true`                 | Enable/disable auto-save             |
+| `thresholdSize` | `10240`                | Size in bytes to trigger save (10KB) |
+| `dir`           | `.temp/mcpu-responses` | Directory for saved responses        |
+| `previewSize`   | `500`                  | Characters to show in preview        |
 
 **Hierarchy:** Settings merge from `global` ← `server` ← `byTools[tool]` (inner wins).
 
