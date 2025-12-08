@@ -75,6 +75,7 @@ function createParserCLI() {
       subCommands: {
         servers: {
           desc: 'List all configured MCP servers',
+          args: '[pattern string]',
           options: {
             detailed: {
               desc: 'Show detailed multi-line format',
@@ -246,6 +247,7 @@ export async function coreExecute(options: CoreExecutionOptions): Promise<Comman
         }
 
         return await executeCommand('servers', {
+          pattern: args.pattern as string | undefined,
           tools: toolsMode,
           detailed: localOpts.detailed as boolean | undefined,
         }, globalOptions);

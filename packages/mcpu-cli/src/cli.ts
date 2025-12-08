@@ -50,6 +50,7 @@ const nc = new NixClap({
     subCommands: {
       servers: {
         desc: 'List all configured MCP servers',
+        args: '[pattern string]',
         options: {
           detailed: {
             desc: 'Show detailed multi-line format',

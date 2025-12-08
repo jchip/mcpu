@@ -8,6 +8,7 @@ import type { ConnectionPool } from '../daemon/connection-pool.ts';
 import { ExecutionContext } from './context.ts';
 import { formatToolInfo, formatMcpResponse, abbreviateType, LEGEND_HEADER, TYPES_LINE, collectEnums, formatEnumLegend, extractEnumOrRange, formatParamType, autoSaveResponse } from '../formatters.ts';
 import { isStdioConfig, isUrlConfig, isWebSocketConfig } from '../types.ts';
+import { fuzzyMatch } from '../utils/fuzzy.ts';
 
 /**
  * Core command executor - shared logic for CLI and daemon
@@ -186,6 +187,7 @@ export interface ExecuteOptions {
 }
 
 export interface ServersCommandArgs {
+  pattern?: string;
   tools?: 'names' | 'desc';
   detailed?: boolean;
 }
@@ -307,8 +309,32 @@ export async function executeServersCommand(
       verbose: ctx.verbose,
     });
 
-    const configs = await discovery.loadConfigs(ctx.cwd);
+    const allConfigs = await discovery.loadConfigs(ctx.cwd);
     const pool = options.connectionPool;
+
+    // Filter configs by pattern if provided
+    let configs = allConfigs;
+    if (args.pattern) {
+      configs = new Map(
+        Array.from(allConfigs.entries()).filter(([name, config]) => {
+          // Match server name
+          if (fuzzyMatch(name, args.pattern!)) return true;
+
+          // Match command for stdio configs
+          if (isStdioConfig(config)) {
+            const fullCommand = [config.command, ...(config.args || [])].join(' ');
+            if (fuzzyMatch(fullCommand, args.pattern!)) return true;
+          }
+
+          // Match URL for http configs
+          if (isUrlConfig(config)) {
+            if (fuzzyMatch(config.url, args.pattern!)) return true;
+          }
+
+          return false;
+        })
+      );
+    }
 
     // Get server info from active connections only (don't spawn new connections)
     const serverInfos = new Map<string, { description?: string; toolCount?: number; tools?: Array<{ name: string; description?: string }> }>();
