@@ -46,11 +46,11 @@ MCPU Schema Size Statistics
 npm install -g @mcpu/cli
 ```
 
-2. Migrate your existing MCP servers from Claude Desktop and/or Claude CLI:
+2. Migrate your existing MCP servers from Claude Desktop, Claude CLI, and/or Gemini CLI:
 
 ```bash
 mcpu setup --dry-run  # Preview changes
-mcpu setup            # Run migration (also adds MCPU to Claude CLI)
+mcpu setup            # Run migration (updates all detected configs)
 ```
 
 3. Start Claude CLI and check `/context` to verify that `mcpu` is the only MCP server Claude connected.
@@ -266,14 +266,15 @@ You can use `mcpu` to run commands directly without starting the daemon or Claud
 
 ### `mcpu setup`
 
-Migrate MCP servers from Claude Desktop and/or Claude CLI to MCPU. This automates the initial setup:
+Migrate MCP servers from Claude Desktop, Claude CLI, and/or Gemini CLI to MCPU. This automates the initial setup:
 
 1. Discovers MCP servers from:
    - Claude Desktop: `~/Library/Application Support/Claude/claude_desktop_config.json`
    - Claude CLI: `~/.claude.json` (or `CLAUDE_CONFIG_DIR/settings.json`)
+   - Gemini CLI: `~/.gemini/settings.json`
 2. Reads project-level MCP configs (deduplicates, global wins over project)
 3. Saves servers to `~/.config/mcpu/config.json`
-4. Updates Claude configs to use only MCPU (creates backups)
+4. Updates all detected configs to use only MCPU (creates `.mcpu.bak` backups)
 
 ```bash
 # Preview what would be migrated
