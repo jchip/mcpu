@@ -1,3 +1,22 @@
+# 12/8/2025
+
+## Packages
+
+-   `@mcpu/cli@0.2.13` `(0.2.12 => 0.2.13)`
+-   `@mcpu/tacks@0.1.5` `(0.1.4 => 0.1.5)`
+
+## Commits
+
+-   `packages/mcpu-cli`
+
+    -   update readme and mcp add [commit](/commit/32fbf81815d0ab5fcb5e57f4b6e17af1b401a81c)
+    -   MCU-54: Add fuzzy search to servers command using Jaro-Winkler [commit](/commit/c6c1d5ae94450a881fd0fb1fa05905c533b266ac)
+
+-   `packages/tacks`
+
+    -   update readme and mcp add [commit](/commit/32fbf81815d0ab5fcb5e57f4b6e17af1b401a81c)
+    -   tacks [commit](/commit/79f9592d4c0af3594b6af3ee315d1d17d9901d0b)
+
 # 12/7/2025
 
 ## Packages
