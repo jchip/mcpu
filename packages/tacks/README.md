@@ -37,7 +37,7 @@ gemini mcp add --scope=user --transport=stdio tacks bunx @mcpu/tacks
 ```
 ### Important Rules
 
-- ✅ Use mcp `tasks` for ALL task tracking.
+- ✅ Use mcp `tacks` for ALL task tracking.
 - ✅ Always use the project's directory name for `proj` or `project_id`, and setup project with a 3 letter prefix for issues.
 - ✅ Link discovered work with `add_dependency` and type `discovered-from`
 - ✅ Check work queue for ready issues before asking "what should I work on?"
