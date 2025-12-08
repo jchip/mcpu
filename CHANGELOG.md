@@ -1,3 +1,18 @@
+# 12/7/2025
+
+## Packages
+
+-   `@mcpu/cli@0.2.12` `(0.2.11 => 0.2.12)`
+
+## Commits
+
+-   `packages/mcpu-cli`
+
+    -   Update README to mention Gemini CLI migration [commit](/commit/0e54527ee9bd2fe9777430e256506d92a5801310)
+    -   MCU-52: Add reload command for mcpu-mcp [commit](/commit/21318a3672d4d68d96b5376e21c545e74ca8b7f5)
+    -   MCU-50, MCU-51: Add Gemini CLI support and .mcpu.bak backup naming [commit](/commit/0c30bbdb18b3040e617a9c955b93d17a7f9e56b0)
+    -   MCU-50: Auto-detect npx and configure Claude CLI accordingly [commit](/commit/82eb4216e29d6ff69eb01cad5daffbaa189dcd89)
+
 # 12/5/2025
 
 ## Packages
