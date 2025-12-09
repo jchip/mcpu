@@ -2,7 +2,15 @@
 
 > **MCP Unified - Unlimit MCP servers with zero upfront tokens, and 80% token reduction**
 
-MCPU manages all your mcp servers for multiple AI Assistants for progressive discovery and disclosure and reduce token usage by up to 84%. It can be used in two ways:
+MCPU is an MCP multiplexer (1:N) that manages all your MCP servers for multiple AI Assistants, with progressive discovery and up to 84% token reduction.
+
+```
+         ┌→ playwright
+mcpu ────┼→ filesystem
+         └→ memory
+```
+
+It can be used in two ways:
 
 1. **As an MCP Server** (`mcpu-mcp`) - For clients with native MCP support (Claude Desktop, Cursor, etc.)
 2. **Via CLI** (`mcpu-daemon` + `mcpu-remote`) - For AI agents with bash tool access (Claude Code, etc.)
