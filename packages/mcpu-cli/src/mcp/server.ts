@@ -7,6 +7,9 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import express from "express";
+import type { Server as HttpServer } from "node:http";
 import { z } from "zod";
 import { coreExecute } from "../core/core.ts";
 import { ConnectionPool } from "../daemon/connection-pool.ts";
@@ -14,11 +17,16 @@ import { ConfigDiscovery } from "../config.ts";
 import { VERSION } from "../version.ts";
 import type { MCPServerConfig } from "../types.ts";
 
+export type TransportType = 'stdio' | 'http';
+
 export interface McpuMcpServerOptions {
   config?: string;
   verbose?: boolean;
   autoDisconnect?: boolean;
   idleTimeoutMs?: number;
+  transport?: TransportType;
+  port?: number;
+  endpoint?: string;
 }
 
 export class McpuMcpServer {
@@ -27,6 +35,8 @@ export class McpuMcpServer {
   private configs: Map<string, MCPServerConfig>;
   private configDiscovery: ConfigDiscovery | undefined;
   private options: McpuMcpServerOptions;
+  private httpServer?: HttpServer;
+  private httpTransport?: StreamableHTTPServerTransport;
 
   constructor(options: McpuMcpServerOptions = {}) {
     this.options = options;
@@ -145,11 +155,74 @@ params: tool args for call. --yaml/--json: full MCP response.`;
 
     this.log("Loaded configs", { servers: Array.from(this.configs.keys()) });
 
-    // Connect via stdio transport
-    const transport = new StdioServerTransport();
-    await this.server.connect(transport);
+    const transportType = this.options.transport || 'stdio';
 
-    this.log("MCP server started");
+    if (transportType === 'http') {
+      await this.startHttpServer();
+    } else {
+      // Connect via stdio transport
+      const transport = new StdioServerTransport();
+      await this.server.connect(transport);
+      this.log("MCP server started (stdio)");
+    }
+  }
+
+  /**
+   * Start HTTP server with StreamableHTTPServerTransport
+   */
+  private async startHttpServer(): Promise<void> {
+    const port = this.options.port || 3000;
+    const endpoint = this.options.endpoint || '/mcp';
+
+    // Create transport (stateless mode for simplicity)
+    this.httpTransport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+    });
+
+    await this.server.connect(this.httpTransport);
+
+    // Set up Express
+    const app = express();
+    app.use(express.json());
+
+    app.post(endpoint, async (req, res) => {
+      try {
+        await this.httpTransport!.handleRequest(req, res, req.body);
+      } catch (error: any) {
+        this.log("HTTP request error", { error: error.message });
+        if (!res.headersSent) {
+          res.status(500).json({
+            jsonrpc: '2.0',
+            error: { code: -32603, message: 'Internal server error' },
+            id: null,
+          });
+        }
+      }
+    });
+
+    // Method not allowed for GET/DELETE
+    app.get(endpoint, (_req, res) => {
+      res.status(405).json({
+        jsonrpc: '2.0',
+        error: { code: -32000, message: 'Method not allowed' },
+        id: null,
+      });
+    });
+
+    app.delete(endpoint, (_req, res) => {
+      res.status(405).json({
+        jsonrpc: '2.0',
+        error: { code: -32000, message: 'Method not allowed' },
+        id: null,
+      });
+    });
+
+    // Start server
+    this.httpServer = app.listen(port, () => {
+      this.log(`MCP server started (http://localhost:${port}${endpoint})`);
+      // Also log to stderr so user can see the URL
+      console.error(`[mcpu-mcp] Listening on http://localhost:${port}${endpoint}`);
+    });
   }
 
   /**
@@ -157,6 +230,14 @@ params: tool args for call. --yaml/--json: full MCP response.`;
    */
   async shutdown(): Promise<void> {
     this.log("Shutting down");
+
+    // Close HTTP server if running
+    if (this.httpServer) {
+      await new Promise<void>((resolve) => {
+        this.httpServer!.close(() => resolve());
+      });
+      this.log("HTTP server closed");
+    }
 
     try {
       await this.pool.shutdown();

@@ -96,7 +96,6 @@ export async function addServer(options: AddServerOptions): Promise<{ success: b
 
     const [command, ...args] = options.command;
     serverConfig = {
-      type: 'stdio',
       command,
       ...(args.length > 0 && { args }),
       env: options.env ?? {},

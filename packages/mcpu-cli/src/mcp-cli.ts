@@ -1,12 +1,12 @@
 /**
  * MCPU MCP Server CLI
  *
- * Start MCPU as an MCP server using stdio transport.
+ * Start MCPU as an MCP server using stdio or HTTP transport.
  * This allows AI agents to discover and use MCP servers through MCPU.
  */
 
 import { NixClap } from 'nix-clap';
-import { McpuMcpServer } from './mcp/server.ts';
+import { McpuMcpServer, type TransportType } from './mcp/server.ts';
 import { VERSION } from './version.ts';
 
 interface McpCommandOptions {
@@ -14,6 +14,9 @@ interface McpCommandOptions {
   verbose?: boolean;
   autoDisconnect?: boolean;
   idleTimeoutMs?: number;
+  transport?: TransportType;
+  port?: number;
+  endpoint?: string;
 }
 
 async function mcpCommand(options: McpCommandOptions): Promise<void> {
@@ -64,7 +67,7 @@ new NixClap({ name: 'mcpu-mcp' })
   .version(VERSION)
   .usage('$0 [options]')
   .init2({
-    desc: 'Start MCPU as an MCP server (stdio transport)',
+    desc: 'Start MCPU as an MCP server',
     options: {
       config: {
         desc: 'Use specific config file',
@@ -72,6 +75,18 @@ new NixClap({ name: 'mcpu-mcp' })
       },
       verbose: {
         desc: 'Show detailed logging to stderr',
+      },
+      transport: {
+        desc: 'Transport type: stdio (default) or http',
+        args: '<type string>',
+      },
+      port: {
+        desc: 'Port for HTTP transport (default: 3000)',
+        args: '<port number>',
+      },
+      endpoint: {
+        desc: 'Endpoint path for HTTP transport (default: /mcp)',
+        args: '<path string>',
       },
       'auto-disconnect': {
         desc: 'Enable automatic disconnection of idle MCP connections',
@@ -85,12 +100,17 @@ new NixClap({ name: 'mcpu-mcp' })
       const opts = cmd.jsonMeta.opts;
       const idleTimeoutMinutes = opts['idle-timeout'] ? parseInt(opts['idle-timeout'] as string, 10) : undefined;
       const idleTimeoutMs = idleTimeoutMinutes ? idleTimeoutMinutes * 60 * 1000 : undefined;
+      const transport = opts.transport as TransportType | undefined;
+      const port = opts.port ? parseInt(opts.port as string, 10) : undefined;
 
       await mcpCommand({
         config: opts.config as string | undefined,
         verbose: opts.verbose as boolean | undefined,
         autoDisconnect: opts['auto-disconnect'] as boolean | undefined,
         idleTimeoutMs,
+        transport,
+        port,
+        endpoint: opts.endpoint as string | undefined,
       });
     },
   })
