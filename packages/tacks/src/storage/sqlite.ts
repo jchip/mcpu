@@ -10,6 +10,7 @@ import {
   Status, IssueType, DependencyType
 } from '../types/index.js';
 import { CreateIssueInput, IssueService } from '../service/issue.js';
+import { parse, termToLikePattern, normalizeField } from './query/parser.js';
 
 // Helper for converting SQLite result to boolean (though `sqlite` package often maps to JS types)
 const sqliteBoolean = (value: any): boolean => value === 1;
@@ -457,28 +458,150 @@ export class SqliteStorage implements Storage, Transaction {
     const params: any[] = [projectID];
     const conditions: string[] = [];
 
-    if (query) {
-      conditions.push('(title LIKE ? OR description LIKE ? OR id LIKE ?)');
-      const searchPattern = `%${query}%`;
-      params.push(searchPattern, searchPattern, searchPattern);
+    // Parse the query using GitHub-style syntax
+    const parsed = parse(query || '');
+
+    // Process general (non-field) terms - AND logic, each must match title/description/id
+    for (const term of parsed.generalTerms()) {
+      const pattern = termToLikePattern(term);
+      if (term.negated) {
+        // Exclude matches
+        conditions.push('NOT (title LIKE ? ESCAPE \'\\\' OR description LIKE ? ESCAPE \'\\\' OR id LIKE ? ESCAPE \'\\\')');
+      } else {
+        // Include matches
+        conditions.push('(title LIKE ? ESCAPE \'\\\' OR description LIKE ? ESCAPE \'\\\' OR id LIKE ? ESCAPE \'\\\')');
+      }
+      params.push(pattern, pattern, pattern);
     }
 
-    if (filter.status) {
+    // Process field-specific terms from query
+    for (const term of parsed.terms) {
+      if (term.field === '') continue; // Skip general terms, already handled
+
+      const field = normalizeField(term.field);
+      const pattern = termToLikePattern(term);
+
+      switch (field) {
+        case 'title':
+          if (term.negated) {
+            conditions.push('title NOT LIKE ? ESCAPE \'\\\'');
+          } else {
+            conditions.push('title LIKE ? ESCAPE \'\\\'');
+          }
+          params.push(pattern);
+          break;
+
+        case 'description':
+          if (term.negated) {
+            conditions.push('description NOT LIKE ? ESCAPE \'\\\'');
+          } else {
+            conditions.push('description LIKE ? ESCAPE \'\\\'');
+          }
+          params.push(pattern);
+          break;
+
+        case 'id':
+          if (term.negated) {
+            conditions.push('id NOT LIKE ? ESCAPE \'\\\'');
+          } else {
+            conditions.push('id LIKE ? ESCAPE \'\\\'');
+          }
+          params.push(pattern);
+          break;
+
+        case 'notes':
+          if (term.negated) {
+            conditions.push('notes NOT LIKE ? ESCAPE \'\\\'');
+          } else {
+            conditions.push('notes LIKE ? ESCAPE \'\\\'');
+          }
+          params.push(pattern);
+          break;
+
+        case 'status': {
+          const { include, exclude } = parsed.extractStatus();
+          // Only process if this is the first status term (avoid duplicates)
+          if (parsed.fieldTerms('status')[0] === term) {
+            if (include) {
+              conditions.push('status = ?');
+              params.push(include);
+            }
+            for (const excl of exclude) {
+              conditions.push('status != ?');
+              params.push(excl);
+            }
+          }
+          break;
+        }
+
+        case 'type': {
+          const { include, exclude } = parsed.extractType();
+          if (parsed.fieldTerms('type')[0] === term) {
+            if (include) {
+              conditions.push('issue_type = ?');
+              params.push(include);
+            }
+            for (const excl of exclude) {
+              conditions.push('issue_type != ?');
+              params.push(excl);
+            }
+          }
+          break;
+        }
+
+        case 'priority': {
+          const { include, exclude } = parsed.extractPriority();
+          if (parsed.fieldTerms('priority')[0] === term) {
+            if (include !== null) {
+              conditions.push('priority = ?');
+              params.push(include);
+            }
+            for (const excl of exclude) {
+              conditions.push('priority != ?');
+              params.push(excl);
+            }
+          }
+          break;
+        }
+
+        case 'assignee':
+          if (term.negated) {
+            conditions.push('(assignee_id IS NULL OR assignee_id != ?)');
+            params.push(term.value);
+          } else {
+            conditions.push('assignee_id = ?');
+            params.push(term.value);
+          }
+          break;
+
+        case 'label':
+          if (term.negated) {
+            conditions.push('NOT EXISTS (SELECT 1 FROM labels WHERE issue_id = issues.id AND label = ?)');
+          } else {
+            conditions.push('EXISTS (SELECT 1 FROM labels WHERE issue_id = issues.id AND label = ?)');
+          }
+          params.push(term.value);
+          break;
+      }
+    }
+
+    // Process IssueFilter fields (these are additive to query-based filters)
+    if (filter.status && !parsed.firstFieldValue('status')) {
       conditions.push('status = ?');
       params.push(filter.status);
     }
 
-    if (filter.priority !== undefined) {
+    if (filter.priority !== undefined && parsed.extractPriority().include === null) {
       conditions.push('priority = ?');
       params.push(filter.priority);
     }
 
-    if (filter.issue_type) {
+    if (filter.issue_type && !parsed.firstFieldValue('type')) {
       conditions.push('issue_type = ?');
       params.push(filter.issue_type);
     }
 
-    if (filter.assignee) {
+    if (filter.assignee && !parsed.firstFieldValue('assignee')) {
       conditions.push('assignee_id = ?');
       params.push(filter.assignee);
     }
@@ -546,14 +669,14 @@ export class SqliteStorage implements Storage, Transaction {
       params.push(filter.priority_max);
     }
 
-    // Label filtering (AND semantics)
+    // Label filtering from IssueFilter (AND semantics)
     if (filter.labels && filter.labels.length > 0) {
       for (const label of filter.labels) {
         conditions.push(`EXISTS (SELECT 1 FROM labels WHERE issue_id = issues.id AND label = ?)`);
         params.push(label);
       }
     }
-    // Label filtering (OR semantics)
+    // Label filtering from IssueFilter (OR semantics)
     if (filter.labels_any && filter.labels_any.length > 0) {
         conditions.push(`EXISTS (SELECT 1 FROM labels WHERE issue_id = issues.id AND label IN (${filter.labels_any.map(() => '?').join(', ')}))`);
         params.push(...filter.labels_any);
