@@ -183,6 +183,69 @@ describe('ConfigDiscovery', () => {
         GITHUB_API_URL: 'https://api.github.com',
       });
     });
+
+    it('should support HTTP config with url only (no type required)', async () => {
+      const configPath = join(testDir, 'test-config.json');
+      const config = {
+        'pw-http': {
+          url: 'http://localhost:9010/mcp',
+        },
+      };
+
+      await writeFile(configPath, JSON.stringify(config));
+
+      const discovery = new ConfigDiscovery({ configFile: configPath });
+      const configs = await discovery.loadConfigs();
+
+      expect(configs.size).toBe(1);
+      expect(configs.get('pw-http')).toEqual({
+        url: 'http://localhost:9010/mcp',
+      });
+    });
+
+    it('should support HTTP config with explicit type', async () => {
+      const configPath = join(testDir, 'test-config.json');
+      const config = {
+        'pw-http': {
+          type: 'http',
+          url: 'http://localhost:9010/mcp',
+          headers: { 'Authorization': 'Bearer test' },
+        },
+      };
+
+      await writeFile(configPath, JSON.stringify(config));
+
+      const discovery = new ConfigDiscovery({ configFile: configPath });
+      const configs = await discovery.loadConfigs();
+
+      expect(configs.size).toBe(1);
+      expect(configs.get('pw-http')).toEqual({
+        type: 'http',
+        url: 'http://localhost:9010/mcp',
+        headers: { 'Authorization': 'Bearer test' },
+      });
+    });
+
+    it('should support WebSocket config with type', async () => {
+      const configPath = join(testDir, 'test-config.json');
+      const config = {
+        'ws-server': {
+          type: 'websocket',
+          url: 'ws://localhost:9010/mcp',
+        },
+      };
+
+      await writeFile(configPath, JSON.stringify(config));
+
+      const discovery = new ConfigDiscovery({ configFile: configPath });
+      const configs = await discovery.loadConfigs();
+
+      expect(configs.size).toBe(1);
+      expect(configs.get('ws-server')).toEqual({
+        type: 'websocket',
+        url: 'ws://localhost:9010/mcp',
+      });
+    });
   });
 
   describe('getServer', () => {

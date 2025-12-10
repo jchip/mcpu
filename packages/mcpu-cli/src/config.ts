@@ -2,7 +2,32 @@ import { readFile } from 'fs/promises';
 import { homedir } from 'os';
 import { join, resolve } from 'path';
 import { existsSync } from 'fs';
+import { ZodError } from 'zod';
 import { ProjectMCPConfigSchema, type MCPServerConfig, isStdioConfig, type StdioConfig, type ServerAutoSaveConfig, type ToolAutoSaveConfig } from './types.ts';
+
+/**
+ * Format Zod validation errors into human-readable messages
+ */
+function formatZodError(error: ZodError): string {
+  const messages: string[] = [];
+
+  for (const issue of error.issues) {
+    const path = issue.path.join('.');
+
+    if (issue.code === 'invalid_union') {
+      // For union errors, try to give a helpful hint
+      messages.push(`  Server "${issue.path[0]}": Invalid config - must have either 'command' (stdio) or 'url' (http/websocket)`);
+    } else if (issue.code === 'invalid_type') {
+      messages.push(`  ${path}: expected ${issue.expected}, got ${issue.received}`);
+    } else if (issue.code === 'invalid_literal') {
+      messages.push(`  ${path}: expected "${issue.expected}"`);
+    } else {
+      messages.push(`  ${path}: ${issue.message}`);
+    }
+  }
+
+  return messages.join('\n');
+}
 
 /**
  * Resolved auto-save config (all fields required after merge)
@@ -88,8 +113,14 @@ export class ConfigDiscovery {
           console.error(`Loaded config from: ${source}`);
         }
       } catch (error) {
-        if (this.options.verbose) {
-          console.error(`Failed to load ${source}:`, error);
+        // Always log config errors - silent failures are confusing
+        console.error(`Failed to load config from ${source}:`);
+        if (error instanceof ZodError) {
+          console.error(formatZodError(error));
+        } else if (error instanceof Error) {
+          console.error(`  ${error.message}`);
+        } else {
+          console.error(`  ${error}`);
         }
       }
     }

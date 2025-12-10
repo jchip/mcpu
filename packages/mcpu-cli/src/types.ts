@@ -20,8 +20,9 @@ const StdioConfigSchema = CommonConfigSchema.extend({
 });
 
 // MCP Server Configuration Schema (HTTP)
+// type is optional - defaults to 'http' if url is present without type
 const HttpConfigSchema = CommonConfigSchema.extend({
-  type: z.literal('http'),
+  type: z.literal('http').optional(),
   url: z.string(),
   headers: z.record(z.string()).optional(),
 });
@@ -33,10 +34,11 @@ const WebSocketConfigSchema = CommonConfigSchema.extend({
 });
 
 // Union of transport types
+// Order matters: WebSocket first (requires type: 'websocket'), then HTTP (type optional), then Stdio
 export const MCPServerConfigSchema = z.union([
-  StdioConfigSchema,
-  HttpConfigSchema,
   WebSocketConfigSchema,
+  HttpConfigSchema,
+  StdioConfigSchema,
 ]);
 
 export type MCPServerConfig = z.infer<typeof MCPServerConfigSchema>;
@@ -56,7 +58,8 @@ export function isStdioConfig(config: MCPServerConfig): config is StdioConfig {
 }
 
 export function isHttpConfig(config: MCPServerConfig): config is HttpConfig {
-  return 'type' in config && config.type === 'http';
+  // HTTP config has url and either no type or type === 'http'
+  return 'url' in config && (!('type' in config) || config.type === 'http');
 }
 
 export function isWebSocketConfig(config: MCPServerConfig): config is WebSocketConfig {
