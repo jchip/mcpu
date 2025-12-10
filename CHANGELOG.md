@@ -1,3 +1,24 @@
+# 12/9/2025
+
+## Packages
+
+-   `@mcpu/cli@0.2.14` `(0.2.13 => 0.2.14)`
+-   `@mcpu/tacks@0.1.6` `(0.1.5 => 0.1.6)`
+
+## Commits
+
+-   `packages/mcpu-cli`
+
+    -   support HTTP config without explicit type and log config errors [commit](/commit/c655f4cab9854a02e7b88b09e5de54cf4bf459d2)
+    -   add HTTP transport support to mcpu-mcp [commit](/commit/280808dcec974f2467e6d82b78cf2557e6810757)
+    -   add HTTP transport integration test [commit](/commit/630414f31ba3c1a918fec52e4b9d8f7756190eab)
+    -   add muxer explanation and diagram to readme [commit](/commit/e8bf30487dcea9a016677fab6441edc6df7014aa)
+
+-   `packages/tacks`
+
+    -   TSK-1: Implement GitHub-style query syntax for issue search [commit](/commit/d77acf08c17b8a1a90beb3a5d6fcc151c9c76b1b)
+    -   update tacks readme [commit](/commit/fa853f6a0123ea4decaf20d46ed037d60224a814)
+
 # 12/8/2025
 
 ## Packages
