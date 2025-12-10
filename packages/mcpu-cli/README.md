@@ -5,9 +5,9 @@
 MCPU is an MCP multiplexer (1:N) that manages all your MCP servers for multiple AI Assistants, with progressive discovery and up to 84% token reduction.
 
 ```
-         ┌→ playwright
-mcpu ────┼→ filesystem
-         └→ memory
+Claude CLI/Desktop ─┐          ┌-> playwright
+       Gemini CLI ──┼-> mcpu ──┼-> filesystem
+      OpenAI Codex ─┘          └-> memory
 ```
 
 It can be used in two ways:
@@ -17,12 +17,13 @@ It can be used in two ways:
 
 ## Why MCPU?
 
-MCP tool schemas are verbose. A single server like Playwright requires ~11KB of schema data. With multiple servers, this adds up quickly and consumes valuable context window space.
+MCP tool schemas are verbose. A single server like Playwright requires ~11KB of schema data. With multiple servers, this adds up quickly and consumes valuable context window space. MCP servers can also return large inline responses that bloat tokens or even fail to send to the LLM.
 
 MCPU addresses this by:
 
 - **Progressive discovery and disclosure** - Servers and their tool schemas are revealed and connected only when needed
 - **Compressing tool schemas** - Reduces schema size by up to 84% using a compact format designed for AI consumption
+- **Intercept** - Intercept large inline content and save them to disk
 - **CLI-first design** - Built for AI agents with bash tool access (Claude Code, etc.), not just MCP-native clients
 
 ## Schema Compression Stats
