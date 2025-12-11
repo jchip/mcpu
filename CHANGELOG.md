@@ -15,6 +15,27 @@
 
     -   Expose full nested JSON schema for tacks MCP tool [commit](/commit/908db51e460ba4a0c1d4c5c1e0a39be34a49f8aa)
 
+-   `MISC`
+
+    -   Update changelog [commit](/commit/749c0b6244a7b565cbe9abcc415ca0dcf78187ad)
+
+# 12/11/2025
+
+## Packages
+
+-   `@mcpu/cli@0.2.15` `(0.2.14 => 0.2.15)`
+-   `@mcpu/tacks@0.1.7` `(0.1.6 => 0.1.7)`
+
+## Commits
+
+-   `packages/mcpu-cli`
+
+    -   update muxer diagram and readme [commit](/commit/02e6b9bc4f2958f8ed924dc10b12fc594e3cb2f2)
+
+-   `packages/tacks`
+
+    -   Expose full nested JSON schema for tacks MCP tool [commit](/commit/908db51e460ba4a0c1d4c5c1e0a39be34a49f8aa)
+
 # 12/9/2025
 
 ## Packages
