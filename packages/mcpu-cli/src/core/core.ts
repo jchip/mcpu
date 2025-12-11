@@ -9,6 +9,7 @@
 
 import { NixClap } from 'nix-clap';
 import { executeCommand } from './executor.ts';
+import { executeBatch, type BatchParams } from './batch.ts';
 import { ConfigDiscovery } from '../config.ts';
 import type { CommandResult } from '../types/result.ts';
 import type { ConnectionPool } from '../daemon/connection-pool.ts';
@@ -142,6 +143,9 @@ function createParserCLI() {
         },
         reload: {
           desc: 'Reload config from disk (daemon/MCP mode)',
+        },
+        batch: {
+          desc: 'Execute multiple tool calls in a single request',
         },
       },
     });
@@ -328,6 +332,26 @@ export async function coreExecute(options: CoreExecutionOptions): Promise<Comman
 
       case 'reload': {
         return await executeCommand('reload', {}, globalOptions);
+      }
+
+      case 'batch': {
+        // Batch command requires params to be passed via MCP tool call
+        // params should contain: { calls: {...}, response_mode?: string, timeout?: number }
+        if (!params || !params.calls) {
+          return {
+            success: false,
+            error: 'Batch command requires params.calls to be provided via MCP tool call',
+            exitCode: 1,
+          };
+        }
+
+        return await executeBatch(params as BatchParams, {
+          argv: [],
+          cwd,
+          connectionPool,
+          configs,
+          configDiscovery,
+        });
       }
 
       default:
