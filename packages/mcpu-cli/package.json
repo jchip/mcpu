@@ -1,6 +1,6 @@
 {
   "name": "@mcpu/cli",
-  "version": "0.2.14",
+  "version": "0.2.15",
   "description": "Unified CLI to manage MCP servers for efficient AI code assistant usage",
   "author": "Joel Chen <joel123@gmail.com>",
   "repository": {
