@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { zodToJsonSchema } from 'zod-to-json-schema';
 import { Status, IssueType, DependencyType, Project, Issue, Template, User, Role, Comment, Event, Statistics, BlockedIssue } from '../types/index.js';
 
 // --- Input Data Schemas (from fyntacks/internal/mcp/tools.go) ---
@@ -95,6 +96,16 @@ export const InputSchema = z.object({
 }).passthrough(); // passthrough allows unknown keys which can be useful for flexible inputs
 
 export type Input = z.infer<typeof InputSchema>;
+
+/**
+ * Generate JSON Schema for the InputSchema
+ * This exposes full nested schema details to MCP clients
+ */
+export function getInputJsonSchema() {
+  return zodToJsonSchema(InputSchema, {
+    $refStrategy: 'none', // Inline all definitions instead of using $ref
+  });
+}
 
 // --- Output Data (from fyntacks/internal/mcp/tools.go) ---
 

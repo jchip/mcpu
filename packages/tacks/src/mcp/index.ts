@@ -4,7 +4,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { Storage, ErrNotFound } from '../storage/index.js';
 import { IssueService, CreateIssueInput } from '../service/issue.js';
 import { Project, Issue, Dependency, Label, Comment, Template, User, Role, Event, Status, IssueType, DependencyType } from '../types/index.js';
-import { Input, Output, InputSchema } from './types.js';
+import { Input, Output, InputSchema, getInputJsonSchema } from './types.js';
 
 export class TacksMcpServer {
   private mcp: MCP;
@@ -25,32 +25,15 @@ export class TacksMcpServer {
     console.log('--- Registering Tools ---');
 
     this.mcp.setRequestHandler(ListToolsRequestSchema, async () => {
+      // Generate full JSON schema from Zod definitions
+      const inputSchema = getInputJsonSchema();
+
       return {
         tools: [
           {
             name: "tm",
             description: "Task Management Tool",
-            inputSchema: {
-              type: "object",
-              properties: {
-                cmd: { type: "string", enum: ['create', 'get', 'list', 'update', 'delete', 'close', 'add', 'remove', 'assign', 'unassign', 'stats', 'queue', 'ready'] },
-                type: { type: "string", enum: ['project', 'issue', 'dependency', 'dependent', 'label', 'comment', 'template', 'user', 'role', 'event'] },
-                proj: { type: "string", description: 'Project ID (use "" if N/A)' },
-                id: { type: "string" },
-                project: { type: "object" },
-                issue: { type: "object" },
-                template: { type: "object" },
-                user: { type: "object" },
-                role: { type: "object" },
-                dependency: { type: "object" },
-                comment: { type: "object" },
-                label: { type: "object" },
-                filter: { type: "object" },
-                limit: { type: "number" },
-                queue_type: { type: "string" }
-              },
-              required: ["cmd", "type", "proj"]
-            }
+            inputSchema: inputSchema as Record<string, unknown>,
           }
         ]
       };
