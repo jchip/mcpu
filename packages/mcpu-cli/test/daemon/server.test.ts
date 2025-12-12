@@ -852,6 +852,43 @@ describe('Daemon Server', () => {
 
       expect(response.body.success).toBe(true);
     });
+
+    it('should parse params passed as JSON string (MCU-69)', async () => {
+      // When params is passed as a JSON string instead of object
+      const params = JSON.stringify({
+        field1: 'value1',
+        field2: 42,
+      });
+
+      const response = await request(app)
+        .post('/cli')
+        .send({
+          argv: ['call', 'testServer', 'test_tool', '--stdin'],
+          params, // String instead of object
+          cwd: '/test/path',
+        })
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        success: true,
+        exitCode: 0,
+      });
+    });
+
+    it('should handle invalid JSON string in params gracefully', async () => {
+      const response = await request(app)
+        .post('/cli')
+        .send({
+          argv: ['call', 'testServer', 'test_tool', '--stdin'],
+          params: 'not valid json {',
+          cwd: '/test/path',
+        })
+        .expect(200);
+
+      // Should still succeed - invalid JSON is kept as-is
+      // (the tool call may fail later, but params parsing should not crash)
+      expect(response.body.exitCode).toBeDefined();
+    });
   });
 
   describe('Legacy Endpoints', () => {

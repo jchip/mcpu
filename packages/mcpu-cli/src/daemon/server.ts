@@ -622,10 +622,20 @@ export class DaemonServer {
           return;
         }
 
+        // Parse params if passed as JSON string (MCU-69)
+        let parsedParams = params;
+        if (typeof params === 'string') {
+          try {
+            parsedParams = JSON.parse(params);
+          } catch {
+            // Keep as-is if not valid JSON
+          }
+        }
+
         // Execute using core module with connection pool and config map
         const result = await coreExecute({
           argv,
-          params,
+          params: parsedParams,
           mcpServerConfig,
           cwd,
           connectionPool: this.pool,
