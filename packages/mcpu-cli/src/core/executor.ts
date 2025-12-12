@@ -214,13 +214,13 @@ export interface CallCommandArgs {
   tool: string;
   args: string[];
   stdinData?: string;
-  mcpServerConfig?: { extraArgs?: string[] };
+  setConfig?: { extraArgs?: string[] };
   restart?: boolean;
 }
 
 export interface ConfigCommandArgs {
   server: string;
-  mcpServerConfig?: { extraArgs?: string[] };
+  setConfig?: { extraArgs?: string[] };
 }
 
 export interface SchemaCommandArgs {
@@ -919,9 +919,9 @@ export async function executeCallCommand(
       };
     }
 
-    // Handle mcpServerConfig.extraArgs if provided
-    if (args.mcpServerConfig?.extraArgs !== undefined && isStdioConfig(config)) {
-      const newExtraArgs = args.mcpServerConfig.extraArgs;
+    // Handle setConfig.extraArgs if provided
+    if (args.setConfig?.extraArgs !== undefined && isStdioConfig(config)) {
+      const newExtraArgs = args.setConfig.extraArgs;
       const oldExtraArgs = config.extraArgs;
       const argsChanged = !extraArgsEqual(oldExtraArgs, newExtraArgs);
 
@@ -1107,7 +1107,7 @@ async function executeConfigCommand(
   args: ConfigCommandArgs,
   options: ExecuteOptions
 ): Promise<CommandResult> {
-  const { server, mcpServerConfig } = args;
+  const { server, setConfig } = args;
   const { configs, connectionPool } = options;
 
   if (!configs) {
@@ -1136,7 +1136,7 @@ async function executeConfigCommand(
     };
   }
 
-  const newExtraArgs = mcpServerConfig?.extraArgs;
+  const newExtraArgs = setConfig?.extraArgs;
   const oldExtraArgs = config.extraArgs;
   const changed = !extraArgsEqual(oldExtraArgs, newExtraArgs);
 
@@ -1470,7 +1470,7 @@ export async function executeCommand(
       return executeReconnectCommand(args, options);
     case 'connections':
       return executeConnectionsCommand(args, options);
-    case 'config':
+    case 'setConfig':
       return executeConfigCommand(args, options);
     case 'reload':
       return executeReloadCommand(args, options);

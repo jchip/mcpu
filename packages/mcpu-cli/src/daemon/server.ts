@@ -611,7 +611,7 @@ export class DaemonServer {
     // Execute CLI command (backward compatibility)
     this.app.post('/cli', async (req: Request, res: Response) => {
       try {
-        const { argv, params, mcpServerConfig, cwd } = req.body;
+        const { argv, params, batch, setConfig, cwd } = req.body;
 
         if (!Array.isArray(argv)) {
           res.status(400).json({
@@ -636,7 +636,8 @@ export class DaemonServer {
         const result = await coreExecute({
           argv,
           params: parsedParams,
-          mcpServerConfig,
+          batch,
+          setConfig,
           cwd,
           connectionPool: this.pool,
           configs: this.configs,  // Pass mutable config map

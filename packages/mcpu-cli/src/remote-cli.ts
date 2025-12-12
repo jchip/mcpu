@@ -120,7 +120,7 @@ async function findDaemonPort(port?: number, pid?: number, ppid?: number): Promi
 /**
  * Send command to daemon via HTTP
  */
-async function sendCommand(port: number, argv: string[], params?: any, mcpServerConfig?: any): Promise<void> {
+async function sendCommand(port: number, argv: string[], params?: any, setConfig?: any): Promise<void> {
   const url = `http://localhost:${port}/cli`;
   const body: any = { argv, cwd: process.cwd() };
 
@@ -128,8 +128,8 @@ async function sendCommand(port: number, argv: string[], params?: any, mcpServer
     body.params = params;
   }
 
-  if (mcpServerConfig !== undefined) {
-    body.mcpServerConfig = mcpServerConfig;
+  if (setConfig !== undefined) {
+    body.setConfig = setConfig;
   }
 
   const response = await fetch(url, {
@@ -349,7 +349,7 @@ const nc = new NixClap({
 
       // Handle --stdin or --param-file
       let params: any = undefined;
-      let mcpServerConfig: any = undefined;
+      let setConfig: any = undefined;
       let argv = parsed._ || [];
 
       // --stdin and --cmd-file are mutually exclusive, --stdin takes precedence
@@ -388,13 +388,13 @@ const nc = new NixClap({
           params = yamlData.params;
         }
 
-        // Extract mcpServerConfig from YAML
-        if (yamlData.mcpServerConfig !== undefined) {
-          mcpServerConfig = yamlData.mcpServerConfig;
+        // Extract setConfig from YAML
+        if (yamlData.setConfig !== undefined) {
+          setConfig = yamlData.setConfig;
         }
       }
 
-      await sendCommand(port, argv, params, mcpServerConfig);
+      await sendCommand(port, argv, params, setConfig);
     } catch (error: any) {
       console.error('Error:', error.message || error);
       process.exit(1);

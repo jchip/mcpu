@@ -45,6 +45,34 @@ MCPU Schema Size Statistics
 | TOTAL      |    92 |    72.2 KB |   35.0 KB |   -51% |      11.8 KB |      -84% |
 ```
 
+## MCP Tool Schema
+
+When used as an MCP server, MCPU exposes a single `mux` tool:
+
+```yaml
+name: mux
+description: MCP muxer
+argv: "[cmd, ...args]: servers [fuzzy], tools|info|call|connect|disconnect|setConfig <server> [tool..], batch, connections, reload"
+params: "batch: {timeout?, resp_mode?: auto|full|summary|refs}"
+batch: "{id: {argv, params}}"
+setConfig.extraArgs: "args from user"
+```
+
+### Batch Calls
+
+Execute multiple calls in one request. Per-server serial, cross-server parallel:
+
+```js
+argv: ["batch"],
+batch: {
+  "01": { argv: ["call", "server1", "tool1"], params: {...} },
+  "02": { argv: ["tools", "server2"] }
+},
+params: { timeout: 5000, resp_mode: "auto" }  // optional
+```
+
+Response modes: `auto` (threshold truncation), `full` (inline all), `summary` (brief+files), `refs` (files only).
+
 ## 📦 Installation
 
 ### Claude CLI
@@ -71,7 +99,7 @@ Something like this:
 ```
 > list my mcp servers
 
-⏺ mcpu - cli (MCP)(argv: ["servers"])
+⏺ mcpu - mux (MCP)(argv: ["servers"])
   ⎿ disconnected:
     - chroma - disconnected - Type: stdio - Command: uvx chroma-mcp --client-t
     ype persistent --data-dir ~/.local/share/chromadb - ENV: {"ANO
@@ -111,7 +139,7 @@ claude mcp add --scope=user mcpu -- npx --package=@mcpu/cli -c mcpu-mcp
 ```markdown
 ## MCP Servers
 
-Use the MCPU `cli` to discover and use other MCP servers.
+Use the MCPU `mux` tool to discover and use other MCP servers.
 ```
 
 ## 🤖 Bash CLI Mode

@@ -77,7 +77,7 @@ describe('McpuMcpServer', () => {
 
     it('should register cli tool', () => {
       expect(mockTool).toHaveBeenCalledWith(
-        'cli',
+        'mux',
         expect.any(String),
         expect.any(Object),
         expect.any(Function)
@@ -107,7 +107,8 @@ describe('McpuMcpServer', () => {
       expect(mockCoreExecute).toHaveBeenCalledWith({
         argv: ['servers'],
         params: undefined,
-        mcpServerConfig: undefined,
+        batch: undefined,
+        setConfig: undefined,
         cwd: undefined,
         connectionPool: expect.any(Object),
         configs: expect.any(Map),
@@ -134,7 +135,8 @@ describe('McpuMcpServer', () => {
       expect(mockCoreExecute).toHaveBeenCalledWith({
         argv: ['call', 'playwright', 'browser_navigate'],
         params: { url: 'https://example.com' },
-        mcpServerConfig: undefined,
+        batch: undefined,
+        setConfig: undefined,
         cwd: undefined,
         connectionPool: expect.any(Object),
         configs: expect.any(Map),
@@ -143,7 +145,7 @@ describe('McpuMcpServer', () => {
       expect(result.isError).toBe(false);
     });
 
-    it('should execute call command with mcpServerConfig', async () => {
+    it('should execute call command with setConfig', async () => {
       mockCoreExecute.mockResolvedValue({
         success: true,
         output: 'Tool executed with config',
@@ -153,13 +155,14 @@ describe('McpuMcpServer', () => {
       const result = await toolHandler({
         argv: ['call', 'playwright', 'browser_navigate'],
         params: { url: 'https://example.com' },
-        mcpServerConfig: { extraArgs: ['--isolated'] },
+        setConfig: { extraArgs: ['--isolated'] },
       });
 
       expect(mockCoreExecute).toHaveBeenCalledWith({
         argv: ['call', 'playwright', 'browser_navigate'],
         params: { url: 'https://example.com' },
-        mcpServerConfig: { extraArgs: ['--isolated'] },
+        batch: undefined,
+        setConfig: { extraArgs: ['--isolated'] },
         cwd: undefined,
         connectionPool: expect.any(Object),
         configs: expect.any(Map),
@@ -183,7 +186,8 @@ describe('McpuMcpServer', () => {
       expect(mockCoreExecute).toHaveBeenCalledWith({
         argv: ['servers'],
         params: undefined,
-        mcpServerConfig: undefined,
+        batch: undefined,
+        setConfig: undefined,
         cwd: '/custom/path',
         connectionPool: expect.any(Object),
         configs: expect.any(Map),

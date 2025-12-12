@@ -99,7 +99,7 @@ export const MAX_RESPONSE_SIZE = 1024 * 1024;
 const ALLOWED_COMMANDS = new Set(['call', 'servers', 'tools', 'info']);
 
 /** Commands explicitly rejected (mutations and nested batches) */
-const REJECTED_COMMANDS = new Set(['connect', 'disconnect', 'reconnect', 'reload', 'config', 'batch']);
+const REJECTED_COMMANDS = new Set(['connect', 'disconnect', 'reconnect', 'reload', 'setConfig', 'batch']);
 
 // ============================================================================
 // Validation

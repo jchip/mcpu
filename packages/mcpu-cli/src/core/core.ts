@@ -17,7 +17,8 @@ import type { ConnectionPool } from '../daemon/connection-pool.ts';
 export interface CoreExecutionOptions {
   argv: string[];
   params?: any;
-  mcpServerConfig?: { extraArgs?: string[] };
+  batch?: Record<string, { argv: string[]; params?: Record<string, unknown> }>;  // For batch command
+  setConfig?: { extraArgs?: string[] };
   cwd?: string;
   connectionPool?: ConnectionPool;
   configs?: Map<string, any>;  // Runtime config map from daemon
@@ -137,8 +138,8 @@ function createParserCLI() {
           alias: ['list-connections'],
           desc: 'List active server connections (daemon mode only)',
         },
-        config: {
-          desc: 'Configure MCP server runtime settings',
+        setConfig: {
+          desc: 'Set MCP server runtime extraArgs',
           args: '<server string>',
         },
         reload: {
@@ -161,7 +162,7 @@ function createParserCLI() {
  * Core execution - parse and execute command
  */
 export async function coreExecute(options: CoreExecutionOptions): Promise<CommandResult> {
-  const { argv, params, mcpServerConfig, cwd, connectionPool, configs, configDiscovery } = options;
+  const { argv, params, batch, setConfig, cwd, connectionPool, configs, configDiscovery } = options;
 
   try {
     // Parse command line with custom output/exit handlers
@@ -292,7 +293,7 @@ export async function coreExecute(options: CoreExecutionOptions): Promise<Comman
           tool: args.tool as string,
           args: allArgs,
           stdinData: params ? JSON.stringify(params) : undefined,
-          mcpServerConfig,
+          setConfig,
           restart: localOpts.restart as boolean | undefined,
         }, {
           ...globalOptions,
@@ -323,10 +324,10 @@ export async function coreExecute(options: CoreExecutionOptions): Promise<Comman
         return await executeCommand('connections', {}, globalOptions);
       }
 
-      case 'config': {
-        return await executeCommand('config', {
+      case 'setConfig': {
+        return await executeCommand('setConfig', {
           server: args.server as string,
-          mcpServerConfig,
+          setConfig,
         }, globalOptions);
       }
 
@@ -335,17 +336,22 @@ export async function coreExecute(options: CoreExecutionOptions): Promise<Comman
       }
 
       case 'batch': {
-        // Batch command requires params to be passed via MCP tool call
-        // params should contain: { calls: {...}, response_mode?: string, timeout?: number }
-        if (!params || !params.calls) {
+        // Batch command: batch contains the call map, params contains options (timeout, resp_mode)
+        if (!batch || Object.keys(batch).length === 0) {
           return {
             success: false,
-            error: 'Batch command requires params.calls to be provided via MCP tool call',
+            error: 'Batch command requires batch parameter',
             exitCode: 1,
           };
         }
 
-        return await executeBatch(params as BatchParams, {
+        const batchParams: BatchParams = {
+          calls: batch,
+          response_mode: params?.resp_mode || params?.response_mode,
+          timeout: params?.timeout,
+        };
+
+        return await executeBatch(batchParams, {
           argv: [],
           cwd,
           connectionPool,

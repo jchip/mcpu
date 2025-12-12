@@ -92,7 +92,7 @@ describe('Batch Command', () => {
     });
 
     it('should reject mutation commands', () => {
-      const mutationCommands = ['connect', 'disconnect', 'reconnect', 'reload', 'config'];
+      const mutationCommands = ['connect', 'disconnect', 'reconnect', 'reload', 'setConfig'];
 
       for (const cmd of mutationCommands) {
         const params: BatchParams = {

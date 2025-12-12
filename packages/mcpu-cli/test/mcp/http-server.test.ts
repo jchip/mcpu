@@ -53,9 +53,9 @@ describe('McpuMcpServer HTTP Transport', () => {
 
     try {
       const tools = await client.listTools(connection);
-      // mcpu-mcp exposes a single 'cli' tool
+      // mcpu-mcp exposes a single 'mux' tool
       expect(tools.length).toBe(1);
-      expect(tools[0].name).toBe('cli');
+      expect(tools[0].name).toBe('mux');
     } finally {
       await client.disconnect(connection);
     }
@@ -68,8 +68,8 @@ describe('McpuMcpServer HTTP Transport', () => {
     });
 
     try {
-      // Call the cli tool with 'servers' command
-      const result = await client.callTool(connection, 'cli', {
+      // Call the mux tool with 'servers' command
+      const result = await client.callTool(connection, 'mux', {
         argv: ['servers'],
       }) as { content: Array<{ type: string; text: string }> };
 

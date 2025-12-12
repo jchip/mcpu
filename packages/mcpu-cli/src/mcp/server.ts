@@ -64,30 +64,22 @@ export class McpuMcpServer {
   }
 
   /**
-   * Register the mcpu_cli tool
+   * Register the mux tool
    */
   private registerTools(): void {
-    const description = `MCPU CLI proxy for MCP servers.
-
-argv: servers | tools [svr..] | info <svr> [tools..] | call <svr> <tool> | connect/disconnect <svr> | connections | config <svr> | reload
-
-params: tool args for call. --yaml/--json: full MCP response.`;
+    const batchSchema = z.record(z.any()).optional().describe("{id: {argv, params}}");
 
     this.server.tool(
-      "cli",
-      description,
+      "mux",
+      "MCP muxer",
       {
-        argv: z.array(z.string()).describe("Command args"),
-        params: z.union([z.record(z.any()), z.string()]).optional().describe("Tool params for call"),
-        mcpServerConfig: z
-          .object({
-            extraArgs: z.array(z.string()).optional(),
-          })
-          .optional()
-          .describe("Server extraArgs"),
-        cwd: z.string().optional().describe("Working dir"),
+        argv: z.array(z.string()).describe("[cmd, ...args]: servers [fuzzy], tools|info|call|connect|disconnect|setConfig <server> [tool..], batch, connections, reload"),
+        params: z.union([z.record(z.any()), z.string()]).optional().describe("batch: {timeout?, resp_mode?: auto|full|summary|refs}"),
+        batch: batchSchema,
+        setConfig: z.object({ extraArgs: z.array(z.string()).optional().describe("args from user") }).optional(),
+        cwd: z.string().optional(),
       },
-      async ({ argv, params, mcpServerConfig, cwd }) => {
+      async ({ argv, params, batch, setConfig, cwd }) => {
         // Parse params if passed as JSON string
         let parsedParams = params;
         if (typeof params === "string") {
@@ -98,13 +90,14 @@ params: tool args for call. --yaml/--json: full MCP response.`;
           }
         }
 
-        this.log("Executing command", { argv, params: parsedParams, mcpServerConfig, cwd });
+        this.log("Executing command", { argv, params: parsedParams, batch, setConfig, cwd });
 
         try {
           const result = await coreExecute({
             argv,
             params: parsedParams,
-            mcpServerConfig,
+            batch: batch as Record<string, { argv: string[]; params?: Record<string, unknown> }> | undefined,
+            setConfig,
             cwd,
             connectionPool: this.pool,
             configs: this.configs,
