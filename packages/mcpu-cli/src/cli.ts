@@ -405,6 +405,9 @@ See AGENTS.md for details about using MCPU to talk to MCP servers.
             if (plan.sources.gemini) {
               console.log(`  Gemini:  ${plan.sources.gemini}`);
             }
+            if (plan.sources.cursor) {
+              console.log(`  Cursor:  ${plan.sources.cursor}`);
+            }
             console.log(`  Output:  ${plan.mcpuConfigPath}`);
             console.log();
             console.log(chalk.bold(`Servers to migrate (${serverCount}):`));

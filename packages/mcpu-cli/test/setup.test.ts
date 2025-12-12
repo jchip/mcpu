@@ -9,6 +9,8 @@ import {
   getClaudeCliConfigPath,
   getGeminiCliConfigPath,
   getGeminiConfigDir,
+  getCursorConfigPath,
+  getCursorConfigDir,
   readClaudeConfig,
   readClaudeCliConfig,
   readGeminiCliConfig,
@@ -21,6 +23,7 @@ import {
   updateClaudeConfig,
   updateClaudeCliConfig,
   updateGeminiCliConfig,
+  updateCursorConfig,
   executeSetup,
   isMcpuMcpAvailable,
   isRunningViaNpx,
@@ -393,6 +396,7 @@ describe('setup command', () => {
       vi.stubEnv('CLAUDE_DESKTOP_CONFIG_DIR', desktopDir);
       vi.stubEnv('CLAUDE_CONFIG_DIR', join(testDir, 'nonexistent-cli'));
       vi.stubEnv('GEMINI_CONFIG_DIR', join(testDir, 'nonexistent-gemini'));
+      vi.stubEnv('CURSOR_CONFIG_DIR', join(testDir, 'nonexistent-cursor'));
       vi.stubEnv('XDG_CONFIG_HOME', mcpuOutputDir);
     });
 
@@ -495,6 +499,7 @@ describe('setup command', () => {
       vi.stubEnv('CLAUDE_CONFIG_DIR', cliDir);
       vi.stubEnv('CLAUDE_DESKTOP_CONFIG_DIR', join(testDir, 'nonexistent-desktop'));
       vi.stubEnv('GEMINI_CONFIG_DIR', join(testDir, 'nonexistent-gemini'));
+      vi.stubEnv('CURSOR_CONFIG_DIR', join(testDir, 'nonexistent-cursor'));
       vi.stubEnv('XDG_CONFIG_HOME', mcpuOutputDir);
     });
 
@@ -589,6 +594,7 @@ describe('setup command', () => {
       vi.stubEnv('CLAUDE_DESKTOP_CONFIG_DIR', desktopDir);
       vi.stubEnv('CLAUDE_CONFIG_DIR', cliDir);
       vi.stubEnv('GEMINI_CONFIG_DIR', join(testDir, 'nonexistent-gemini'));
+      vi.stubEnv('CURSOR_CONFIG_DIR', join(testDir, 'nonexistent-cursor'));
       vi.stubEnv('XDG_CONFIG_HOME', mcpuOutputDir);
     });
 
@@ -852,6 +858,7 @@ describe('setup command', () => {
       vi.stubEnv('GEMINI_CONFIG_DIR', geminiDir);
       vi.stubEnv('CLAUDE_DESKTOP_CONFIG_DIR', join(testDir, 'nonexistent-desktop'));
       vi.stubEnv('CLAUDE_CONFIG_DIR', join(testDir, 'nonexistent-cli'));
+      vi.stubEnv('CURSOR_CONFIG_DIR', join(testDir, 'nonexistent-cursor'));
       vi.stubEnv('XDG_CONFIG_HOME', mcpuOutputDir);
     });
 
@@ -943,6 +950,7 @@ describe('setup command', () => {
       vi.stubEnv('CLAUDE_DESKTOP_CONFIG_DIR', desktopDir);
       vi.stubEnv('CLAUDE_CONFIG_DIR', join(testDir, 'nonexistent-cli'));
       vi.stubEnv('GEMINI_CONFIG_DIR', geminiDir);
+      vi.stubEnv('CURSOR_CONFIG_DIR', join(testDir, 'nonexistent-cursor'));
       vi.stubEnv('XDG_CONFIG_HOME', mcpuOutputDir);
     });
 
