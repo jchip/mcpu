@@ -1,6 +1,6 @@
 {
   "name": "@mcpu/tacks",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "simple todo mcp server for Claude, Gemini, Codex",
   "keywords": [
     "todo",
