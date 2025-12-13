@@ -164,10 +164,9 @@ describe('ConnectionPool', () => {
       const connections = pool.listConnections();
       expect(connections).toHaveLength(0);
 
-      // But ConnectionInfo should still be retrievable by ID
+      // ConnectionInfo is cleaned up to prevent memory leak
       const storedInfo = pool.getConnectionById(info.id);
-      expect(storedInfo).toBeDefined();
-      expect(storedInfo?.status).toBe('disconnected');
+      expect(storedInfo).toBeNull();
     });
   });
 
@@ -267,7 +266,7 @@ describe('ConnectionPool', () => {
       expect(result).toBeNull();
     });
 
-    it('should still return info for disconnected connections', async () => {
+    it('should return null for disconnected connections (cleaned up to prevent memory leak)', async () => {
       const config: MCPServerConfig = {
         command: 'test',
         args: []
@@ -277,8 +276,7 @@ describe('ConnectionPool', () => {
       await pool.disconnect('testServer');
 
       const retrieved = pool.getConnectionById(info.id);
-      expect(retrieved).toBeDefined();
-      expect(retrieved?.status).toBe('disconnected');
+      expect(retrieved).toBeNull();
     });
   });
 

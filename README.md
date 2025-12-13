@@ -1,6 +1,6 @@
 # MCPU - MCP Unified
 
-> _Unlimit MCP servers with zero upfront tokens, and 80% token reduction_
+> _Unlimit MCP servers with zero upfront tokens, and up to 90% token reduction_
 
 MCPU is an MCP multiplexer (1:N) that manages all your MCP servers for multiple AI Assistants, with progressive discovery, parallel batch calls, code execution, and up to 90% token reduction.
 
