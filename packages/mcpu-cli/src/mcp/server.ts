@@ -73,8 +73,8 @@ export class McpuMcpServer {
       "mux",
       "MCP muxer",
       {
-        argv: z.array(z.string()).describe("[cmd, ...args]: servers [fuzzy], tools|info|call|connect|disconnect|setConfig <server> [tool..], batch, connections, reload"),
-        params: z.union([z.record(z.any()), z.string()]).optional().describe("batch: {timeout?, resp_mode?: auto|full|summary|refs}"),
+        argv: z.array(z.string()).describe("[cmd, ...args]: servers [fuzzy], tools|info|call|connect|disconnect|setConfig <server> [tool..], batch, exec, connections, reload"),
+        params: z.union([z.record(z.any()), z.string()]).optional().describe("batch: {timeout?, resp_mode?: auto|full|summary|refs}; exec: {file?, code?, timeout?} - file or code required, code has async mcpuMux({argv,params,...}):Promise<any> available"),
         batch: batchSchema,
         setConfig: z.object({ extraArgs: z.array(z.string()).optional().describe("args from user") }).optional(),
         cwd: z.string().optional(),
