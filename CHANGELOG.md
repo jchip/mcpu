@@ -1,3 +1,30 @@
+# 12/12/2025
+
+## Packages
+
+-   `@mcpu/cli@0.2.16` `(0.2.15 => 0.2.16)`
+-   `@mcpu/tacks@0.1.8` `(0.1.7 => 0.1.8)`
+
+## Commits
+
+-   `packages/mcpu-cli`
+
+    -   Improve mcpu setup: add Cursor support, better output, skip circular mcpu ref [commit](/commit/a6e2c948945042030adc0a16c00a24288f304273)
+    -   MCU-69: Fix params JSON string parsing in daemon /cli endpoint [commit](/commit/e21213be405e7936e3ee791d6fc7d9406eaee22d)
+    -   Add Cursor MCP config support to mcpu setup [commit](/commit/dbb12899f728b8d205ea6a38a86004194b446279)
+    -   [Publish] [commit](/commit/55e14ea786efac1a06d549690dcb80e64181b07d)
+    -   update muxer diagram and readme [commit](/commit/02e6b9bc4f2958f8ed924dc10b12fc594e3cb2f2)
+
+-   `packages/tacks`
+
+    -   [Publish] [commit](/commit/55e14ea786efac1a06d549690dcb80e64181b07d)
+    -   Expose full nested JSON schema for tacks MCP tool [commit](/commit/908db51e460ba4a0c1d4c5c1e0a39be34a49f8aa)
+
+-   `MISC`
+
+    -   Update changelog [commit](/commit/2e643d8f1b220ac85d6ceb841e36e68c65d5bc15)
+    -   Update changelog [commit](/commit/749c0b6244a7b565cbe9abcc415ca0dcf78187ad)
+
 # 12/11/2025
 
 ## Packages
