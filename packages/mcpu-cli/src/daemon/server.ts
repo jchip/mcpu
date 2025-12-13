@@ -162,9 +162,14 @@ export class DaemonServer {
       return; // Only monitor for session-specific daemons (ppid > 0)
     }
 
-    // Check if parent process actually exists
+    // Check if parent process actually exists at startup
     if (!this.isParentAlive(ppid)) {
-      // Parent doesn't exist - treat ppid as just an ID, no monitoring
+      // Parent already dead at startup - shut down immediately to prevent orphan
+      this.log('warn', 'Parent process not found at startup, shutting down', { ppid });
+      this.shutdown().catch(err => {
+        this.log('error', 'Error during shutdown', { error: String(err) });
+        process.exit(1);
+      });
       return;
     }
 
