@@ -24,6 +24,7 @@ MCPU addresses this by:
 - **Progressive discovery and disclosure** - Servers and their tool schemas are revealed and connected only when needed
 - **Compressing tool schemas** - Reduces schema size by up to 84% using a compact format designed for AI consumption
 - **Intercept** - Intercept large inline content and save them to disk
+- **Exec** - Run JavaScript code to orchestrate tools, filter responses, and control what reaches the context window
 - **CLI-first design** - Built for AI agents with bash tool access (Claude Code, etc.), not just MCP-native clients
 
 ## Schema Compression Stats

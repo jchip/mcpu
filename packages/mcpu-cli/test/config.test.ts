@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { ConfigDiscovery, AUTO_SAVE_DEFAULTS } from '../src/config.js';
+import { ConfigDiscovery, AUTO_SAVE_DEFAULTS, resolveAutoSave } from '../src/config.js';
 import { writeFile, mkdir, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -541,6 +541,120 @@ describe('ConfigDiscovery', () => {
         dir: '/global/dir',       // from global
         previewSize: 300,         // from server
       });
+    });
+  });
+});
+
+describe('resolveAutoSave', () => {
+  it('should return defaults when no overrides provided', () => {
+    const result = resolveAutoSave();
+    expect(result).toEqual(AUTO_SAVE_DEFAULTS);
+  });
+
+  it('should merge global config overrides', () => {
+    const result = resolveAutoSave({
+      enabled: false,
+      thresholdSize: 5000,
+    });
+
+    expect(result).toEqual({
+      enabled: false,
+      thresholdSize: 5000,
+      dir: AUTO_SAVE_DEFAULTS.dir,
+      previewSize: AUTO_SAVE_DEFAULTS.previewSize,
+    });
+  });
+
+  it('should merge server config overrides', () => {
+    const result = resolveAutoSave(
+      { thresholdSize: 5000 },
+      { dir: '.custom/responses', previewSize: 200 }
+    );
+
+    expect(result).toEqual({
+      enabled: AUTO_SAVE_DEFAULTS.enabled,
+      thresholdSize: 5000,
+      dir: '.custom/responses',
+      previewSize: 200,
+    });
+  });
+
+  it('should merge tool-level config via byTools', () => {
+    const result = resolveAutoSave(
+      { thresholdSize: 5000 },
+      {
+        dir: '.server/responses',
+        byTools: {
+          special_tool: {
+            enabled: false,
+            thresholdSize: 1000,
+          },
+        },
+      },
+      'special_tool'
+    );
+
+    expect(result).toEqual({
+      enabled: false,
+      thresholdSize: 1000,
+      dir: '.server/responses',
+      previewSize: AUTO_SAVE_DEFAULTS.previewSize,
+    });
+  });
+
+  it('should ignore byTools when tool not specified', () => {
+    const result = resolveAutoSave(
+      undefined,
+      {
+        enabled: true,
+        byTools: {
+          special_tool: {
+            enabled: false,
+          },
+        },
+      }
+    );
+
+    expect(result.enabled).toBe(true);
+  });
+
+  it('should ignore byTools for non-matching tools', () => {
+    const result = resolveAutoSave(
+      undefined,
+      {
+        enabled: true,
+        byTools: {
+          special_tool: {
+            enabled: false,
+          },
+        },
+      },
+      'other_tool'
+    );
+
+    expect(result.enabled).toBe(true);
+  });
+
+  it('should apply cascade: defaults <- global <- server <- tool', () => {
+    const result = resolveAutoSave(
+      { enabled: false, thresholdSize: 1000 },   // global
+      {
+        thresholdSize: 2000,                      // server overrides global
+        dir: '.server',
+        byTools: {
+          my_tool: {
+            thresholdSize: 3000,                  // tool overrides server
+          },
+        },
+      },
+      'my_tool'
+    );
+
+    expect(result).toEqual({
+      enabled: false,           // from global
+      thresholdSize: 3000,      // from tool (overrides server's 2000, global's 1000)
+      dir: '.server',           // from server
+      previewSize: 500,         // from defaults
     });
   });
 });

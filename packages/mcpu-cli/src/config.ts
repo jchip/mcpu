@@ -50,6 +50,53 @@ export const AUTO_SAVE_DEFAULTS: ResolvedAutoSaveConfig = {
 };
 
 /**
+ * Resolve auto-save config for a server/tool combination.
+ * Pure function that merges: defaults <- global <- server <- tool (byTools)
+ *
+ * @param globalAutoSave - Global auto-save config (optional overrides)
+ * @param serverAutoSave - Server-level auto-save config (optional overrides)
+ * @param tool - Tool name for byTools lookup
+ * @returns Fully resolved auto-save config with all fields
+ */
+export function resolveAutoSave(
+  globalAutoSave?: Partial<ResolvedAutoSaveConfig>,
+  serverAutoSave?: ServerAutoSaveConfig,
+  tool?: string
+): ResolvedAutoSaveConfig {
+  // Start with defaults
+  const resolved: ResolvedAutoSaveConfig = { ...AUTO_SAVE_DEFAULTS };
+
+  // Merge global config
+  if (globalAutoSave) {
+    if (globalAutoSave.enabled !== undefined) resolved.enabled = globalAutoSave.enabled;
+    if (globalAutoSave.thresholdSize !== undefined) resolved.thresholdSize = globalAutoSave.thresholdSize;
+    if (globalAutoSave.dir !== undefined) resolved.dir = globalAutoSave.dir;
+    if (globalAutoSave.previewSize !== undefined) resolved.previewSize = globalAutoSave.previewSize;
+  }
+
+  // Merge server-level config
+  if (serverAutoSave) {
+    if (serverAutoSave.enabled !== undefined) resolved.enabled = serverAutoSave.enabled;
+    if (serverAutoSave.thresholdSize !== undefined) resolved.thresholdSize = serverAutoSave.thresholdSize;
+    if (serverAutoSave.dir !== undefined) resolved.dir = serverAutoSave.dir;
+    if (serverAutoSave.previewSize !== undefined) resolved.previewSize = serverAutoSave.previewSize;
+
+    // Merge tool-level config (byTools)
+    if (tool && serverAutoSave.byTools) {
+      const toolConfig = serverAutoSave.byTools[tool];
+      if (toolConfig) {
+        if (toolConfig.enabled !== undefined) resolved.enabled = toolConfig.enabled;
+        if (toolConfig.thresholdSize !== undefined) resolved.thresholdSize = toolConfig.thresholdSize;
+        if (toolConfig.dir !== undefined) resolved.dir = toolConfig.dir;
+        if (toolConfig.previewSize !== undefined) resolved.previewSize = toolConfig.previewSize;
+      }
+    }
+  }
+
+  return resolved;
+}
+
+/**
  * Extended server config with autoSaveResponse
  */
 export type ExtendedServerConfig = MCPServerConfig & {

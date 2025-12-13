@@ -5,6 +5,8 @@ import { ConfigDiscovery } from '../config.ts';
 import { coreExecute } from '../core/core.ts';
 import { type MCPServerConfig, isStdioConfig, isHttpConfig, DEFAULT_REQUEST_TIMEOUT_MS } from '../types.ts';
 import { type Logger } from './logger.ts';
+import { formatMcpResponse, autoSaveResponse } from '../formatters.ts';
+import type { CommandResult } from '../types/result.ts';
 
 /**
  * Standard response envelope for success
@@ -190,6 +192,39 @@ export class DaemonServer {
    */
   getPool(): ConnectionPool {
     return this.pool;
+  }
+
+  /**
+   * Format raw result from call commands
+   * If result contains rawResult in meta, format it according to auto-save config
+   */
+  private async formatRawResult(result: CommandResult, cwd?: string): Promise<CommandResult> {
+    // Only format if there's a rawResult from a call command
+    if (!result.meta?.rawResult) {
+      return result;
+    }
+
+    const { server, tool, result: mcpResult } = result.meta.rawResult;
+    const workingDir = cwd || process.cwd();
+
+    // Get auto-save config for this server/tool
+    const autoSaveConfig = this.configDiscovery.getAutoSaveConfig(server, tool);
+
+    let output: string;
+    if (autoSaveConfig.enabled) {
+      const autoSaveResult = await autoSaveResponse(mcpResult, server, tool, autoSaveConfig, workingDir);
+      output = autoSaveResult.output;
+    } else {
+      output = formatMcpResponse(mcpResult);
+    }
+
+    // Return formatted result (remove rawResult from meta since it's been processed)
+    const { rawResult, ...restMeta } = result.meta;
+    return {
+      ...result,
+      output,
+      meta: Object.keys(restMeta).length > 0 ? restMeta : undefined,
+    };
   }
 
   /**
@@ -644,7 +679,9 @@ export class DaemonServer {
           configDiscovery: this.configDiscovery,
         });
 
-        res.json(result);
+        // Format raw result from call commands
+        const formattedResult = await this.formatRawResult(result, cwd);
+        res.json(formattedResult);
       } catch (error: any) {
         res.status(500).json({
           success: false,

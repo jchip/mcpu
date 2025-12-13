@@ -16,6 +16,8 @@ import { ConnectionPool } from "../daemon/connection-pool.ts";
 import { ConfigDiscovery } from "../config.ts";
 import { VERSION } from "../version.ts";
 import type { MCPServerConfig } from "../types.ts";
+import type { CommandResult } from "../types/result.ts";
+import { formatMcpResponse, autoSaveResponse } from "../formatters.ts";
 
 export type TransportType = 'stdio' | 'http';
 
@@ -64,6 +66,39 @@ export class McpuMcpServer {
   }
 
   /**
+   * Format raw result from call commands
+   * If result contains rawResult in meta, format it according to auto-save config
+   */
+  private async formatRawResult(result: CommandResult, cwd?: string): Promise<CommandResult> {
+    // Only format if there's a rawResult from a call command
+    if (!result.meta?.rawResult || !this.configDiscovery) {
+      return result;
+    }
+
+    const { server, tool, result: mcpResult } = result.meta.rawResult;
+    const workingDir = cwd || process.cwd();
+
+    // Get auto-save config for this server/tool
+    const autoSaveConfig = this.configDiscovery.getAutoSaveConfig(server, tool);
+
+    let output: string;
+    if (autoSaveConfig.enabled) {
+      const autoSaveResult = await autoSaveResponse(mcpResult, server, tool, autoSaveConfig, workingDir);
+      output = autoSaveResult.output;
+    } else {
+      output = formatMcpResponse(mcpResult);
+    }
+
+    // Return formatted result (remove rawResult from meta since it's been processed)
+    const { rawResult, ...restMeta } = result.meta;
+    return {
+      ...result,
+      output,
+      meta: Object.keys(restMeta).length > 0 ? restMeta : undefined,
+    };
+  }
+
+  /**
    * Register the mux tool
    */
   private registerTools(): void {
@@ -93,7 +128,7 @@ export class McpuMcpServer {
         this.log("Executing command", { argv, params: parsedParams, batch, setConfig, cwd });
 
         try {
-          const result = await coreExecute({
+          const rawResult = await coreExecute({
             argv,
             params: parsedParams,
             batch: batch as Record<string, { argv: string[]; params?: Record<string, unknown> }> | undefined,
@@ -103,6 +138,9 @@ export class McpuMcpServer {
             configs: this.configs,
             configDiscovery: this.configDiscovery,
           });
+
+          // Format raw result from call commands
+          const result = await this.formatRawResult(rawResult, cwd);
 
           this.log("Command result", {
             success: result.success,

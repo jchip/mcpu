@@ -9,6 +9,27 @@ import { coreExecute } from './core/core.ts';
 import { VERSION } from './version.ts';
 import { addServer, addServerJson, parseEnvFlags, parseHeaderFlags, type Scope } from './commands/mcp-add.ts';
 import { executeSetup, createMigrationPlan } from './commands/setup.ts';
+import { formatMcpResponse } from './formatters.ts';
+import type { CommandResult } from './types/result.ts';
+
+/**
+ * Format raw result from call commands for CLI output
+ */
+function formatRawResult(result: CommandResult): CommandResult {
+  if (!result.meta?.rawResult) {
+    return result;
+  }
+
+  const { result: mcpResult } = result.meta.rawResult;
+  const output = formatMcpResponse(mcpResult);
+
+  const { rawResult, ...restMeta } = result.meta;
+  return {
+    ...result,
+    output,
+    meta: Object.keys(restMeta).length > 0 ? restMeta : undefined,
+  };
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -122,7 +143,8 @@ const nc = new NixClap({
           },
         },
         exec: async () => {
-          const result = await coreExecute({ argv: process.argv.slice(2) });
+          const rawResult = await coreExecute({ argv: process.argv.slice(2) });
+          const result = formatRawResult(rawResult);
           if (result.output) {
             console.log(result.output);
           }

@@ -227,17 +227,41 @@ export async function executeExec(
             argv: msg.argv,
             params: msg.params,
             batch: msg.batch,
-            autoSaveResponse: false,  // User code handles full responses
           });
 
-          // Parse output if it's JSON (for structured results)
-          let parsedOutput: unknown = result.output;
-          if (typeof result.output === 'string') {
+          // Use raw result if available (from call commands), otherwise parse output
+          let parsedOutput: unknown;
+          if (result.meta?.rawResult) {
+            // Call command returned raw MCP result - unwrap content for user code
+            const mcpResult = result.meta.rawResult.result as any;
+
+            // Unwrap MCP response: extract text content and parse as JSON if possible
+            if (mcpResult?.content && Array.isArray(mcpResult.content)) {
+              const textContent = mcpResult.content
+                .filter((item: any) => item.type === 'text' && item.text)
+                .map((item: any) => item.text)
+                .join('\n');
+
+              // Try to parse as JSON for structured data
+              try {
+                parsedOutput = JSON.parse(textContent);
+              } catch {
+                parsedOutput = textContent || mcpResult;
+              }
+            } else {
+              // Non-standard response, use as-is
+              parsedOutput = mcpResult;
+            }
+          } else if (typeof result.output === 'string') {
+            // Other commands return formatted output - try to parse as JSON
             try {
               parsedOutput = JSON.parse(result.output);
             } catch {
               // Keep as string if not valid JSON
+              parsedOutput = result.output;
             }
+          } else {
+            parsedOutput = result.output;
           }
 
           const response: MuxResponse = {

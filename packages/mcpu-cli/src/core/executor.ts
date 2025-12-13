@@ -6,7 +6,7 @@ import type { CommandResult } from '../types/result.ts';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ConnectionPool } from '../daemon/connection-pool.ts';
 import { ExecutionContext } from './context.ts';
-import { formatToolInfo, formatMcpResponse, abbreviateType, LEGEND_HEADER, TYPES_LINE, collectEnums, formatEnumLegend, extractEnumOrRange, formatParamType, autoSaveResponse } from '../formatters.ts';
+import { formatToolInfo, abbreviateType, LEGEND_HEADER, TYPES_LINE, collectEnums, formatEnumLegend, extractEnumOrRange, formatParamType } from '../formatters.ts';
 import { isStdioConfig, isUrlConfig, isWebSocketConfig } from '../types.ts';
 import { fuzzyMatch } from '../utils/fuzzy.ts';
 
@@ -184,7 +184,6 @@ export interface ExecuteOptions {
   context?: ExecutionContext;  // Execution context (preferred over individual options)
   configs?: Map<string, any>;  // Runtime config map from daemon (mutable)
   configDiscovery?: ConfigDiscovery;  // Config discovery instance
-  autoSaveResponse?: boolean;  // Enable auto-save of large responses (default: true if configDiscovery set)
 }
 
 export interface ServersCommandArgs {
@@ -1032,40 +1031,18 @@ export async function executeCallCommand(
     try {
       const result = await client.callTool(connection, args.tool, toolArgs, config.requestTimeout);
 
-      // Format output
-      const ctx = getContext(options);
-      let output: string;
-
-      // If json/yaml/raw requested, return full MCP response structure verbatim
-      if (ctx.json || ctx.yaml || ctx.raw) {
-        // --raw defaults to JSON (native MCP format), unless --yaml is explicitly set
-        const outputCtx = ctx.raw && !ctx.json && !ctx.yaml
-          ? new ExecutionContext({ cwd: ctx.cwd, verbose: ctx.verbose, json: true, yaml: false, raw: ctx.raw, configFile: ctx.configFile, noCache: ctx.noCache })
-          : ctx;
-        output = formatOutput(result, outputCtx);
-      } else {
-        // Auto-save: false=disable, undefined=use config
-        if (options.autoSaveResponse === false) {
-          output = formatMcpResponse(result);
-        } else if (options.configDiscovery) {
-          const autoSaveConfig = options.configDiscovery.getAutoSaveConfig(args.server, args.tool);
-          if (autoSaveConfig.enabled) {
-            const workingDir = ctx.cwd || process.cwd();
-            const autoSaveResult = await autoSaveResponse(result, args.server, args.tool, autoSaveConfig, workingDir);
-            output = autoSaveResult.output;
-          } else {
-            output = formatMcpResponse(result);
-          }
-        } else {
-          output = formatMcpResponse(result);
-        }
-      }
-
+      // Return raw result in meta - caller handles formatting
       return {
         success: true,
-        output,
         exitCode: 0,
-        meta,
+        meta: {
+          ...meta,
+          rawResult: {
+            server: args.server,
+            tool: args.tool,
+            result,
+          },
+        },
       };
     } catch (callError: any) {
       const errorMsg = callError.message || String(callError);
