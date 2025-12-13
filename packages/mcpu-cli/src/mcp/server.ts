@@ -134,32 +134,17 @@ Commands: argv=[cmd, ...args], params={}
       toolDescription,
       {
         argv: z.array(z.string()),
-        params: z.union([z.record(z.any()), z.string()]).optional(),
+        params: z.record(z.any()).optional(),
         batch: z.record(z.any()).optional(),
         cwd: z.string().optional(),
       },
       async ({ argv, params, batch, cwd }) => {
-        // Parse params if passed as JSON string
-        let parsedParams = params;
-        if (typeof params === "string") {
-          try {
-            parsedParams = JSON.parse(params);
-          } catch {
-            parsedParams = params; // Keep as-is if not valid JSON
-          }
-        }
-
-        this.log("Executing command", {
-          argv,
-          params: parsedParams,
-          batch,
-          cwd,
-        });
+        this.log("Executing command", { argv, params, batch, cwd });
 
         try {
           const rawResult = await coreExecute({
             argv,
-            params: parsedParams,
+            params,
             batch: batch as
               | Record<
                   string,
