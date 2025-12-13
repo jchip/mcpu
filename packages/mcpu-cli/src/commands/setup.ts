@@ -417,6 +417,7 @@ export function discoverServers(): { discovered: DiscoveredServers; sources: { d
 
 /**
  * Deduplicate servers - global wins over project-level
+ * Skips 'mcpu' itself to avoid circular reference
  */
 export function deduplicateServers(discovered: DiscoveredServers): {
   servers: Record<string, MCPServerConfig>;
@@ -426,29 +427,33 @@ export function deduplicateServers(discovered: DiscoveredServers): {
   const duplicates: MigrationPlan['duplicates'] = [];
   const sources: Record<string, string[]> = {};
 
-  // Track all sources for each server name
+  // Track all sources for each server name (skip mcpu itself)
   for (const [name] of Object.entries(discovered.global)) {
+    if (name === 'mcpu') continue; // Skip mcpu to avoid circular reference
     sources[name] = sources[name] || [];
     sources[name].push('global');
   }
 
   for (const [projectId, projectServers] of Object.entries(discovered.projects)) {
     for (const [name] of Object.entries(projectServers)) {
+      if (name === 'mcpu') continue; // Skip mcpu to avoid circular reference
       sources[name] = sources[name] || [];
       sources[name].push(`project:${projectId}`);
     }
   }
 
-  // Apply global servers first (they win)
+  // Apply global servers first (they win, skip mcpu)
   for (const [name, config] of Object.entries(discovered.global)) {
+    if (name === 'mcpu') continue; // Skip mcpu to avoid circular reference
     servers[name] = config;
   }
 
-  // Apply project servers only if not already defined globally
+  // Apply project servers only if not already defined globally (skip mcpu)
   const sortedProjects = Object.keys(discovered.projects).sort();
   for (const projectId of sortedProjects) {
     const projectServers = discovered.projects[projectId];
     for (const [name, config] of Object.entries(projectServers)) {
+      if (name === 'mcpu') continue; // Skip mcpu to avoid circular reference
       if (!servers[name]) {
         servers[name] = config;
       }
@@ -689,6 +694,7 @@ export async function executeSetup(options: {
     return {
       success: false,
       message: 'No MCP servers found in any config.',
+      plan, // Include plan so CLI can show which configs were checked
     };
   }
 

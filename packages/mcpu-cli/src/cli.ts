@@ -434,6 +434,25 @@ See AGENTS.md for details about using MCPU to talk to MCP servers.
 
           if (!result.success) {
             console.error(result.message);
+
+            // Show which configs were checked even on failure
+            if (result.plan?.sources) {
+              console.log();
+              console.log('Configs checked:');
+              if (result.plan.sources.desktop) {
+                console.log(`  Claude Desktop: ${result.plan.sources.desktop}`);
+              }
+              if (result.plan.sources.cli) {
+                console.log(`  Claude CLI: ${result.plan.sources.cli}`);
+              }
+              if (result.plan.sources.gemini) {
+                console.log(`  Gemini CLI: ${result.plan.sources.gemini}`);
+              }
+              if (result.plan.sources.cursor) {
+                console.log(`  Cursor: ${result.plan.sources.cursor}`);
+              }
+            }
+
             process.exit(1);
           }
 
@@ -446,8 +465,28 @@ See AGENTS.md for details about using MCPU to talk to MCP servers.
             }
             console.log();
             console.log(`MCPU config: ${result.plan.mcpuConfigPath}`);
-            if (result.plan.sources.desktop || result.plan.sources.cli) {
-              console.log('Backup(s) created for modified config(s).');
+
+            // Show which configs were modified
+            const modifiedConfigs: string[] = [];
+            if (result.plan.sources.desktop) {
+              modifiedConfigs.push(`Claude Desktop: ${result.plan.sources.desktop}`);
+            }
+            if (result.plan.sources.cli) {
+              modifiedConfigs.push(`Claude CLI: ${result.plan.sources.cli}`);
+            }
+            if (result.plan.sources.gemini) {
+              modifiedConfigs.push(`Gemini CLI: ${result.plan.sources.gemini}`);
+            }
+            if (result.plan.sources.cursor) {
+              modifiedConfigs.push(`Cursor: ${result.plan.sources.cursor}`);
+            }
+
+            if (modifiedConfigs.length > 0) {
+              console.log();
+              console.log('Updated configs (backups created with .mcpu.bak):');
+              for (const cfg of modifiedConfigs) {
+                console.log(`  ${cfg}`);
+              }
             }
           }
           process.exit(0);
