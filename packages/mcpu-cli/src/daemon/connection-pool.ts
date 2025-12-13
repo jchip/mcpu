@@ -186,11 +186,12 @@ export class ConnectionPool {
         info.status = 'disconnected';
         info.closedAt = Date.now();
 
-        // Clean up maps but keep ConnectionInfo for history
+        // Clean up all maps including connectionInfo to prevent memory leak
         this.connections.delete(serverName);
         this.serverToId.delete(serverName);
         this.idToServer.delete(id);
         this.configs.delete(serverName);
+        this.connectionInfo.delete(id);
 
         return info;
       }
