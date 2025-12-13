@@ -33,6 +33,7 @@ export class ConnectionPool {
   private cleanupInterval: NodeJS.Timeout | null = null;
   private schemaCache = new SchemaCache();
   private refreshingServers = new Set<string>(); // Track servers being refreshed
+  private connectingServers = new Map<string, Promise<ConnectionInfo>>(); // Track in-flight connection attempts
 
   // Connection TTL: 5 minutes of inactivity (default)
   private readonly idleTimeoutMs: number;
@@ -57,14 +58,34 @@ export class ConnectionPool {
     const existingId = this.serverToId.get(serverName);
     if (existingId !== undefined) {
       const info = this.connectionInfo.get(existingId);
-      if (info) {
+      if (info && info.status === 'connected') {
         // Update last used timestamp
         info.lastUsed = Date.now();
         return info;
       }
     }
 
-    // Create new connection
+    // Check if connection is already in progress (prevents race condition)
+    const existingPromise = this.connectingServers.get(serverName);
+    if (existingPromise) {
+      return existingPromise;
+    }
+
+    // Create connection promise and track it
+    const connectionPromise = this.createConnection(serverName, config);
+    this.connectingServers.set(serverName, connectionPromise);
+
+    try {
+      return await connectionPromise;
+    } finally {
+      this.connectingServers.delete(serverName);
+    }
+  }
+
+  /**
+   * Internal method to create a new connection
+   */
+  private async createConnection(serverName: string, config: MCPServerConfig): Promise<ConnectionInfo> {
     const connection = await this.client.connect(serverName, config);
     const id = this.nextId++;
     const now = Date.now();
