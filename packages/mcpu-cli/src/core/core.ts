@@ -10,6 +10,7 @@
 import { NixClap } from 'nix-clap';
 import { executeCommand } from './executor.ts';
 import { executeBatch, type BatchParams } from './batch.ts';
+import { executeExec, type ExecParams } from '../commands/exec.ts';
 import { ConfigDiscovery } from '../config.ts';
 import type { CommandResult } from '../types/result.ts';
 import type { ConnectionPool } from '../daemon/connection-pool.ts';
@@ -147,6 +148,9 @@ function createParserCLI() {
         },
         batch: {
           desc: 'Execute multiple tool calls in a single request',
+        },
+        exec: {
+          desc: 'Execute code in isolated worker with mcpuMux access',
         },
       },
     });
@@ -352,6 +356,23 @@ export async function coreExecute(options: CoreExecutionOptions): Promise<Comman
         };
 
         return await executeBatch(batchParams, {
+          argv: [],
+          cwd,
+          connectionPool,
+          configs,
+          configDiscovery,
+        });
+      }
+
+      case 'exec': {
+        // Exec command: params contains file, code, timeout
+        const execParams: ExecParams = {
+          file: params?.file as string | undefined,
+          code: params?.code as string | undefined,
+          timeout: params?.timeout as number | undefined,
+        };
+
+        return await executeExec(execParams, {
           argv: [],
           cwd,
           connectionPool,
