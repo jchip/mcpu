@@ -23,7 +23,8 @@ export interface CoreExecutionOptions {
   cwd?: string;
   connectionPool?: ConnectionPool;
   configs?: Map<string, any>;  // Runtime config map from daemon
-  configDiscovery?: ConfigDiscovery;  // Config discovery for response auto-save settings
+  configDiscovery?: ConfigDiscovery;  // Config discovery instance
+  autoSaveResponse?: boolean;  // Enable auto-save of large responses (default: true)
 }
 
 /**
@@ -166,7 +167,7 @@ function createParserCLI() {
  * Core execution - parse and execute command
  */
 export async function coreExecute(options: CoreExecutionOptions): Promise<CommandResult> {
-  const { argv, params, batch, setConfig, cwd, connectionPool, configs, configDiscovery } = options;
+  const { argv, params, batch, setConfig, cwd, connectionPool, configs, configDiscovery, autoSaveResponse } = options;
 
   try {
     // Parse command line with custom output/exit handlers
@@ -226,6 +227,7 @@ export async function coreExecute(options: CoreExecutionOptions): Promise<Comman
       connectionPool,
       configs,
       configDiscovery,
+      autoSaveResponse,
     };
 
     // Get the sub-command data from parsed result
@@ -365,6 +367,15 @@ export async function coreExecute(options: CoreExecutionOptions): Promise<Comman
       }
 
       case 'exec': {
+        // Check if exec is enabled
+        if (configDiscovery && !configDiscovery.isExecEnabled()) {
+          return {
+            success: false,
+            error: 'exec command is disabled via configuration (execEnabled: false)',
+            exitCode: 1,
+          };
+        }
+
         // Exec command: params contains file, code, timeout
         const execParams: ExecParams = {
           file: params?.file as string | undefined,

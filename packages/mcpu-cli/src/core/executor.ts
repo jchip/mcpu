@@ -183,7 +183,8 @@ export interface ExecuteOptions {
   cwd?: string;  // Client's working directory for resolving paths
   context?: ExecutionContext;  // Execution context (preferred over individual options)
   configs?: Map<string, any>;  // Runtime config map from daemon (mutable)
-  configDiscovery?: ConfigDiscovery;  // Config discovery instance for response settings
+  configDiscovery?: ConfigDiscovery;  // Config discovery instance
+  autoSaveResponse?: boolean;  // Enable auto-save of large responses (default: true if configDiscovery set)
 }
 
 export interface ServersCommandArgs {
@@ -1043,19 +1044,19 @@ export async function executeCallCommand(
           : ctx;
         output = formatOutput(result, outputCtx);
       } else {
-        // Check for auto-save first (needs raw result for content extraction)
-        if (options.configDiscovery) {
+        // Auto-save: false=disable, undefined=use config
+        if (options.autoSaveResponse === false) {
+          output = formatMcpResponse(result);
+        } else if (options.configDiscovery) {
           const autoSaveConfig = options.configDiscovery.getAutoSaveConfig(args.server, args.tool);
           if (autoSaveConfig.enabled) {
             const workingDir = ctx.cwd || process.cwd();
             const autoSaveResult = await autoSaveResponse(result, args.server, args.tool, autoSaveConfig, workingDir);
             output = autoSaveResult.output;
           } else {
-            // Auto-save disabled, just format normally
             output = formatMcpResponse(result);
           }
         } else {
-          // No config discovery, just format normally
           output = formatMcpResponse(result);
         }
       }

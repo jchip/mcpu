@@ -99,6 +99,7 @@ export type ServerAutoSaveConfig = z.infer<typeof ServerAutoSaveConfigSchema>;
 // Global config schema
 export const GlobalConfigSchema = z.object({
   autoSaveResponse: AutoSaveConfigBaseSchema.optional(),
+  execEnabled: z.boolean().optional(), // Enable/disable exec command (default: true)
 }).passthrough(); // Allow server configs at top level
 
 export type GlobalConfig = z.infer<typeof GlobalConfigSchema>;

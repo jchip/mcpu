@@ -73,6 +73,51 @@ params: { timeout: 5000, resp_mode: "auto" }  // optional
 
 Response modes: `auto` (threshold truncation), `full` (inline all), `summary` (brief+files), `refs` (files only).
 
+### Exec Command
+
+Execute JavaScript code in an isolated worker with access to `mcpuMux()` for programmatic tool orchestration:
+
+```js
+argv: ["exec"],
+params: {
+  code: `
+    const result = await mcpuMux({
+      argv: ["call", "tasks", "tm"],
+      params: { cmd: "list", type: "issue", proj: "myproj" }
+    });
+    return result.issues.filter(i => i.status === "open");
+  `,
+  timeout: 30000  // optional, default 30s
+}
+```
+
+**Parameters:**
+- `code` - Inline JavaScript code to execute
+- `file` - Path to a JS file to execute (alternative to `code`)
+- `timeout` - Execution timeout in ms (default: 30000)
+
+**The `mcpuMux` function:**
+```js
+async function mcpuMux(options: {
+  argv: string[];           // Command arguments
+  params?: object;          // Tool parameters
+  batch?: object;           // Batch calls
+}): Promise<any>
+```
+
+**Use cases:**
+- Filter/transform large responses before returning to context
+- Chain multiple tool calls with conditional logic
+- Aggregate data from multiple servers
+- Implement retry logic or error handling
+
+**Security:** Exec runs in an isolated worker process. To disable exec entirely, add to your config:
+```json
+{
+  "execEnabled": false
+}
+```
+
 ## 📦 Installation
 
 ### Claude CLI

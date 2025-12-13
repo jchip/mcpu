@@ -69,6 +69,7 @@ export class ConfigDiscovery {
   private configs: Map<string, ExtendedServerConfig> = new Map();
   private globalAutoSave: Partial<ResolvedAutoSaveConfig> = {};
   private resolvedCache: Map<string, ResolvedAutoSaveConfig> = new Map(); // memoize: "server:tool" -> config
+  private _execEnabled: boolean = true; // Default: exec is enabled
   private options: {
     configFile?: string;
     verbose?: boolean;
@@ -141,11 +142,16 @@ export class ConfigDiscovery {
       if (typeof global.previewSize === 'number') this.globalAutoSave.previewSize = global.previewSize;
     }
 
+    // Extract execEnabled config (if present)
+    if (typeof data.execEnabled === 'boolean') {
+      this._execEnabled = data.execEnabled;
+    }
+
     // MCPU format (direct server configs object)
-    // Filter out global config key before parsing servers
+    // Filter out global config keys before parsing servers
     const serverData: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(data)) {
-      if (key !== 'autoSaveResponse') {
+      if (key !== 'autoSaveResponse' && key !== 'execEnabled') {
         serverData[key] = value;
       }
     }
@@ -207,6 +213,13 @@ export class ConfigDiscovery {
    */
   getAllServers(): Map<string, ExtendedServerConfig> {
     return this.configs;
+  }
+
+  /**
+   * Check if exec command is enabled (default: true)
+   */
+  isExecEnabled(): boolean {
+    return this._execEnabled;
   }
 
   /**

@@ -227,6 +227,7 @@ export async function executeExec(
             argv: msg.argv,
             params: msg.params,
             batch: msg.batch,
+            autoSaveResponse: false,  // User code handles full responses
           });
 
           // Parse output if it's JSON (for structured results)
