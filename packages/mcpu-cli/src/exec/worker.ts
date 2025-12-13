@@ -103,9 +103,32 @@ async function runUserCode(code: string, cwd?: string): Promise<unknown> {
   return await fn(mcpuMux, userRequire);
 }
 
+/**
+ * Validate incoming IPC message structure
+ */
+function isExecMessage(msg: unknown): msg is ExecMessage {
+  return (
+    typeof msg === 'object' &&
+    msg !== null &&
+    'type' in msg &&
+    (msg as ExecMessage).type === 'exec' &&
+    'code' in msg &&
+    typeof (msg as ExecMessage).code === 'string'
+  );
+}
+
+function isMuxResponse(msg: unknown): msg is MuxResponse {
+  return (
+    typeof msg === 'object' &&
+    msg !== null &&
+    'id' in msg &&
+    typeof (msg as MuxResponse).id === 'number'
+  );
+}
+
 // Handle messages from main process
-process.on('message', async (msg: ExecMessage | MuxResponse) => {
-  if ('type' in msg && msg.type === 'exec') {
+process.on('message', async (msg: unknown) => {
+  if (isExecMessage(msg)) {
     // Execute user code
     try {
       const result = await runUserCode(msg.code, msg.cwd);
@@ -116,7 +139,7 @@ process.on('message', async (msg: ExecMessage | MuxResponse) => {
       const doneMsg: DoneMessage = { type: 'done', error };
       process.send!(doneMsg);
     }
-  } else if ('id' in msg) {
+  } else if (isMuxResponse(msg)) {
     // Response to a mux call
     const p = pending.get(msg.id);
     if (p) {
@@ -128,6 +151,7 @@ process.on('message', async (msg: ExecMessage | MuxResponse) => {
       }
     }
   }
+  // Ignore unrecognized messages silently
 });
 
 // Handle uncaught errors
