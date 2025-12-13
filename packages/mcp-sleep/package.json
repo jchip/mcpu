@@ -1,0 +1,21 @@
+{
+  "name": "@mcpu/mcp-sleep",
+  "version": "0.1.0",
+  "description": "Simple MCP server with a sleep tool for testing parallel execution",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "mcp-sleep": "./bin/mcp-sleep.mjs"
+  },
+  "files": [
+    "bin"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "zod": "^3.23.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}

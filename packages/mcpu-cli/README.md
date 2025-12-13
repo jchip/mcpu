@@ -17,7 +17,7 @@ It can be used in two ways:
 
 ## Why MCPU?
 
-MCP tool schemas are verbose. A single server like Playwright requires ~11KB of schema data. With multiple servers, this adds up quickly and consumes valuable context window space. MCP servers can also return large inline responses that bloat tokens or even fail to send to the LLM.
+MCP tool schemas are verbose. A single server like Playwright requires ~11KB of schema data. With multiple servers, this adds up quickly and consumes valuable context window space. MCP servers can also return large inline responses that bloat tokens or even fail to send to the LLM. Additionally, native MCP tool calls execute sequentially even when requested in parallel, making cross-server operations slow.
 
 MCPU addresses this by:
 
@@ -25,7 +25,24 @@ MCPU addresses this by:
 - **Compressing tool schemas** - Reduces schema size by up to 84% using a compact format designed for AI consumption
 - **Intercept** - Intercept large inline content and save them to disk
 - **Exec** - Run JavaScript code to orchestrate tools, filter responses, and control what reaches the context window
+- **True parallel execution** - The `batch` command enables real cross-server parallelism (see verification below)
 - **CLI-first design** - Built for AI agents with bash tool access (Claude Code, etc.), not just MCP-native clients
+
+### Parallel Execution Verification
+
+```
+# Native MCP - 3 servers with 6s, 7s, 8s sleep calls "in parallel"
+sleep:  18:06:14 → 18:06:20 (6s)
+sleep2: 18:06:20 → 18:06:27 (7s)  ← started after sleep finished
+sleep3: 18:06:28 → 18:06:36 (8s)  ← started after sleep2 finished
+Total: ~21 seconds (sequential)
+
+# MCPU batch - same operations, truly parallel
+All three started together, finished when slowest completed
+Total: ~8 seconds (2.6x faster)
+```
+
+This makes MCPU essential for workflows that need to query multiple databases, fetch from multiple APIs, or run independent operations across different MCP servers simultaneously.
 
 ## Schema Compression Stats
 
