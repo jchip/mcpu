@@ -20,7 +20,7 @@ import type { CommandResult } from "../types/result.ts";
 import { formatMcpResponse, autoSaveResponse } from "../formatters.ts";
 import { getErrorMessage } from "../utils/error.ts";
 
-export type TransportType = 'stdio' | 'http';
+export type TransportType = "stdio" | "http";
 
 export interface McpuMcpServerOptions {
   config?: string;
@@ -70,7 +70,10 @@ export class McpuMcpServer {
    * Format raw result from call commands
    * If result contains rawResult in meta, format it according to auto-save config
    */
-  private async formatRawResult(result: CommandResult, cwd?: string): Promise<CommandResult> {
+  private async formatRawResult(
+    result: CommandResult,
+    cwd?: string
+  ): Promise<CommandResult> {
     // Only format if there's a rawResult from a call command
     if (!result.meta?.rawResult || !this.configDiscovery) {
       return result;
@@ -84,7 +87,13 @@ export class McpuMcpServer {
 
     let output: string;
     if (autoSaveConfig.enabled) {
-      const autoSaveResult = await autoSaveResponse(mcpResult, server, tool, autoSaveConfig, workingDir);
+      const autoSaveResult = await autoSaveResponse(
+        mcpResult,
+        server,
+        tool,
+        autoSaveConfig,
+        workingDir
+      );
       output = autoSaveResult.output;
     } else {
       output = formatMcpResponse(mcpResult);
@@ -103,19 +112,33 @@ export class McpuMcpServer {
    * Register the mux tool
    */
   private registerTools(): void {
-    const batchSchema = z.record(z.any()).optional().describe("{id: {argv, params}}");
+    // Tool description with examples for clarity
+    const toolDescription = `Route commands to MCP servers.
+
+Commands: argv=[cmd, ...args], params={}
+- List servers: ["servers", "optional pattern"]
+- Call tool: ["call","server","tool"], {arg1:"...", ...}
+- Get summary of tools: ["tools","server"]
+- Get full tool info: ["info","server","optional tool"]
+- connect/disconnect: ["connect","server"] (commands auto connect)
+- Set server config: ["setConfig","server"], {extraArgs?:["--flag"], env?:{}, requestTimeout?:ms}
+- Batch Commands: ["batch"], {timeout?:ms, resp_mode?:auto|full|summary|refs}, batch={id: {argv, params, ...}}
+- exec JS Code: ["exec"], {file?:string, code?:string, timeout?:ms}
+  - API: mcpuMux({argv,params,...}):Promise<any>
+- List connections: ["connections"]
+- Reload: ["reload"]
+`;
 
     this.server.tool(
       "mux",
-      "MCP muxer",
+      toolDescription,
       {
-        argv: z.array(z.string()).describe("[cmd, ...args]: servers [fuzzy], tools|info|call|connect|disconnect|setConfig <server> [tool..], batch, exec, connections, reload"),
-        params: z.union([z.record(z.any()), z.string()]).optional().describe("batch: {timeout?, resp_mode?: auto|full|summary|refs}; exec: {file?, code?, timeout?} - file or code required, code has async mcpuMux({argv,params,...}):Promise<any> available"),
-        batch: batchSchema,
-        setConfig: z.object({ extraArgs: z.array(z.string()).optional().describe("args from user") }).optional(),
+        argv: z.array(z.string()),
+        params: z.union([z.record(z.any()), z.string()]).optional(),
+        batch: z.record(z.any()).optional(),
         cwd: z.string().optional(),
       },
-      async ({ argv, params, batch, setConfig, cwd }) => {
+      async ({ argv, params, batch, cwd }) => {
         // Parse params if passed as JSON string
         let parsedParams = params;
         if (typeof params === "string") {
@@ -126,14 +149,23 @@ export class McpuMcpServer {
           }
         }
 
-        this.log("Executing command", { argv, params: parsedParams, batch, setConfig, cwd });
+        this.log("Executing command", {
+          argv,
+          params: parsedParams,
+          batch,
+          cwd,
+        });
 
         try {
           const rawResult = await coreExecute({
             argv,
             params: parsedParams,
-            batch: batch as Record<string, { argv: string[]; params?: Record<string, unknown> }> | undefined,
-            setConfig,
+            batch: batch as
+              | Record<
+                  string,
+                  { argv: string[]; params?: Record<string, unknown> }
+                >
+              | undefined,
             cwd,
             connectionPool: this.pool,
             configs: this.configs,
@@ -187,9 +219,9 @@ export class McpuMcpServer {
 
     this.log("Loaded configs", { servers: Array.from(this.configs.keys()) });
 
-    const transportType = this.options.transport || 'stdio';
+    const transportType = this.options.transport || "stdio";
 
-    if (transportType === 'http') {
+    if (transportType === "http") {
       await this.startHttpServer();
     } else {
       // Connect via stdio transport
@@ -204,7 +236,7 @@ export class McpuMcpServer {
    */
   private async startHttpServer(): Promise<void> {
     const port = this.options.port || 3000;
-    const endpoint = this.options.endpoint || '/mcp';
+    const endpoint = this.options.endpoint || "/mcp";
 
     // Create transport (stateless mode for simplicity)
     this.httpTransport = new StreamableHTTPServerTransport({
@@ -224,8 +256,8 @@ export class McpuMcpServer {
         this.log("HTTP request error", { error: getErrorMessage(error) });
         if (!res.headersSent) {
           res.status(500).json({
-            jsonrpc: '2.0',
-            error: { code: -32603, message: 'Internal server error' },
+            jsonrpc: "2.0",
+            error: { code: -32603, message: "Internal server error" },
             id: null,
           });
         }
@@ -235,16 +267,16 @@ export class McpuMcpServer {
     // Method not allowed for GET/DELETE
     app.get(endpoint, (_req, res) => {
       res.status(405).json({
-        jsonrpc: '2.0',
-        error: { code: -32000, message: 'Method not allowed' },
+        jsonrpc: "2.0",
+        error: { code: -32000, message: "Method not allowed" },
         id: null,
       });
     });
 
     app.delete(endpoint, (_req, res) => {
       res.status(405).json({
-        jsonrpc: '2.0',
-        error: { code: -32000, message: 'Method not allowed' },
+        jsonrpc: "2.0",
+        error: { code: -32000, message: "Method not allowed" },
         id: null,
       });
     });
@@ -253,7 +285,9 @@ export class McpuMcpServer {
     this.httpServer = app.listen(port, () => {
       this.log(`MCP server started (http://localhost:${port}${endpoint})`);
       // Also log to stderr so user can see the URL
-      console.error(`[mcpu-mcp] Listening on http://localhost:${port}${endpoint}`);
+      console.error(
+        `[mcpu-mcp] Listening on http://localhost:${port}${endpoint}`
+      );
     });
   }
 

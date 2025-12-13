@@ -145,24 +145,22 @@ describe('McpuMcpServer', () => {
       expect(result.isError).toBe(false);
     });
 
-    it('should execute call command with setConfig', async () => {
+    it('should execute setConfig command with params.extraArgs', async () => {
       mockCoreExecute.mockResolvedValue({
         success: true,
-        output: 'Tool executed with config',
+        output: 'Config updated',
         exitCode: 0,
       });
 
       const result = await toolHandler({
-        argv: ['call', 'playwright', 'browser_navigate'],
-        params: { url: 'https://example.com' },
-        setConfig: { extraArgs: ['--isolated'] },
+        argv: ['setConfig', 'playwright'],
+        params: { extraArgs: ['--isolated'] },
       });
 
       expect(mockCoreExecute).toHaveBeenCalledWith({
-        argv: ['call', 'playwright', 'browser_navigate'],
-        params: { url: 'https://example.com' },
+        argv: ['setConfig', 'playwright'],
+        params: { extraArgs: ['--isolated'] },
         batch: undefined,
-        setConfig: { extraArgs: ['--isolated'] },
         cwd: undefined,
         connectionPool: expect.any(Object),
         configs: expect.any(Map),

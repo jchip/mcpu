@@ -121,16 +121,12 @@ async function findDaemonPort(port?: number, pid?: number, ppid?: number): Promi
 /**
  * Send command to daemon via HTTP
  */
-async function sendCommand(port: number, argv: string[], params?: any, setConfig?: any): Promise<void> {
+async function sendCommand(port: number, argv: string[], params?: any): Promise<void> {
   const url = `http://localhost:${port}/cli`;
   const body: any = { argv, cwd: process.cwd() };
 
   if (params !== undefined) {
     body.params = params;
-  }
-
-  if (setConfig !== undefined) {
-    body.setConfig = setConfig;
   }
 
   const response = await fetch(url, {
@@ -352,7 +348,6 @@ const nc = new NixClap({
 
       // Handle --stdin or --param-file
       let params: any = undefined;
-      let setConfig: any = undefined;
       let argv = parsed._ || [];
 
       // --stdin and --cmd-file are mutually exclusive, --stdin takes precedence
@@ -390,14 +385,9 @@ const nc = new NixClap({
         if (yamlData.params !== undefined) {
           params = yamlData.params;
         }
-
-        // Extract setConfig from YAML
-        if (yamlData.setConfig !== undefined) {
-          setConfig = yamlData.setConfig;
-        }
       }
 
-      await sendCommand(port, argv, params, setConfig);
+      await sendCommand(port, argv, params);
     } catch (error) {
       console.error('Error:', getErrorMessage(error));
       process.exit(1);

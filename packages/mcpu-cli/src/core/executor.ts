@@ -215,13 +215,12 @@ export interface CallCommandArgs {
   tool: string;
   args: string[];
   stdinData?: string;
-  setConfig?: { extraArgs?: string[] };
   restart?: boolean;
 }
 
 export interface ConfigCommandArgs {
   server: string;
-  setConfig?: { extraArgs?: string[] };
+  setConfig?: Record<string, any>;  // {extraArgs?:[], env?:{}, requestTimeout?:ms}
 }
 
 export interface SchemaCommandArgs {
@@ -920,38 +919,6 @@ export async function executeCallCommand(
       };
     }
 
-    // Handle setConfig.extraArgs if provided
-    if (args.setConfig?.extraArgs !== undefined && isStdioConfig(config)) {
-      const newExtraArgs = args.setConfig.extraArgs;
-      const oldExtraArgs = config.extraArgs;
-      const argsChanged = !extraArgsEqual(oldExtraArgs, newExtraArgs);
-
-      // Check if server is currently connected
-      let serverRunning = false;
-      if (options.connectionPool) {
-        const connections = options.connectionPool.listConnections();
-        serverRunning = connections.some(c => c.server === args.server);
-      }
-
-      if (argsChanged && serverRunning) {
-        if (!args.restart) {
-          // Error: server running with different args, no --restart flag
-          return {
-            success: false,
-            error: `Server "${args.server}" is running with different extraArgs. Use --restart to apply new extraArgs.`,
-            exitCode: 1,
-          };
-        }
-        // Restart: disconnect server, store new args
-        options.connectionPool!.disconnect(args.server);
-        config.extraArgs = newExtraArgs;
-      } else if (!serverRunning) {
-        // Server not running: just store the args
-        config.extraArgs = newExtraArgs;
-      }
-      // If server running with same args: proceed normally, no change needed
-    }
-
     const client = new MCPClient();
     const cache = new SchemaCache();
     const pool = options.connectionPool;
@@ -1089,6 +1056,15 @@ async function executeConfigCommand(
   const { server, setConfig } = args;
   const { configs, connectionPool } = options;
 
+  // Fail fast if setConfig property is missing - prevents accidental config clearing
+  if (!setConfig) {
+    return {
+      success: false,
+      error: 'setConfig command requires params. Use {extraArgs:[...], requestTimeout:N, env:{...}}',
+      exitCode: 1,
+    };
+  }
+
   if (!configs) {
     return {
       success: false,
@@ -1106,21 +1082,57 @@ async function executeConfigCommand(
     };
   }
 
-  // Check if this is a stdio config (only stdio supports extraArgs)
-  if (!isStdioConfig(config)) {
-    return {
-      success: false,
-      error: `Server "${server}" is not a stdio server. extraArgs only applies to stdio servers.`,
-      exitCode: 1,
-    };
+  const isStdio = isStdioConfig(config);
+  const changes: string[] = [];
+  let requiresRestart = false;
+
+  // Handle extraArgs (stdio only)
+  if ('extraArgs' in setConfig) {
+    if (!isStdio) {
+      return {
+        success: false,
+        error: `Server "${server}" is not a stdio server. extraArgs only applies to stdio servers.`,
+        exitCode: 1,
+      };
+    }
+    const newExtraArgs = setConfig.extraArgs as string[] | undefined;
+    const oldExtraArgs = (config as any).extraArgs;
+    if (!extraArgsEqual(oldExtraArgs, newExtraArgs)) {
+      (config as any).extraArgs = newExtraArgs;
+      requiresRestart = true;
+      if (newExtraArgs && newExtraArgs.length > 0) {
+        changes.push(`extraArgs=[${newExtraArgs.join(', ')}]`);
+      } else {
+        changes.push('extraArgs cleared');
+      }
+    }
   }
 
-  const newExtraArgs = setConfig?.extraArgs;
-  const oldExtraArgs = config.extraArgs;
-  const changed = !extraArgsEqual(oldExtraArgs, newExtraArgs);
+  // Handle env (stdio only)
+  if ('env' in setConfig) {
+    if (!isStdio) {
+      return {
+        success: false,
+        error: `Server "${server}" is not a stdio server. env only applies to stdio servers.`,
+        exitCode: 1,
+      };
+    }
+    const newEnv = setConfig.env as Record<string, string> | undefined;
+    (config as any).env = newEnv ? { ...(config as any).env, ...newEnv } : undefined;
+    requiresRestart = true;
+    if (newEnv) {
+      changes.push(`env={${Object.keys(newEnv).join(', ')}}`);
+    } else {
+      changes.push('env cleared');
+    }
+  }
 
-  // Store the new extraArgs
-  config.extraArgs = newExtraArgs;
+  // Handle requestTimeout (all transports)
+  if ('requestTimeout' in setConfig) {
+    const newTimeout = setConfig.requestTimeout as number | undefined;
+    config.requestTimeout = newTimeout;
+    changes.push(newTimeout ? `requestTimeout=${newTimeout}ms` : 'requestTimeout cleared');
+  }
 
   // Check if server is currently connected
   let serverRunning = false;
@@ -1130,14 +1142,14 @@ async function executeConfigCommand(
   }
 
   let message = `Server "${server}" config updated`;
-  if (newExtraArgs && newExtraArgs.length > 0) {
-    message += `: extraArgs = [${newExtraArgs.join(', ')}]`;
+  if (changes.length > 0) {
+    message += `: ${changes.join(', ')}`;
   } else {
-    message += `: extraArgs cleared`;
+    message += ' (no changes)';
   }
 
-  if (changed && serverRunning) {
-    message += `\nNote: Server is running with previous args. Restart required to apply new extraArgs.`;
+  if (requiresRestart && serverRunning) {
+    message += '\nNote: Server is running. Restart required to apply changes.';
   }
 
   return {
