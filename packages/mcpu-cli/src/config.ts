@@ -161,14 +161,14 @@ export class ConfigDiscovery {
           console.error(`Loaded config from: ${source}`);
         }
       } catch (error) {
-        // Always log config errors - silent failures are confusing
-        console.error(`Failed to load config from ${source}:`);
+        // Log config validation errors as warnings so they're visible but don't crash
+        console.warn(`[mcpu] Warning: Failed to load config from ${source}:`);
         if (error instanceof ZodError) {
-          console.error(formatZodError(error));
+          console.warn(formatZodError(error));
         } else if (error instanceof Error) {
-          console.error(`  ${error.message}`);
+          console.warn(`  ${error.message}`);
         } else {
-          console.error(`  ${error}`);
+          console.warn(`  ${error}`);
         }
       }
     }
