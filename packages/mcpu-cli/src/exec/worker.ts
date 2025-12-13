@@ -9,6 +9,8 @@
  */
 
 import { createRequire } from 'module';
+import { existsSync, statSync } from 'fs';
+import { isAbsolute } from 'path';
 
 // Types for IPC messages
 interface MuxRequest {
@@ -72,6 +74,17 @@ async function mcpuMux(opts: {
 async function runUserCode(code: string, cwd?: string): Promise<unknown> {
   // Change to specified working directory if provided
   if (cwd) {
+    // Validate cwd: must be absolute path and exist as a directory
+    if (!isAbsolute(cwd)) {
+      throw new Error(`cwd must be an absolute path, got: ${cwd}`);
+    }
+    if (!existsSync(cwd)) {
+      throw new Error(`cwd does not exist: ${cwd}`);
+    }
+    const stat = statSync(cwd);
+    if (!stat.isDirectory()) {
+      throw new Error(`cwd is not a directory: ${cwd}`);
+    }
     process.chdir(cwd);
   }
 
