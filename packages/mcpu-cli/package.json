@@ -1,7 +1,7 @@
 {
   "name": "@mcpu/cli",
   "version": "0.2.17",
-  "description": "Unified CLI to manage MCP servers for efficient AI code assistant usage",
+  "description": "MCP multiplexer with progressive discovery, parallel batch calls, code execution, and up to 90% token reduction",
   "author": "Joel Chen <joel123@gmail.com>",
   "repository": {
     "type": "git",
@@ -16,13 +16,15 @@
     "mcp",
     "model-context-protocol",
     "cli",
-    "proxy",
+    "multiplexer",
     "claude",
     "ai",
-    "tool-schema",
-    "coding",
-    "assistant",
-    "vibe"
+    "progressive-discovery",
+    "code-execution",
+    "token-reduction",
+    "agent",
+    "batch",
+    "parallel"
   ],
   "type": "module",
   "main": "./dist/cli.js",

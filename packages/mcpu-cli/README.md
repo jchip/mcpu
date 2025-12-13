@@ -1,8 +1,8 @@
 # MCPU CLI
 
-> **MCP Unified - Unlimit MCP servers with zero upfront tokens, and 80% token reduction**
+> **MCP Unified - Unlimit MCP servers with zero upfront tokens, and up to 90% token reduction**
 
-MCPU is an MCP multiplexer (1:N) that manages all your MCP servers for multiple AI Assistants, with progressive discovery and up to 84% token reduction.
+MCPU is an MCP multiplexer (1:N) that manages all your MCP servers for multiple AI Assistants, with progressive discovery, parallel batch calls, code execution, and up to 90% token reduction.
 
 ```
 Claude CLI/Desktop ─┐          ┌-> playwright
@@ -22,7 +22,7 @@ MCP tool schemas are verbose. A single server like Playwright requires ~11KB of 
 MCPU addresses this by:
 
 - **Progressive discovery and disclosure** - Servers and their tool schemas are revealed and connected only when needed
-- **Compressing tool schemas** - Reduces schema size by up to 84% using a compact format designed for AI consumption
+- **Compressing tool schemas** - Reduces schema size by up to 90% using a compact format designed for AI consumption
 - **Intercept** - Intercept large inline content and save them to disk
 - **Exec** - Run JavaScript code to orchestrate tools, filter responses, and control what reaches the context window
 - **True parallel execution** - The `batch` command enables real cross-server parallelism (see verification below)
