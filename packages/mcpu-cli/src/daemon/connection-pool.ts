@@ -131,17 +131,23 @@ export class ConnectionPool {
     this.refreshingServers.add(serverName);
 
     // Fire and forget - fetch tools and update cache
-    (async () => {
-      try {
-        const response = await connection.client.listTools();
-        const tools = response.tools || [];
-        await this.schemaCache.set(serverName, tools);
-      } catch (error) {
-        console.error(`[${serverName}] Background cache refresh failed:`, error);
-      } finally {
-        this.refreshingServers.delete(serverName);
-      }
-    })();
+    // Use .catch() to ensure no unhandled rejections
+    this.doRefreshCache(serverName, connection).catch((error) => {
+      console.error(`[${serverName}] Background cache refresh failed:`, error);
+    });
+  }
+
+  /**
+   * Internal cache refresh implementation
+   */
+  private async doRefreshCache(serverName: string, connection: MCPConnection): Promise<void> {
+    try {
+      const response = await connection.client.listTools();
+      const tools = response.tools || [];
+      await this.schemaCache.set(serverName, tools);
+    } finally {
+      this.refreshingServers.delete(serverName);
+    }
   }
 
   /**
