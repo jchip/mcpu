@@ -27,25 +27,35 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 /**
- * Find the worker script path - handles both development and production scenarios
+ * Find the worker script path
+ * Bun: use .ts source (handles TypeScript natively)
+ * Node: use built .js (tsx is devDependency only)
  */
 function getWorkerPath(): string {
-  // Check if we're running from dist (built) or src (development)
-  const distWorker = resolve(__dirname, '../exec/worker.js');
-  const srcWorker = resolve(__dirname, '../exec/worker.ts');
+  const isBun = !!process.versions.bun;
 
-  // Prefer built version
-  if (existsSync(distWorker)) {
-    return distWorker;
+  if (isBun) {
+    // Bun handles TypeScript natively - use source
+    const srcWorker = resolve(__dirname, '../exec/worker.ts');
+    if (existsSync(srcWorker)) {
+      return srcWorker;
+    }
   }
 
-  // Fall back to source if dist doesn't exist (need tsx/ts-node to run)
-  if (existsSync(srcWorker)) {
-    return srcWorker;
+  // Node.js - use built worker
+  // From dist/commands/exec.js -> ../exec/worker.js
+  const fromDist = resolve(__dirname, '../exec/worker.js');
+  if (existsSync(fromDist)) {
+    return fromDist;
   }
 
-  // Default to dist path (will error if not built)
-  return distWorker;
+  // From src/commands/exec.ts -> ../../dist/exec/worker.js
+  const fromSrc = resolve(__dirname, '../../dist/exec/worker.js');
+  if (existsSync(fromSrc)) {
+    return fromSrc;
+  }
+
+  throw new Error('Worker not found - run build first');
 }
 
 const WORKER_PATH = getWorkerPath();
@@ -134,18 +144,20 @@ export async function executeExec(
   let worker: ChildProcess;
   try {
     const workerPath = getWorkerPath();
-    const isTypeScript = workerPath.endsWith('.ts');
 
-    // For TypeScript files, use tsx loader
-    const execArgv = isTypeScript
-      ? ['--import', 'tsx']
-      : [];
+    // No execArgv needed:
+    // - Bun handles TypeScript natively
+    // - Node uses built .js worker
+    const execArgv: string[] = [];
+
+    // Remove NODE_OPTIONS to prevent tsx preload inheritance when running .js worker
+    const workerEnv = { ...process.env };
+    delete workerEnv.NODE_OPTIONS;
 
     worker = fork(workerPath, [], {
       stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
       execArgv,
-      // Don't inherit env by default for isolation
-      env: { ...process.env },
+      env: workerEnv,
     });
   } catch (err: unknown) {
     const error = err instanceof Error ? err.message : String(err);
