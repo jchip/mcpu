@@ -1,3 +1,30 @@
+# 12/13/2025
+
+## Packages
+
+-   `@mcpu/cli@0.2.17` `(0.2.16 => 0.2.17)`
+
+## Commits
+
+-   `packages/mcpu-cli`
+
+    -   Add mcp-sleep package for testing parallel MCP execution [commit](/commit/b23b08450ff41d6c5e81c5c4d17f3fc115ce441f)
+    -   MCU-79: Refactor executor to return raw results for caller formatting [commit](/commit/dcc4361b8d014c86061e0864662f5e43d92be1de)
+    -   MCU-78,76,77: Exec command improvements and documentation [commit](/commit/c614282994507579019ed4e1a2a41b5610455ade)
+    -   MCU-75: Fix exec worker tsx preload error [commit](/commit/695ac097374f6cbb06860c655b0276900dd16398)
+    -   MCU-74: Update MCP tool schema to document exec command [commit](/commit/68cfd5e892c193dc6970250c55be757669c80aaf)
+    -   MCU-58: Implement exec command with worker isolation [commit](/commit/02eafa9ff660d1e2ec68bd11290820c60814df61)
+    -   MCU-56: Document batch params in MCP tool schema [commit](/commit/f783e61f108f51bdf5849b477d55ef4425c0b1a2)
+    -   MCU-56: Add batch tool calls support [commit](/commit/a29ddee5469cffe8575f41f486a4b4a244460839)
+
+-   `packages/mcp-sleep`
+
+    -   Add mcp-sleep package for testing parallel MCP execution [commit](/commit/b23b08450ff41d6c5e81c5c4d17f3fc115ce441f)
+
+-   `MISC`
+
+    -   chore: update dep [commit](/commit/3da8f5fc465a18c1b6b4eb6744ca98719b459d97)
+
 # 12/12/2025
 
 ## Packages
