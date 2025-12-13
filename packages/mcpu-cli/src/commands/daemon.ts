@@ -2,6 +2,7 @@
 
 import { DaemonServer } from '../daemon/server.ts';
 import { createLogger, getLogPath } from '../daemon/logger.ts';
+import { getErrorMessage } from '../utils/error.ts';
 
 export interface DaemonOptions {
   port?: number;
@@ -72,8 +73,8 @@ export async function daemonCommand(options: DaemonOptions): Promise<void> {
   // Start the daemon
   try {
     await daemon.start();
-  } catch (error: any) {
-    logger.error({ error: error.message || String(error) }, 'Failed to start daemon');
+  } catch (error) {
+    logger.error({ error: getErrorMessage(error) }, 'Failed to start daemon');
     process.exit(1);
   }
 }

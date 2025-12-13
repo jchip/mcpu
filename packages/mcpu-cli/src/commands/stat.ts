@@ -13,6 +13,7 @@ import {
   executeInfoCommand,
   type ExecuteOptions,
 } from '../core/executor.ts';
+import { getErrorMessage } from '../utils/error.ts';
 
 /**
  * Format byte size as human-readable string
@@ -154,14 +155,14 @@ export async function executeStat(options: {
         fullSize,
         compactSize,
       });
-    } catch (error: any) {
+    } catch (error) {
       stats.push({
         name: serverName,
         toolCount: 0,
         nativeSize: 0,
         fullSize: 0,
         compactSize: 0,
-        error: error.message || String(error),
+        error: getErrorMessage(error),
       });
     }
   }

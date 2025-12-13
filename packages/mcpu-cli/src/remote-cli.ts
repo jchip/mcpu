@@ -5,6 +5,7 @@ import { parse as parseYaml } from 'yaml';
 import { readFile, rename, unlink } from 'fs/promises';
 import { PidManager } from './daemon/pid-manager.ts';
 import { VERSION } from './version.ts';
+import { getErrorMessage, isNodeError } from './utils/error.ts';
 
 const output = (text: string) => console.log(text);
 
@@ -15,11 +16,11 @@ async function readParamFile(filePath: string): Promise<any> {
   try {
     const content = await readFile(filePath, 'utf-8');
     return parseYaml(content);
-  } catch (error: any) {
-    if (error.code === 'ENOENT') {
+  } catch (error) {
+    if (isNodeError(error) && error.code === 'ENOENT') {
       throw new Error(`File not found: ${filePath}`);
     }
-    throw new Error(`Failed to read param file: ${error.message}`);
+    throw new Error(`Failed to read param file: ${getErrorMessage(error)}`);
   }
 }
 
@@ -181,9 +182,10 @@ async function shutdownDaemons(limit?: number, port?: number, pid?: number, ppid
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
-    } catch (error: any) {
-      if (!error.message?.includes('ECONNRESET') && !error.message?.includes('socket hang up')) {
-        output(`Failed to shutdown daemon: ${error.message}`);
+    } catch (error) {
+      const msg = getErrorMessage(error);
+      if (!msg.includes('ECONNRESET') && !msg.includes('socket hang up')) {
+        output(`Failed to shutdown daemon: ${msg}`);
         process.exit(1);
       }
     }
@@ -216,13 +218,14 @@ async function shutdownDaemons(limit?: number, port?: number, pid?: number, ppid
       });
       successCount++;
       output(`  ✓ Daemon PID ${daemon.pid} shut down`);
-    } catch (error: any) {
-      if (error.message?.includes('ECONNRESET') || error.message?.includes('socket hang up')) {
+    } catch (error) {
+      const msg = getErrorMessage(error);
+      if (msg.includes('ECONNRESET') || msg.includes('socket hang up')) {
         successCount++;
         output(`  ✓ Daemon PID ${daemon.pid} shut down`);
       } else {
         failCount++;
-        output(`  ✗ Failed to shutdown daemon PID ${daemon.pid}: ${error.message}`);
+        output(`  ✗ Failed to shutdown daemon PID ${daemon.pid}: ${msg}`);
       }
     }
   }
@@ -395,8 +398,8 @@ const nc = new NixClap({
       }
 
       await sendCommand(port, argv, params, setConfig);
-    } catch (error: any) {
-      console.error('Error:', error.message || error);
+    } catch (error) {
+      console.error('Error:', getErrorMessage(error));
       process.exit(1);
     }
   }

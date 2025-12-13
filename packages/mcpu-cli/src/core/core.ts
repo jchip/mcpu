@@ -14,6 +14,7 @@ import { executeExec, type ExecParams } from '../commands/exec.ts';
 import { ConfigDiscovery } from '../config.ts';
 import type { CommandResult } from '../types/result.ts';
 import type { ConnectionPool } from '../daemon/connection-pool.ts';
+import { getErrorMessage } from '../utils/error.ts';
 
 export interface CoreExecutionOptions {
   argv: string[];
@@ -397,10 +398,10 @@ export async function coreExecute(options: CoreExecutionOptions): Promise<Comman
           exitCode: 1,
         };
     }
-  } catch (error: any) {
+  } catch (error) {
     return {
       success: false,
-      error: error.message || String(error),
+      error: getErrorMessage(error),
       exitCode: 1,
     };
   }

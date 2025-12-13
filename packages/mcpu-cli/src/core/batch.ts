@@ -13,6 +13,7 @@ import { mkdir, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { coreExecute, type CoreExecutionOptions } from './core.ts';
 import type { CommandResult } from '../types/result.ts';
+import { getErrorMessage } from '../utils/error.ts';
 
 // ============================================================================
 // Types
@@ -344,12 +345,12 @@ async function executeCall(
         },
       };
     }
-  } catch (error: any) {
+  } catch (error) {
     return {
       id,
       result: {
         success: false,
-        error: error.message || String(error),
+        error: getErrorMessage(error),
       },
     };
   }

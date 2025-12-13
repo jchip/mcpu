@@ -18,6 +18,7 @@ import { VERSION } from "../version.ts";
 import type { MCPServerConfig } from "../types.ts";
 import type { CommandResult } from "../types/result.ts";
 import { formatMcpResponse, autoSaveResponse } from "../formatters.ts";
+import { getErrorMessage } from "../utils/error.ts";
 
 export type TransportType = 'stdio' | 'http';
 
@@ -156,8 +157,8 @@ export class McpuMcpServer {
             ],
             isError: !result.success,
           };
-        } catch (error: any) {
-          this.log("Command error", { error: error.message });
+        } catch (error) {
+          this.log("Command error", { error: getErrorMessage(error) });
           return {
             content: [
               {
@@ -219,8 +220,8 @@ export class McpuMcpServer {
     app.post(endpoint, async (req, res) => {
       try {
         await this.httpTransport!.handleRequest(req, res, req.body);
-      } catch (error: any) {
-        this.log("HTTP request error", { error: error.message });
+      } catch (error) {
+        this.log("HTTP request error", { error: getErrorMessage(error) });
         if (!res.headersSent) {
           res.status(500).json({
             jsonrpc: '2.0',
@@ -272,8 +273,8 @@ export class McpuMcpServer {
 
     try {
       await this.pool.shutdown();
-    } catch (error: any) {
-      this.log("Error during pool shutdown", { error: error.message });
+    } catch (error) {
+      this.log("Error during pool shutdown", { error: getErrorMessage(error) });
     }
 
     this.log("Shutdown complete");

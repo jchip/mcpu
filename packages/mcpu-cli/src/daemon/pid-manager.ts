@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
+import { hasErrorCode } from '../utils/error.ts';
 
 export interface DaemonInfo {
   pid: number;
@@ -28,8 +29,8 @@ export class PidManager {
   private async ensureDataDir(): Promise<void> {
     try {
       await fs.mkdir(this.dataDir, { recursive: true });
-    } catch (error: any) {
-      if (error.code !== 'EEXIST') {
+    } catch (error) {
+      if (!hasErrorCode(error, 'EEXIST')) {
         throw error;
       }
     }
@@ -59,8 +60,8 @@ export class PidManager {
       const filePath = this.getPidFilePath(ppid, pid);
       const content = await fs.readFile(filePath, 'utf-8');
       return JSON.parse(content);
-    } catch (error: any) {
-      if (error.code === 'ENOENT') {
+    } catch (error) {
+      if (hasErrorCode(error, 'ENOENT')) {
         return null;
       }
       throw error;
@@ -74,8 +75,8 @@ export class PidManager {
     try {
       const filePath = this.getPidFilePath(ppid, pid);
       await fs.unlink(filePath);
-    } catch (error: any) {
-      if (error.code !== 'ENOENT') {
+    } catch (error) {
+      if (!hasErrorCode(error, 'ENOENT')) {
         throw error;
       }
     }
@@ -126,8 +127,8 @@ export class PidManager {
       }
 
       return daemons;
-    } catch (error: any) {
-      if (error.code === 'ENOENT') {
+    } catch (error) {
+      if (hasErrorCode(error, 'ENOENT')) {
         return [];
       }
       throw error;

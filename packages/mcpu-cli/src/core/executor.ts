@@ -9,6 +9,7 @@ import { ExecutionContext } from './context.ts';
 import { formatToolInfo, abbreviateType, LEGEND_HEADER, TYPES_LINE, collectEnums, formatEnumLegend, extractEnumOrRange, formatParamType } from '../formatters.ts';
 import { isStdioConfig, isUrlConfig, isWebSocketConfig } from '../types.ts';
 import { fuzzyMatch } from '../utils/fuzzy.ts';
+import { getErrorMessage } from '../utils/error.ts';
 
 /**
  * Core command executor - shared logic for CLI and daemon
@@ -503,10 +504,10 @@ export async function executeServersCommand(
         exitCode: 0,
       };
     }
-  } catch (error: any) {
+  } catch (error) {
     return {
       success: false,
-      error: error.message || String(error),
+      error: getErrorMessage(error),
       exitCode: 1,
     };
   }
@@ -694,10 +695,10 @@ export async function executeToolsCommand(
         meta,
       };
     }
-  } catch (error: any) {
+  } catch (error) {
     return {
       success: false,
-      error: error.message || String(error),
+      error: getErrorMessage(error),
       exitCode: 1,
     };
   }
@@ -828,10 +829,10 @@ export async function executeInfoCommand(
         meta,
       };
     }
-  } catch (error: any) {
+  } catch (error) {
     return {
       success: false,
-      error: error.message || String(error),
+      error: getErrorMessage(error),
       exitCode: 1,
     };
   }
@@ -1059,10 +1060,10 @@ export async function executeCallCommand(
         await client.disconnect(connection);
       }
     }
-  } catch (error: any) {
+  } catch (error) {
     return {
       success: false,
-      error: `Tool execution failed: ${error.message || String(error)}`,
+      error: `Tool execution failed: ${getErrorMessage(error)}`,
       exitCode: 1,
     };
   }
@@ -1196,10 +1197,10 @@ async function executeConnectCommand(
       output,
       exitCode: 0,
     };
-  } catch (error: any) {
+  } catch (error) {
     return {
       success: false,
-      error: `Failed to connect to "${server}": ${error.message || error}`,
+      error: `Failed to connect to "${server}": ${getErrorMessage(error)}`,
       exitCode: 1,
     };
   }
@@ -1230,10 +1231,10 @@ async function executeDisconnectCommand(
       output: `Disconnected from server "${server}"`,
       exitCode: 0,
     };
-  } catch (error: any) {
+  } catch (error) {
     return {
       success: false,
-      error: `Failed to disconnect from "${server}": ${error.message || error}`,
+      error: `Failed to disconnect from "${server}": ${getErrorMessage(error)}`,
       exitCode: 1,
     };
   }
@@ -1290,10 +1291,10 @@ async function executeReconnectCommand(
       output,
       exitCode: 0,
     };
-  } catch (error: any) {
+  } catch (error) {
     return {
       success: false,
-      error: `Failed to reconnect to "${server}": ${error.message || error}`,
+      error: `Failed to reconnect to "${server}": ${getErrorMessage(error)}`,
       exitCode: 1,
     };
   }
@@ -1338,10 +1339,10 @@ async function executeConnectionsCommand(
       output: lines.join('\n'),
       exitCode: 0,
     };
-  } catch (error: any) {
+  } catch (error) {
     return {
       success: false,
-      error: `Failed to list connections: ${error.message || error}`,
+      error: `Failed to list connections: ${getErrorMessage(error)}`,
       exitCode: 1,
     };
   }
@@ -1417,10 +1418,10 @@ async function executeReloadCommand(
       output: lines.join('\n'),
       exitCode: 0,
     };
-  } catch (error: any) {
+  } catch (error) {
     return {
       success: false,
-      error: `Failed to reload config: ${error.message || error}`,
+      error: `Failed to reload config: ${getErrorMessage(error)}`,
       exitCode: 1,
     };
   }

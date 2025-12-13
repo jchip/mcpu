@@ -7,6 +7,7 @@ import { type MCPServerConfig, isStdioConfig, isHttpConfig, DEFAULT_REQUEST_TIME
 import { type Logger } from './logger.ts';
 import { formatMcpResponse, autoSaveResponse } from '../formatters.ts';
 import type { CommandResult } from '../types/result.ts';
+import { getErrorMessage } from '../utils/error.ts';
 
 /**
  * Standard response envelope for success
@@ -378,10 +379,10 @@ export class DaemonServer {
         // Create new connection
         const info = await this.pool.getConnection(serverName, config);
         res.status(201).json(successResponse(toConnectionResponse(info)));
-      } catch (error: any) {
+      } catch (error) {
         res.status(500).json(errorResponse(
           'CONNECTION_FAILED',
-          error.message || String(error)
+          getErrorMessage(error)
         ));
       }
     });
@@ -445,10 +446,10 @@ export class DaemonServer {
             'Failed to close connection'
           ));
         }
-      } catch (error: any) {
+      } catch (error) {
         res.status(500).json(errorResponse(
           'DAEMON_ERROR',
-          error.message || String(error)
+          getErrorMessage(error)
         ));
       }
     });
@@ -508,10 +509,10 @@ export class DaemonServer {
             { id }
           ));
         }
-      } catch (error: any) {
+      } catch (error) {
         res.status(500).json(errorResponse(
           'DAEMON_ERROR',
-          error.message || String(error)
+          getErrorMessage(error)
         ));
       }
     });
@@ -544,10 +545,10 @@ export class DaemonServer {
         const response = await connection.client.listTools();
         const tools = response.tools || [];
         res.json(successResponse(tools, { count: tools.length }));
-      } catch (error: any) {
+      } catch (error) {
         res.status(500).json(errorResponse(
           'DAEMON_ERROR',
-          error.message || String(error)
+          getErrorMessage(error)
         ));
       }
     });
@@ -591,10 +592,10 @@ export class DaemonServer {
         }
 
         res.json(successResponse(tool));
-      } catch (error: any) {
+      } catch (error) {
         res.status(500).json(errorResponse(
           'DAEMON_ERROR',
-          error.message || String(error)
+          getErrorMessage(error)
         ));
       }
     });
@@ -637,10 +638,10 @@ export class DaemonServer {
           executedAt: Date.now(),
           result,
         }));
-      } catch (error: any) {
+      } catch (error) {
         res.status(500).json(errorResponse(
           'TOOL_EXECUTION_FAILED',
-          error.message || String(error),
+          getErrorMessage(error),
           { server: req.params.server, tool: req.params.tool }
         ));
       }
@@ -687,10 +688,10 @@ export class DaemonServer {
         // Format raw result from call commands
         const formattedResult = await this.formatRawResult(result, cwd);
         res.json(formattedResult);
-      } catch (error: any) {
+      } catch (error) {
         res.status(500).json({
           success: false,
-          error: error.message || String(error),
+          error: getErrorMessage(error),
           exitCode: 1,
         });
       }
@@ -775,10 +776,10 @@ export class DaemonServer {
               error: `Unknown action: ${action}`,
             });
         }
-      } catch (error: any) {
+      } catch (error) {
         res.status(500).json({
           success: false,
-          error: error.message || String(error),
+          error: getErrorMessage(error),
         });
       }
     });

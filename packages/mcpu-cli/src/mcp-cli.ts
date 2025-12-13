@@ -8,6 +8,7 @@
 import { NixClap } from 'nix-clap';
 import { McpuMcpServer, type TransportType } from './mcp/server.ts';
 import { VERSION } from './version.ts';
+import { getErrorMessage } from './utils/error.ts';
 
 interface McpCommandOptions {
   config?: string;
@@ -56,8 +57,8 @@ async function mcpCommand(options: McpCommandOptions): Promise<void> {
   try {
     await server.start();
     // Server runs until stdin closes or signal received
-  } catch (error: any) {
-    console.error('[mcpu-mcp] Failed to start:', error.message || String(error));
+  } catch (error) {
+    console.error('[mcpu-mcp] Failed to start:', getErrorMessage(error));
     process.exit(1);
   }
 }

@@ -4,6 +4,7 @@ import { ConfigDiscovery } from '../config.ts';
 import { MCPClient } from '../client.ts';
 import { SchemaCache } from '../cache.ts';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import { getErrorMessage } from '../utils/error.ts';
 
 export interface CallOptions {
   json?: boolean;
@@ -184,10 +185,10 @@ export async function callCommand(
         console.log(result);
       }
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error(chalk.red('Tool execution failed:'));
-    console.error(error.message || error);
-    if (options.verbose && error.stack) {
+    console.error(getErrorMessage(error));
+    if (options.verbose && error instanceof Error && error.stack) {
       console.error(error.stack);
     }
     process.exit(1);
