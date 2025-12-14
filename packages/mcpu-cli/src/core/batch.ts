@@ -2,8 +2,11 @@
  * Batch command execution - execute multiple tool calls in a single request
  *
  * Execution model:
- * - Per-server serial: calls to the same MCP server run serially
- * - Cross-server parallel: different servers run in parallel
+ * - Per-connection serial: calls to the same connection run serially
+ * - Cross-connection parallel: different connections run in parallel
+ *
+ * Connection keys like "server" and "server[connId]" are treated as separate
+ * connections and can run in parallel.
  *
  * This reduces round-trips between LLM and mcpu while respecting
  * server concurrency constraints.
