@@ -6,7 +6,8 @@
   "command": {
     "publish": {
       "tags": {},
-      "versionTagging": {}
+      "versionTagging": {},
+      "gitTagTemplate": "mcpu-rel-{YYYY}{MM}{DD}-{COMMIT}"
     }
   }
 }
