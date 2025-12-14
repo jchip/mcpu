@@ -1,3 +1,31 @@
+# 12/14/2025
+
+## Packages
+
+-   `@mcpu/cli@0.2.18` `(0.2.17 => 0.2.18)`
+
+## Commits
+
+-   `packages/mcpu-cli`
+
+    -   MCU-91: Support multiple connection instances per server [commit](/commit/b2acb0bb0ee3153f75c3e194f11b252cbd8d56ea)
+    -   Remove unnecessary string parsing for params [commit](/commit/0f4211d5b9512103ba89157f97f18f33fa13abeb)
+    -   Unify params for all mux commands, improve tool description [commit](/commit/450cd961a44d325c425591f8aae37ca83813adb3)
+    -   fix tests [commit](/commit/d4a0359fa353d34776ddc5d30adad96962cbbff3)
+    -   MCU-83: Replace catch (error: any) with proper type narrowing [commit](/commit/1e621940612e384f03f064b9230c6f575e50a0e2)
+    -   MCU-90: Log warnings for config validation errors [commit](/commit/4ec2f3346ff67a8f3316d754b223eacc8c369c83)
+    -   MCU-89: Fix memory leak in ConnectionPool connectionInfo map [commit](/commit/29a4f5e371ebf362df40f121b4f617cdb122631f)
+    -   MCU-88: Fix orphaned daemon process accumulation [commit](/commit/ce41b79b48c089eeb23d90790608f986ddd564b5)
+    -   MCU-84: Fix dangling promise in ConnectionPool.refreshCacheAsync() [commit](/commit/8fee967eb06fad8c73223bb0f205038d53cddee2)
+    -   MCU-86: Add validation for IPC message handling in exec worker [commit](/commit/3477e18daeade4bbce22692f917119125e510b1f)
+    -   MCU-82: Add input validation for cwd parameter in exec command [commit](/commit/aff5e9174bca8bf7da91446f8f5c35044ce46d03)
+    -   MCU-80: Fix race condition in ConnectionPool.getConnection() [commit](/commit/b444e463901b7c107186582389ffe44ef79365a4)
+    -   update readme [commit](/commit/3d84b9086a4e37ebb8ec2e13c90b431bfe055ded)
+
+-   `MISC`
+
+    -   add git tag template for publish [commit](/commit/7badf3da432b3891aa53ad6e672e8009fc00efd8)
+
 # 12/13/2025
 
 ## Packages
