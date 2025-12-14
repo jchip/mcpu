@@ -11,9 +11,12 @@ import {
   getGeminiConfigDir,
   getCursorConfigPath,
   getCursorConfigDir,
+  getCodexConfigPath,
+  getCodexConfigDir,
   readClaudeConfig,
   readClaudeCliConfig,
   readGeminiCliConfig,
+  readCodexCliConfig,
   readProjectConfigs,
   discoverServers,
   deduplicateServers,
@@ -24,6 +27,7 @@ import {
   updateClaudeCliConfig,
   updateGeminiCliConfig,
   updateCursorConfig,
+  updateCodexConfig,
   executeSetup,
   isMcpuMcpAvailable,
   isRunningViaNpx,
@@ -1006,6 +1010,167 @@ describe('setup command', () => {
       const geminiFiles = require('node:fs').readdirSync(geminiDir);
       expect(desktopFiles.some((f: string) => f.includes('.mcpu.bak'))).toBe(true);
       expect(geminiFiles.some((f: string) => f.includes('.mcpu.bak'))).toBe(true);
+    });
+  });
+
+  // ============================================================================
+  // Codex CLI Config Tests
+  // ============================================================================
+  describe('Codex CLI config', () => {
+    const codexDir = join(testDir, 'codex');
+    const codexConfigPath = join(codexDir, 'config.toml');
+
+    beforeEach(() => {
+      mkdirSync(codexDir, { recursive: true });
+      vi.stubEnv('CODEX_CONFIG_DIR', codexDir);
+    });
+
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it('should get Codex config path from environment', () => {
+      expect(getCodexConfigDir()).toBe(codexDir);
+      expect(getCodexConfigPath()).toBe(codexConfigPath);
+    });
+
+    it('should read Codex CLI config with MCP servers', () => {
+      const tomlConfig = `
+[mcp_servers.playwright]
+command = "npx"
+args = ["-y", "@anthropic/mcp-server-playwright"]
+
+[mcp_servers.filesystem]
+command = "npx"
+args = ["-y", "@anthropic/mcp-server-filesystem", "/tmp"]
+env = { DEBUG = "true" }
+`;
+      writeFileSync(codexConfigPath, tomlConfig);
+
+      const servers = readCodexCliConfig(codexConfigPath);
+      expect(servers).not.toBeNull();
+      expect(servers).toHaveProperty('playwright');
+      expect(servers!.playwright.command).toBe('npx');
+      expect(servers!.playwright.args).toEqual(['-y', '@anthropic/mcp-server-playwright']);
+      expect(servers).toHaveProperty('filesystem');
+      expect(servers!.filesystem.env).toEqual({ DEBUG: 'true' });
+    });
+
+    it('should return null for non-existent Codex config', () => {
+      const servers = readCodexCliConfig('/nonexistent/config.toml');
+      expect(servers).toBeNull();
+    });
+
+    it('should return null for invalid TOML', () => {
+      writeFileSync(codexConfigPath, 'invalid toml {{{{');
+      const servers = readCodexCliConfig(codexConfigPath);
+      expect(servers).toBeNull();
+    });
+
+    it('should update Codex config to use only MCPU', () => {
+      const tomlConfig = `
+[mcp_servers.playwright]
+command = "npx"
+args = ["-y", "@anthropic/mcp-server-playwright"]
+
+[other_setting]
+value = "preserved"
+`;
+      writeFileSync(codexConfigPath, tomlConfig);
+
+      updateCodexConfig(codexConfigPath);
+
+      const content = readFileSync(codexConfigPath, 'utf-8');
+      // Should have mcpu server
+      expect(content).toContain('[mcp_servers.mcpu]');
+      // Should preserve other settings
+      expect(content).toContain('[other_setting]');
+      expect(content).toContain('value = "preserved"');
+      // Should have backup
+      expect(existsSync(`${codexConfigPath}.mcpu.bak`)).toBe(true);
+    });
+
+    it('should create Codex config if it does not exist', () => {
+      rmSync(codexConfigPath, { force: true });
+
+      updateCodexConfig(codexConfigPath);
+
+      expect(existsSync(codexConfigPath)).toBe(true);
+      const content = readFileSync(codexConfigPath, 'utf-8');
+      expect(content).toContain('[mcp_servers.mcpu]');
+    });
+
+    it('should discover servers from Codex config', () => {
+      // Setup Desktop config
+      const desktopDir = join(testDir, 'claude-desktop-codex');
+      mkdirSync(desktopDir, { recursive: true });
+      writeFileSync(
+        join(desktopDir, 'claude_desktop_config.json'),
+        JSON.stringify({ mcpServers: { desktop: { command: 'desktop-cmd' } } })
+      );
+      vi.stubEnv('CLAUDE_DESKTOP_CONFIG_DIR', desktopDir);
+
+      // Setup Codex config
+      const tomlConfig = `
+[mcp_servers.codex-server]
+command = "codex-cmd"
+args = ["--flag"]
+`;
+      writeFileSync(codexConfigPath, tomlConfig);
+
+      const result = discoverServers();
+      expect(result).not.toBeNull();
+      expect(result!.sources.codex).toBe(codexConfigPath);
+      expect(result!.discovered.global).toHaveProperty('codex-server');
+      expect(result!.discovered.global['codex-server'].command).toBe('codex-cmd');
+    });
+
+    it('should create Codex config during executeSetup even when not a source', async () => {
+      // Setup Desktop config as the only source
+      const desktopDir = join(testDir, 'claude-desktop-only');
+      mkdirSync(desktopDir, { recursive: true });
+      writeFileSync(
+        join(desktopDir, 'claude_desktop_config.json'),
+        JSON.stringify({ mcpServers: { 'test-server': { command: 'test-cmd' } } })
+      );
+      vi.stubEnv('CLAUDE_DESKTOP_CONFIG_DIR', desktopDir);
+      vi.stubEnv('CLAUDE_CONFIG_DIR', join(testDir, 'nonexistent-cli'));
+      vi.stubEnv('GEMINI_CONFIG_DIR', join(testDir, 'nonexistent-gemini'));
+      vi.stubEnv('CURSOR_CONFIG_DIR', join(testDir, 'nonexistent-cursor'));
+      // Codex config does not exist
+
+      const result = await executeSetup({ dryRun: false });
+
+      expect(result.success).toBe(true);
+      // Codex config should have been created even though it wasn't a source
+      expect(existsSync(codexConfigPath)).toBe(true);
+      const content = readFileSync(codexConfigPath, 'utf-8');
+      expect(content).toContain('[mcp_servers.mcpu]');
+    });
+
+    it('should create Claude CLI config during executeSetup even when not a source', async () => {
+      // Setup Desktop config as the only source
+      const desktopDir = join(testDir, 'claude-desktop-only2');
+      mkdirSync(desktopDir, { recursive: true });
+      writeFileSync(
+        join(desktopDir, 'claude_desktop_config.json'),
+        JSON.stringify({ mcpServers: { 'test-server': { command: 'test-cmd' } } })
+      );
+      vi.stubEnv('CLAUDE_DESKTOP_CONFIG_DIR', desktopDir);
+      const cliDir = join(testDir, 'cli-created');
+      vi.stubEnv('CLAUDE_CONFIG_DIR', cliDir);
+      vi.stubEnv('GEMINI_CONFIG_DIR', join(testDir, 'nonexistent-gemini'));
+      vi.stubEnv('CURSOR_CONFIG_DIR', join(testDir, 'nonexistent-cursor'));
+      // CLI config does not exist
+
+      const result = await executeSetup({ dryRun: false });
+
+      expect(result.success).toBe(true);
+      // Claude CLI config should have been created even though it wasn't a source
+      const cliConfigPath = join(cliDir, 'settings.json');
+      expect(existsSync(cliConfigPath)).toBe(true);
+      const config = JSON.parse(readFileSync(cliConfigPath, 'utf-8'));
+      expect(config.mcpServers.mcpu).toBeDefined();
     });
   });
 });

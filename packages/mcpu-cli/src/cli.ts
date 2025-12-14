@@ -473,6 +473,9 @@ See AGENTS.md for details about using MCPU to talk to MCP servers.
               if (result.plan.sources.cursor) {
                 console.log(`  Cursor: ${result.plan.sources.cursor}`);
               }
+              if (result.plan.sources.codex) {
+                console.log(`  Codex: ${result.plan.sources.codex}`);
+              }
             }
 
             process.exit(1);

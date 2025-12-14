@@ -74,6 +74,14 @@ Something like this:
   To connect to a server, use connect <server>.
 ```
 
+## Key Features
+
+- **Progressive discovery** - Servers and tools revealed only when needed
+- **Schema compression** - Up to 90% reduction using compact format
+- **Multi-instance connections** - Multiple connections to same server for true parallelism
+- **Batch execution** - Real cross-server parallel calls
+- **Exec command** - JavaScript orchestration with filtering
+
 ## Usage Modes
 
 MCPU can run in two modes:

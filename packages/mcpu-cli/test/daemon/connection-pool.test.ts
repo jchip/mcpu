@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ConnectionPool } from '../../src/daemon/connection-pool.js';
+import { ConnectionPool, getConnectionKey, parseConnectionKey } from '../../src/daemon/connection-pool.js';
 import { MCPClient } from '../../src/client.js';
 import type { MCPConnection, MCPServerConfig } from '../../src/types.js';
 
@@ -362,7 +362,7 @@ describe('ConnectionPool', () => {
 
     it('should throw error if no config exists', async () => {
       await expect(pool.reconnect('nonExistent')).rejects.toThrow(
-        'No configuration found for server: nonExistent'
+        'No configuration found for connection: nonExistent'
       );
     });
   });
@@ -403,6 +403,232 @@ describe('ConnectionPool', () => {
 
       expect(stopCleanupSpy).toHaveBeenCalled();
       expect(disconnectAllSpy).toHaveBeenCalled();
+    });
+  });
+
+  describe('Multi-instance connections', () => {
+    describe('getConnectionKey helper', () => {
+      it('should return server name when no connId', () => {
+        expect(getConnectionKey('myserver')).toBe('myserver');
+        expect(getConnectionKey('myserver', undefined)).toBe('myserver');
+      });
+
+      it('should return server[id] format with connId', () => {
+        expect(getConnectionKey('myserver', '1')).toBe('myserver[1]');
+        expect(getConnectionKey('myserver', 'dev')).toBe('myserver[dev]');
+        expect(getConnectionKey('myserver', 'prod')).toBe('myserver[prod]');
+      });
+    });
+
+    describe('parseConnectionKey helper', () => {
+      it('should parse plain server name', () => {
+        expect(parseConnectionKey('myserver')).toEqual({ server: 'myserver' });
+      });
+
+      it('should parse server[id] format', () => {
+        expect(parseConnectionKey('myserver[1]')).toEqual({ server: 'myserver', connId: '1' });
+        expect(parseConnectionKey('myserver[dev]')).toEqual({ server: 'myserver', connId: 'dev' });
+        expect(parseConnectionKey('my-server[test-123]')).toEqual({ server: 'my-server', connId: 'test-123' });
+      });
+    });
+
+    describe('getConnection with connId', () => {
+      it('should create separate connections for different connIds', async () => {
+        const config: MCPServerConfig = {
+          command: 'test',
+          args: []
+        };
+
+        const info1 = await pool.getConnection('server1', config);
+        const info2 = await pool.getConnection('server1', config, 'dev');
+        const info3 = await pool.getConnection('server1', config, 'prod');
+
+        expect(info1.id).toBe(1);
+        expect(info2.id).toBe(2);
+        expect(info3.id).toBe(3);
+
+        expect(info1.connId).toBeUndefined();
+        expect(info2.connId).toBe('dev');
+        expect(info3.connId).toBe('prod');
+
+        expect(mockClient.connect).toHaveBeenCalledTimes(3);
+      });
+
+      it('should return existing connection for same server+connId', async () => {
+        const config: MCPServerConfig = {
+          command: 'test',
+          args: []
+        };
+
+        const info1 = await pool.getConnection('server1', config, 'dev');
+        const info2 = await pool.getConnection('server1', config, 'dev');
+
+        expect(info1.id).toBe(info2.id);
+        expect(mockClient.connect).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe('getConnectionWithNewId', () => {
+      it('should auto-assign sequential numeric IDs', async () => {
+        const config: MCPServerConfig = {
+          command: 'test',
+          args: []
+        };
+
+        const info1 = await pool.getConnectionWithNewId('server1', config);
+        const info2 = await pool.getConnectionWithNewId('server1', config);
+        const info3 = await pool.getConnectionWithNewId('server1', config);
+
+        expect(info1.connId).toBe('1');
+        expect(info2.connId).toBe('2');
+        expect(info3.connId).toBe('3');
+
+        expect(mockClient.connect).toHaveBeenCalledTimes(3);
+      });
+
+      it('should track auto IDs separately per server', async () => {
+        const config: MCPServerConfig = {
+          command: 'test',
+          args: []
+        };
+
+        const info1a = await pool.getConnectionWithNewId('server1', config);
+        const info2a = await pool.getConnectionWithNewId('server2', config);
+        const info1b = await pool.getConnectionWithNewId('server1', config);
+
+        expect(info1a.connId).toBe('1');
+        expect(info2a.connId).toBe('1');
+        expect(info1b.connId).toBe('2');
+      });
+    });
+
+    describe('disconnect with connId', () => {
+      it('should disconnect specific connection instance', async () => {
+        const config: MCPServerConfig = {
+          command: 'test',
+          args: []
+        };
+
+        await pool.getConnection('server1', config);
+        await pool.getConnection('server1', config, 'dev');
+
+        await pool.disconnect('server1', 'dev');
+
+        const connections = pool.listConnections();
+        expect(connections).toHaveLength(1);
+        expect(connections[0].server).toBe('server1');
+        expect(connections[0].connId).toBeUndefined();
+      });
+
+      it('should disconnect default connection without affecting named instances', async () => {
+        const config: MCPServerConfig = {
+          command: 'test',
+          args: []
+        };
+
+        await pool.getConnection('server1', config);
+        await pool.getConnection('server1', config, 'dev');
+
+        await pool.disconnect('server1');
+
+        const connections = pool.listConnections();
+        expect(connections).toHaveLength(1);
+        expect(connections[0].connId).toBe('dev');
+      });
+    });
+
+    describe('listConnections with connId', () => {
+      it('should list all connection instances', async () => {
+        const config: MCPServerConfig = {
+          command: 'test',
+          args: []
+        };
+
+        await pool.getConnection('server1', config);
+        await pool.getConnection('server1', config, 'dev');
+        await pool.getConnection('server2', config);
+
+        const connections = pool.listConnections();
+        expect(connections).toHaveLength(3);
+      });
+    });
+
+    describe('listServerConnections with connId', () => {
+      it('should list all instances for a specific server', async () => {
+        const config: MCPServerConfig = {
+          command: 'test',
+          args: []
+        };
+
+        await pool.getConnection('server1', config);
+        await pool.getConnection('server1', config, 'dev');
+        await pool.getConnection('server1', config, 'prod');
+        await pool.getConnection('server2', config);
+
+        const connections = pool.listServerConnections('server1');
+        expect(connections).toHaveLength(3);
+        expect(connections.map(c => c.connId)).toContain(undefined);
+        expect(connections.map(c => c.connId)).toContain('dev');
+        expect(connections.map(c => c.connId)).toContain('prod');
+      });
+    });
+
+    describe('getConnectionByServer with connId', () => {
+      it('should retrieve specific connection instance', async () => {
+        const config: MCPServerConfig = {
+          command: 'test',
+          args: []
+        };
+
+        await pool.getConnection('server1', config);
+        const devInfo = await pool.getConnection('server1', config, 'dev');
+
+        const retrieved = pool.getConnectionByServer('server1', 'dev');
+        expect(retrieved).toEqual(devInfo);
+      });
+
+      it('should return null for non-existent connId', async () => {
+        const config: MCPServerConfig = {
+          command: 'test',
+          args: []
+        };
+
+        await pool.getConnection('server1', config);
+
+        const result = pool.getConnectionByServer('server1', 'nonexistent');
+        expect(result).toBeNull();
+      });
+    });
+
+    describe('getRawConnection with connId', () => {
+      it('should return MCPConnection for specific instance', async () => {
+        const config: MCPServerConfig = {
+          command: 'test',
+          args: []
+        };
+
+        await pool.getConnection('server1', config);
+        await pool.getConnection('server1', config, 'dev');
+
+        const rawConn = pool.getRawConnection('server1', 'dev');
+        expect(rawConn).toBe(mockConnection);
+      });
+    });
+
+    describe('reconnect with connId', () => {
+      it('should reconnect specific connection instance', async () => {
+        const config: MCPServerConfig = {
+          command: 'test',
+          args: []
+        };
+
+        const info1 = await pool.getConnection('server1', config, 'dev');
+        const newInfo = await pool.reconnect('server1', 'dev');
+
+        expect(newInfo.id).not.toBe(info1.id);
+        expect(newInfo.connId).toBe('dev');
+        expect(mockClient.disconnect).toHaveBeenCalledTimes(1);
+      });
     });
   });
 });

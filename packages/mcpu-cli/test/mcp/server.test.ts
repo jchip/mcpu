@@ -30,6 +30,12 @@ vi.mock('../../src/daemon/connection-pool.js', () => ({
     shutdown: vi.fn(),
     listConnections: vi.fn().mockReturnValue([]),
   })),
+  getConnectionKey: (serverName: string, connId?: string) => connId ? `${serverName}[${connId}]` : serverName,
+  parseConnectionKey: (key: string) => {
+    const match = key.match(/^(.+?)\[(.+)\]$/);
+    if (match) return { server: match[1], connId: match[2] };
+    return { server: key };
+  },
 }));
 
 // Mock ConfigDiscovery

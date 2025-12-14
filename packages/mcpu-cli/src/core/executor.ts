@@ -4,7 +4,7 @@ import { MCPClient, type MCPConnection } from '../client.ts';
 import { SchemaCache } from '../cache.ts';
 import type { CommandResult } from '../types/result.ts';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
-import type { ConnectionPool } from '../daemon/connection-pool.ts';
+import { type ConnectionPool, getConnectionKey, parseConnectionKey } from '../daemon/connection-pool.ts';
 import { ExecutionContext } from './context.ts';
 import { formatToolInfo, abbreviateType, LEGEND_HEADER, TYPES_LINE, collectEnums, formatEnumLegend, extractEnumOrRange, formatParamType } from '../formatters.ts';
 import { isStdioConfig, isUrlConfig, isWebSocketConfig } from '../types.ts';
@@ -216,6 +216,7 @@ export interface CallCommandArgs {
   args: string[];
   stdinData?: string;
   restart?: boolean;
+  connId?: string;  // --conn-id option for specific connection instance
 }
 
 export interface ConfigCommandArgs {
@@ -230,14 +231,18 @@ export interface SchemaCommandArgs {
 
 export interface ConnectCommandArgs {
   server: string;
+  connId?: string;    // User-provided connection ID
+  newConn?: boolean;  // --new flag for auto-assign
 }
 
 export interface DisconnectCommandArgs {
   server: string;
+  connId?: string;
 }
 
 export interface ReconnectCommandArgs {
   server: string;
+  connId?: string;
 }
 
 export interface ConnectionsCommandArgs {
@@ -284,10 +289,11 @@ async function getConnection(
   serverName: string,
   config: any,
   client: MCPClient,
-  pool?: ConnectionPool
+  pool?: ConnectionPool,
+  connId?: string
 ): Promise<{ connection: MCPConnection; isPersistent: boolean }> {
   if (pool) {
-    const info = await pool.getConnection(serverName, config);
+    const info = await pool.getConnection(serverName, config, connId);
     return { connection: info.connection, isPersistent: true };
   } else {
     const connection = await client.connect(serverName, config);
@@ -897,6 +903,11 @@ export async function executeCallCommand(
   options: ExecuteOptions
 ): Promise<CommandResult> {
   try {
+    // Parse server argument - could be "server" or "server[connId]"
+    const parsed = parseConnectionKey(args.server);
+    const serverName = parsed.server;
+    const connId = args.connId || parsed.connId;
+
     // Use daemon's config map if available, otherwise load fresh
     let configs: Map<string, any>;
     if (options.configs) {
@@ -909,12 +920,12 @@ export async function executeCallCommand(
       configs = await discovery.loadConfigs(options.cwd);
     }
 
-    const config = configs.get(args.server);
+    const config = configs.get(serverName);
 
     if (!config) {
       return {
         success: false,
-        error: `Server "${args.server}" not found. Available servers: ${Array.from(configs.keys()).join(', ')}`,
+        error: `Server "${serverName}" not found. Available servers: ${Array.from(configs.keys()).join(', ')}`,
         exitCode: 1,
       };
     }
@@ -927,13 +938,13 @@ export async function executeCallCommand(
     let schemaFromCache = false;
 
     if (!options.noCache) {
-      const cacheResult = await cache.getWithExpiry(args.server, config.cacheTTL);
+      const cacheResult = await cache.getWithExpiry(serverName, config.cacheTTL);
       if (cacheResult) {
         if (cacheResult.expired) {
           // TTL expired - force sync refresh if we have a pool connection
           if (pool) {
-            await pool.refreshCacheSync(args.server);
-            tools = await cache.get(args.server, config.cacheTTL);
+            await pool.refreshCacheSync(serverName);
+            tools = await cache.get(serverName, config.cacheTTL);
           }
           // If no pool or refresh failed, fall through to fetch fresh
         } else {
@@ -945,22 +956,22 @@ export async function executeCallCommand(
     }
 
     if (!tools) {
-      tools = await client.withConnection(args.server, config, async (conn) => {
+      tools = await client.withConnection(serverName, config, async (conn) => {
         return await client.listTools(conn);
       });
-      await cache.set(args.server, tools);
+      await cache.set(serverName, tools);
     }
 
     const meta = schemaFromCache
-      ? { fromCache: true, cachedServers: [args.server] }
+      ? { fromCache: true, cachedServers: [serverName] }
       : undefined;
 
     const tool = tools.find(t => t.name === args.tool);
     if (!tool) {
-      const toolsList = formatToolsForError(tools, args.server);
+      const toolsList = formatToolsForError(tools, serverName);
       return {
         success: false,
-        error: `Error: Tool "${args.tool}" not found on server "${args.server}".${toolsList}`,
+        error: `Error: Tool "${args.tool}" not found on server "${serverName}".${toolsList}`,
         exitCode: 1,
       };
     }
@@ -994,7 +1005,7 @@ export async function executeCallCommand(
     }
 
     // Execute the tool - use persistent connection if pool is available
-    const { connection, isPersistent } = await getConnection(args.server, config, client, options.connectionPool);
+    const { connection, isPersistent } = await getConnection(serverName, config, client, options.connectionPool, connId);
 
     try {
       const result = await client.callTool(connection, args.tool, toolArgs, config.requestTimeout);
@@ -1006,7 +1017,7 @@ export async function executeCallCommand(
         meta: {
           ...meta,
           rawResult: {
-            server: args.server,
+            server: serverName,
             tool: args.tool,
             result,
           },
@@ -1014,7 +1025,7 @@ export async function executeCallCommand(
       };
     } catch (callError: any) {
       const errorMsg = callError.message || String(callError);
-      const toolsList = formatToolsForError(tools, args.server);
+      const toolsList = formatToolsForError(tools, serverName);
 
       return {
         success: false,
@@ -1166,7 +1177,7 @@ async function executeConnectCommand(
   args: ConnectCommandArgs,
   options: ExecuteOptions
 ): Promise<CommandResult> {
-  const { server } = args;
+  const { server, connId, newConn } = args;
   const { connectionPool } = options;
 
   if (!connectionPool) {
@@ -1194,14 +1205,23 @@ async function executeConnectCommand(
       };
     }
 
-    const info = await connectionPool.getConnection(server, config);
+    // Get or create connection
+    let info;
+    if (newConn) {
+      info = await connectionPool.getConnectionWithNewId(server, config);
+    } else {
+      info = await connectionPool.getConnection(server, config, connId);
+    }
+
+    // Build connection key for display
+    const displayKey = getConnectionKey(server, info.connId);
 
     // Get stderr from the connection
     const stderr = connectionPool.getStderr(info.connection);
 
-    let output = `Connected to server "${server}"`;
+    let output = `Connected to server "${displayKey}"`;
     if (stderr) {
-      output += `\n\n[${server}] stderr:\n${stderr}`;
+      output += `\n\n[${displayKey}] stderr:\n${stderr}`;
     }
 
     return {
@@ -1210,9 +1230,10 @@ async function executeConnectCommand(
       exitCode: 0,
     };
   } catch (error) {
+    const displayKey = getConnectionKey(server, connId);
     return {
       success: false,
-      error: `Failed to connect to "${server}": ${getErrorMessage(error)}`,
+      error: `Failed to connect to "${displayKey}": ${getErrorMessage(error)}`,
       exitCode: 1,
     };
   }
@@ -1225,7 +1246,7 @@ async function executeDisconnectCommand(
   args: DisconnectCommandArgs,
   options: ExecuteOptions
 ): Promise<CommandResult> {
-  const { server } = args;
+  let { server, connId } = args;
   const { connectionPool } = options;
 
   if (!connectionPool) {
@@ -1236,17 +1257,26 @@ async function executeDisconnectCommand(
     };
   }
 
+  // Support full key format: server[id]
+  if (!connId) {
+    const parsed = parseConnectionKey(server);
+    server = parsed.server;
+    connId = parsed.connId;
+  }
+
+  const displayKey = getConnectionKey(server, connId);
+
   try {
-    connectionPool.disconnect(server);
+    await connectionPool.disconnect(server, connId);
     return {
       success: true,
-      output: `Disconnected from server "${server}"`,
+      output: `Disconnected from server "${displayKey}"`,
       exitCode: 0,
     };
   } catch (error) {
     return {
       success: false,
-      error: `Failed to disconnect from "${server}": ${getErrorMessage(error)}`,
+      error: `Failed to disconnect from "${displayKey}": ${getErrorMessage(error)}`,
       exitCode: 1,
     };
   }
@@ -1259,7 +1289,7 @@ async function executeReconnectCommand(
   args: ReconnectCommandArgs,
   options: ExecuteOptions
 ): Promise<CommandResult> {
-  const { server } = args;
+  let { server, connId } = args;
   const { connectionPool } = options;
 
   if (!connectionPool) {
@@ -1269,6 +1299,15 @@ async function executeReconnectCommand(
       exitCode: 1,
     };
   }
+
+  // Support full key format: server[id]
+  if (!connId) {
+    const parsed = parseConnectionKey(server);
+    server = parsed.server;
+    connId = parsed.connId;
+  }
+
+  const displayKey = getConnectionKey(server, connId);
 
   try {
     const ctx = getContext(options);
@@ -1287,15 +1326,15 @@ async function executeReconnectCommand(
       };
     }
 
-    await connectionPool.disconnect(server);
-    const info = await connectionPool.getConnection(server, config);
+    await connectionPool.disconnect(server, connId);
+    const info = await connectionPool.getConnection(server, config, connId);
 
     // Get stderr from the connection
     const stderr = connectionPool.getStderr(info.connection);
 
-    let output = `Reconnected to server "${server}"`;
+    let output = `Reconnected to server "${displayKey}"`;
     if (stderr) {
-      output += `\n\n[${server}] stderr:\n${stderr}`;
+      output += `\n\n[${displayKey}] stderr:\n${stderr}`;
     }
 
     return {
@@ -1306,7 +1345,7 @@ async function executeReconnectCommand(
   } catch (error) {
     return {
       success: false,
-      error: `Failed to reconnect to "${server}": ${getErrorMessage(error)}`,
+      error: `Failed to reconnect to "${displayKey}": ${getErrorMessage(error)}`,
       exitCode: 1,
     };
   }
@@ -1343,7 +1382,8 @@ async function executeConnectionsCommand(
     const lines = ['Active connections:'];
     for (const conn of connections) {
       const lastUsedDate = new Date(conn.lastUsed).toLocaleString();
-      lines.push(`  ${conn.server} (last used: ${lastUsedDate})`);
+      const displayKey = getConnectionKey(conn.server, conn.connId);
+      lines.push(`  ${displayKey} (last used: ${lastUsedDate})`);
     }
 
     return {

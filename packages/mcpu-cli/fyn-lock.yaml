@@ -10,6 +10,7 @@ $pkg:
   optional-require: ^2.1.0
   pino: ^10.1.0
   pino-pretty: ^13.1.2
+  smol-toml: ^1.5.2
   yaml: ^2.8.1
   zod: ^3.23.0
  dev:
@@ -1995,6 +1996,14 @@ signal-exit:
  4.1.0:
   $: sha512-bzyZ1e88w9O1iNJbKnOlvYTrWPDl46O1bG0D3XInv+9tkPrxrN8jUUTiFlDkkmKWgn1M6CfIA13SuGqOa9Korw==
   _: 'https://registry.npmjs.org/signal-exit/-/signal-exit-4.1.0.tgz'
+smol-toml:
+ _latest: 1.5.2
+ _:
+  ^1.5.2: 1.5.2
+ 1.5.2:
+  top: 1
+  $: sha512-QlaZEqcAH3/RtNyet1IPIYPsEWAaYyXXv1Krsi+1L/QHppjX4Ifm8MQsBISz9vE8cHicIq3clogsheili5vhaQ==
+  _: 'https://registry.npmjs.org/smol-toml/-/smol-toml-1.5.2.tgz'
 sonic-boom:
  _latest: 4.2.0
  _:

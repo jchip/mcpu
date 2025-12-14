@@ -23,6 +23,7 @@ MCPU addresses this by:
 
 - **Progressive discovery and disclosure** - Servers and their tool schemas are revealed and connected only when needed
 - **Compressing tool schemas** - Reduces schema size by up to 90% using a compact format designed for AI consumption
+- **Multi-instance connections** - Create multiple connections to the same server for true parallel execution within a single server
 - **Intercept** - Intercept large inline content and save them to disk
 - **Exec** - Run JavaScript code to orchestrate tools, filter responses, and control what reaches the context window
 - **True parallel execution** - The `batch` command enables real cross-server parallelism (see verification below)
@@ -69,11 +70,23 @@ When used as an MCP server, MCPU exposes a single `mux` tool:
 
 ```yaml
 name: mux
-description: MCP muxer
-argv: "[cmd, ...args]: servers [fuzzy], tools|info|call|connect|disconnect|setConfig <server> [tool..], batch, connections, reload"
-params: "batch: {timeout?, resp_mode?: auto|full|summary|refs}"
-batch: "{id: {argv, params}}"
-setConfig.extraArgs: "args from user"
+description: Route commands to MCP servers
+# connName = "server" (default) or "server[connId]" (named instance)
+commands:
+  - ["servers", "pattern?"]                              # List servers
+  - ["call", "connName", "tool"], {params}               # Call tool (auto-connects)
+  - ["tools", "server"]                                  # Get tools summary
+  - ["info", "server", "tool?"]                          # Get tool info
+  - ["connect", "server"]                                # Default connection
+  - ["connect", "server", "connId"]                      # Named connection
+  - ["connect", "server", "--new"]                       # Auto-assign ID
+  - ["disconnect", "connName"]                           # Disconnect
+  - ["reconnect", "connName"]                            # Reconnect
+  - ["setConfig", "server"], {extraArgs?, env?, timeout?}
+  - ["batch"], {timeout?, resp_mode?}, batch={id:{argv,params}}
+  - ["exec"], {file?, code?, timeout?}
+  - ["connections"]                                      # List active
+  - ["reload"]                                           # Reload config
 ```
 
 ### Batch Calls
@@ -90,6 +103,31 @@ params: { timeout: 5000, resp_mode: "auto" }  // optional
 ```
 
 Response modes: `auto` (threshold truncation), `full` (inline all), `summary` (brief+files), `refs` (files only).
+
+### Multi-Instance Connections
+
+Create multiple connections to the same server for true parallel execution within a single server:
+
+```js
+// Create named connections
+["connect", "sleep"]           // Default connection: "sleep"
+["connect", "sleep", "--new"]  // Auto-assign: "sleep[1]", "sleep[2]", ...
+["connect", "sleep", "dev"]    // Named: "sleep[dev]"
+
+// Use in batch for parallel execution on same server
+argv: ["batch"],
+batch: {
+  "a": { argv: ["call", "sleep", "sleep"], params: { seconds: 2 } },
+  "b": { argv: ["call", "sleep[1]", "sleep"], params: { seconds: 2 } },
+  "c": { argv: ["call", "sleep[dev]", "sleep"], params: { seconds: 2 } }
+}
+// All 3 run in parallel, completing in ~2s instead of ~6s
+
+// List and manage connections
+["connections"]                 // Shows: sleep, sleep[1], sleep[dev]
+["disconnect", "sleep[dev]"]    // Disconnect specific instance
+["reconnect", "sleep[1]"]       // Reconnect specific instance
+```
 
 ### Exec Command
 

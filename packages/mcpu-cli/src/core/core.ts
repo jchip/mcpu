@@ -121,19 +121,28 @@ function createParserCLI() {
             restart: {
               desc: 'Restart server if extraArgs changed',
             },
+            'conn-id': {
+              desc: 'Use specific connection instance',
+              args: '<id string>',
+            },
           },
         },
         connect: {
           desc: 'Connect to an MCP server (daemon mode only)',
-          args: '<server string>',
+          args: '<server string> [connId string]',
+          options: {
+            new: {
+              desc: 'Auto-assign a new connection ID',
+            },
+          },
         },
         disconnect: {
           desc: 'Disconnect from an MCP server (daemon mode only)',
-          args: '<server string>',
+          args: '<server string> [connId string]',
         },
         reconnect: {
           desc: 'Reconnect to an MCP server (daemon mode only)',
-          args: '<server string>',
+          args: '<server string> [connId string]',
         },
         connections: {
           alias: ['list-connections'],
@@ -285,9 +294,9 @@ export async function coreExecute(options: CoreExecutionOptions): Promise<Comman
         // Collect all arguments
         const allArgs: string[] = (args.args as string[] | undefined) || [];
 
-        // Add unknown options as --key=value arguments
+        // Add unknown options as --key=value arguments (exclude known options)
         for (const [key, value] of Object.entries(localOpts)) {
-          if (key !== 'stdin' && key !== 'restart' && value !== undefined) {
+          if (key !== 'stdin' && key !== 'restart' && key !== 'connId' && value !== undefined) {
             allArgs.push(`--${key}=${value}`);
           }
         }
@@ -298,6 +307,7 @@ export async function coreExecute(options: CoreExecutionOptions): Promise<Comman
           args: allArgs,
           stdinData: params ? JSON.stringify(params) : undefined,
           restart: localOpts.restart as boolean | undefined,
+          connId: localOpts.connId as string | undefined,
         }, {
           ...globalOptions,
           stdin: localOpts.stdin as boolean | undefined,
@@ -307,18 +317,22 @@ export async function coreExecute(options: CoreExecutionOptions): Promise<Comman
       case 'connect': {
         return await executeCommand('connect', {
           server: args.server as string,
+          connId: args.connId as string | undefined,
+          newConn: localOpts.new as boolean | undefined,
         }, globalOptions);
       }
 
       case 'disconnect': {
         return await executeCommand('disconnect', {
           server: args.server as string,
+          connId: args.connId as string | undefined,
         }, globalOptions);
       }
 
       case 'reconnect': {
         return await executeCommand('reconnect', {
           server: args.server as string,
+          connId: args.connId as string | undefined,
         }, globalOptions);
       }
 

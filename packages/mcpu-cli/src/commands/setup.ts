@@ -2,6 +2,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync } from
 import { homedir, platform } from 'node:os';
 import { join, dirname } from 'node:path';
 import { execSync } from 'node:child_process';
+import { parse as parseToml, stringify as stringifyToml } from 'smol-toml';
 import { ClaudeSettingsSchema, type MCPServerConfig } from '../types.ts';
 
 // Gemini CLI constants
@@ -11,6 +12,10 @@ const GEMINI_SETTINGS_FILE = 'settings.json';
 // Cursor constants
 const CURSOR_DIR = '.cursor';
 const CURSOR_MCP_FILE = 'mcp.json';
+
+// Codex CLI constants
+const CODEX_DIR = '.codex';
+const CODEX_CONFIG_FILE = 'config.toml';
 
 /**
  * Check if mcpu-mcp command is available globally
@@ -95,6 +100,7 @@ export interface MigrationPlan {
     cli?: string;
     gemini?: string;
     cursor?: string;
+    codex?: string;
   };
   mcpuConfigPath: string;
 }
@@ -177,6 +183,24 @@ export function getCursorConfigDir(): string {
  */
 export function getCursorConfigPath(): string {
   return join(getCursorConfigDir(), CURSOR_MCP_FILE);
+}
+
+/**
+ * Get Codex CLI config directory
+ */
+export function getCodexConfigDir(): string {
+  // Honor CODEX_CONFIG_DIR environment variable
+  if (process.env.CODEX_CONFIG_DIR) {
+    return process.env.CODEX_CONFIG_DIR;
+  }
+  return join(homedir(), CODEX_DIR);
+}
+
+/**
+ * Get Codex CLI config path
+ */
+export function getCodexConfigPath(): string {
+  return join(getCodexConfigDir(), CODEX_CONFIG_FILE);
 }
 
 /**
@@ -298,6 +322,51 @@ export function readGeminiCliConfig(configPath: string): Record<string, MCPServe
 }
 
 /**
+ * Read Codex CLI config and extract MCP servers
+ * Codex CLI format (TOML): [mcp_servers.<name>] with command, args, env
+ */
+export function readCodexCliConfig(configPath: string): Record<string, MCPServerConfig> | null {
+  if (!existsSync(configPath)) {
+    return null;
+  }
+
+  try {
+    const content = readFileSync(configPath, 'utf-8');
+    const data = parseToml(content);
+
+    const servers: Record<string, MCPServerConfig> = {};
+
+    // Read mcp_servers section (note: underscore, not hyphen)
+    const mcpServers = data.mcp_servers as Record<string, unknown> | undefined;
+    if (mcpServers && typeof mcpServers === 'object') {
+      for (const [name, config] of Object.entries(mcpServers)) {
+        if (config && typeof config === 'object') {
+          const cfg = config as Record<string, unknown>;
+          // Codex uses 'command' for stdio, 'url' for HTTP
+          if ('command' in cfg || 'url' in cfg) {
+            // Convert Codex format to MCPServerConfig
+            const serverConfig: MCPServerConfig = {
+              command: cfg.command as string,
+            };
+            if (cfg.args) {
+              serverConfig.args = cfg.args as string[];
+            }
+            if (cfg.env && typeof cfg.env === 'object') {
+              serverConfig.env = cfg.env as Record<string, string>;
+            }
+            servers[name] = serverConfig;
+          }
+        }
+      }
+    }
+
+    return servers;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Read project-level MCP server configs from Claude Desktop's projects directory
  */
 export function readProjectConfigs(projectsDir: string): Record<string, Record<string, MCPServerConfig>> {
@@ -337,12 +406,12 @@ export function readProjectConfigs(projectsDir: string): Record<string, Record<s
 }
 
 /**
- * Discover all MCP servers from Claude Desktop, Claude CLI, Gemini CLI, and Cursor
+ * Discover all MCP servers from Claude Desktop, Claude CLI, Gemini CLI, Cursor, and Codex
  */
-export function discoverServers(): { discovered: DiscoveredServers; sources: { desktop?: string; cli?: string; gemini?: string; cursor?: string } } | null {
+export function discoverServers(): { discovered: DiscoveredServers; sources: { desktop?: string; cli?: string; gemini?: string; cursor?: string; codex?: string } } | null {
   const global: Record<string, MCPServerConfig> = {};
   const projects: Record<string, Record<string, MCPServerConfig>> = {};
-  const sources: { desktop?: string; cli?: string; gemini?: string; cursor?: string } = {};
+  const sources: { desktop?: string; cli?: string; gemini?: string; cursor?: string; codex?: string } = {};
 
   // Read Claude Desktop config
   const desktopPath = getClaudeDesktopConfigPath();
@@ -401,6 +470,21 @@ export function discoverServers(): { discovered: DiscoveredServers; sources: { d
     if (cursorServers) {
       // Cursor servers (merge, others win on conflict)
       for (const [name, config] of Object.entries(cursorServers)) {
+        if (!global[name]) {
+          global[name] = config;
+        }
+      }
+    }
+  }
+
+  // Read Codex CLI config (TOML format)
+  const codexPath = getCodexConfigPath();
+  if (existsSync(codexPath)) {
+    sources.codex = codexPath;
+    const codexServers = readCodexCliConfig(codexPath);
+    if (codexServers) {
+      // Codex servers (merge, others win on conflict)
+      for (const [name, config] of Object.entries(codexServers)) {
         if (!global[name]) {
           global[name] = config;
         }
@@ -564,20 +648,29 @@ export function updateClaudeDesktopConfig(configPath: string): void {
  * Automatically detects if mcpu-mcp is globally installed or if running via npx
  */
 export function updateClaudeCliConfig(configPath: string): void {
-  if (!existsSync(configPath)) {
-    return;
-  }
-
-  // Create backup
-  const backupPath = `${configPath}.mcpu.bak`;
-  copyFileSync(configPath, backupPath);
-
-  // Read existing config
-  const content = readFileSync(configPath, 'utf-8');
-  const data = JSON.parse(content);
-
   // Get appropriate MCPU server config (detects global install vs npx)
   const mcpuConfig = getMcpuServerConfig();
+
+  // Read existing config or create new one
+  let data: Record<string, unknown> = {};
+  if (existsSync(configPath)) {
+    // Create backup
+    const backupPath = `${configPath}.mcpu.bak`;
+    copyFileSync(configPath, backupPath);
+
+    try {
+      const content = readFileSync(configPath, 'utf-8');
+      data = JSON.parse(content);
+    } catch {
+      // Start fresh if existing config is invalid
+    }
+  } else {
+    // Create directory if needed
+    const configDir = dirname(configPath);
+    if (!existsSync(configDir)) {
+      mkdirSync(configDir, { recursive: true });
+    }
+  }
 
   // Replace mcpServers with just MCPU
   data.mcpServers = {
@@ -665,6 +758,52 @@ export function updateCursorConfig(configPath: string): void {
 }
 
 /**
+ * Update Codex CLI config to use only MCPU
+ * Replaces mcp_servers section with just MCPU (TOML format)
+ * Automatically detects if mcpu-mcp is globally installed or if running via npx
+ */
+export function updateCodexConfig(configPath: string): void {
+  // Get appropriate MCPU server config (detects global install vs npx)
+  // getMcpuServerConfig always returns stdio config with command/args
+  const mcpuConfig = getMcpuServerConfig() as { command: string; args?: string[] };
+
+  // Read existing config or create new one
+  let data: Record<string, unknown> = {};
+  if (existsSync(configPath)) {
+    // Create backup
+    const backupPath = `${configPath}.mcpu.bak`;
+    copyFileSync(configPath, backupPath);
+
+    try {
+      const content = readFileSync(configPath, 'utf-8');
+      data = parseToml(content) as Record<string, unknown>;
+    } catch {
+      // Start fresh if existing config is invalid
+    }
+  } else {
+    // Create directory if needed
+    const configDir = dirname(configPath);
+    if (!existsSync(configDir)) {
+      mkdirSync(configDir, { recursive: true });
+    }
+  }
+
+  // Replace mcp_servers with just MCPU (note: underscore for Codex)
+  const mcpuTomlConfig: Record<string, unknown> = {
+    command: mcpuConfig.command,
+  };
+  if (mcpuConfig.args && mcpuConfig.args.length > 0) {
+    mcpuTomlConfig.args = mcpuConfig.args;
+  }
+
+  data.mcp_servers = {
+    mcpu: mcpuTomlConfig,
+  };
+
+  writeFileSync(configPath, stringifyToml(data) + '\n');
+}
+
+/**
  * Legacy alias for backwards compatibility
  */
 export function updateClaudeConfig(configPath: string): void {
@@ -684,7 +823,7 @@ export async function executeSetup(options: {
   if (!plan) {
     return {
       success: false,
-      message: 'Could not find any CLI config. Is Claude Desktop, Claude CLI, Gemini CLI, or Cursor installed?',
+      message: 'Could not find any CLI config. Is Claude Desktop, Claude CLI, Gemini CLI, Cursor, or Codex installed?',
     };
   }
 
@@ -709,18 +848,31 @@ export async function executeSetup(options: {
   // Execute migration
   saveMcpuConfig(plan.servers, plan.mcpuConfigPath);
 
-  // Update Desktop, CLI, Gemini, and Cursor configs if they exist
+  // Update Desktop, CLI, Gemini, Cursor, and Codex configs
+  // For sources that were discovered, update them
+  // For tools without existing config, also add mcpu to their config
   if (plan.sources.desktop) {
     updateClaudeDesktopConfig(plan.sources.desktop);
   }
   if (plan.sources.cli) {
     updateClaudeCliConfig(plan.sources.cli);
+  } else {
+    // Add mcpu to Claude CLI even if it wasn't a source
+    const cliPath = getClaudeCliConfigPath();
+    updateClaudeCliConfig(cliPath);
   }
   if (plan.sources.gemini) {
     updateGeminiCliConfig(plan.sources.gemini);
   }
   if (plan.sources.cursor) {
     updateCursorConfig(plan.sources.cursor);
+  }
+  if (plan.sources.codex) {
+    updateCodexConfig(plan.sources.codex);
+  } else {
+    // Add mcpu to Codex CLI even if it wasn't a source
+    const codexPath = getCodexConfigPath();
+    updateCodexConfig(codexPath);
   }
 
   return {

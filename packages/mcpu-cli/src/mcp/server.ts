@@ -113,20 +113,23 @@ export class McpuMcpServer {
    */
   private registerTools(): void {
     // Tool description with examples for clarity
+    // connName = "server" (default) or "server[connId]" (named instance)
     const toolDescription = `Route commands to MCP servers.
 
 Commands: argv=[cmd, ...args], params={}
-- List servers: ["servers", "optional pattern"]
-- Call tool: ["call","server","tool"], {arg1:"...", ...}
-- Get summary of tools: ["tools","server"]
-- Get full tool info: ["info","server","optional tool"]
-- connect/disconnect: ["connect","server"] (commands auto connect)
-- Set server config: ["setConfig","server"], {extraArgs?:["--flag"], env?:{}, requestTimeout?:ms}
-- Batch Commands: ["batch"], {timeout?:ms, resp_mode?:auto|full|summary|refs}, batch={id: {argv, params, ...}}
-- exec JS Code: ["exec"], {file?:string, code?:string, timeout?:ms}
-  - API: mcpuMux({argv,params,...}):Promise<any>
+- List servers: ["servers", "pattern?"]
+- Call tool: ["call", "connName", "tool"], {arg1:"...", ...} (auto-connects if needed)
+- Get tools summary: ["tools", "server"] (recommended first)
+- Get tool info: ["info", "server", "tool?"]
+- Connect: ["connect", "server"], ["connect", "server", "connId"], ["connect", "server", "--new"]
+- Disconnect: ["disconnect", "connName"]
+- Reconnect: ["reconnect", "connName"]
+- Set config: ["setConfig", "server"], {extraArgs?:[], env?:{}, requestTimeout?:ms}
+- Batch: ["batch"], {timeout?:ms, resp_mode?:auto|full|summary|refs}, batch={id:{argv,params}}
+- Exec JS: ["exec"], {file?:string, code?:string, timeout?:ms}
+  - API: mcpuMux({argv,params}):Promise<any>
 - List connections: ["connections"]
-- Reload: ["reload"]
+- Reload config: ["reload"]
 `;
 
     this.server.tool(

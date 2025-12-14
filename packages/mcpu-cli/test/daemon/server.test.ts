@@ -55,6 +55,12 @@ vi.mock('../../src/daemon/connection-pool.js', () => ({
     getRawConnection: vi.fn(),
     shutdown: vi.fn(),
   })),
+  getConnectionKey: (serverName: string, connId?: string) => connId ? `${serverName}[${connId}]` : serverName,
+  parseConnectionKey: (key: string) => {
+    const match = key.match(/^(.+?)\[(.+)\]$/);
+    if (match) return { server: match[1], connId: match[2] };
+    return { server: key };
+  },
 }));
 
 vi.mock('../../src/daemon/pid-manager.js', () => ({

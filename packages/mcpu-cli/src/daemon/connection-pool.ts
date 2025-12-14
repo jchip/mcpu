@@ -2,9 +2,28 @@ import { MCPClient, type MCPConnection } from '../client.ts';
 import type { MCPServerConfig } from '../types.ts';
 import { SchemaCache } from '../cache.ts';
 
+/**
+ * Form connection key: "server" or "server[id]"
+ */
+export function getConnectionKey(serverName: string, connId?: string): string {
+  return connId ? `${serverName}[${connId}]` : serverName;
+}
+
+/**
+ * Parse connection key back to {server, connId}
+ */
+export function parseConnectionKey(key: string): { server: string; connId?: string } {
+  const match = key.match(/^(.+?)\[(.+)\]$/);
+  if (match) {
+    return { server: match[1], connId: match[2] };
+  }
+  return { server: key };
+}
+
 export interface ConnectionInfo {
   id: number;
   server: string;
+  connId?: string;  // Optional connection instance ID
   connection: MCPConnection;
   status: 'connected' | 'disconnected' | 'error';
   connectedAt: number;
@@ -23,17 +42,18 @@ export interface ConnectionPoolOptions {
  * Manages persistent MCP server connections for the daemon
  */
 export class ConnectionPool {
-  private connections = new Map<string, MCPConnection>();
+  private connections = new Map<string, MCPConnection>(); // key -> connection
   private connectionInfo = new Map<number, ConnectionInfo>();
-  private serverToId = new Map<string, number>();
-  private idToServer = new Map<number, string>();
+  private keyToId = new Map<string, number>(); // connection key -> id
+  private idToKey = new Map<number, string>(); // id -> connection key
   private nextId = 1;
-  private configs = new Map<string, MCPServerConfig>();
+  private serverNextAutoId = new Map<string, number>(); // server -> next auto ID
+  private configs = new Map<string, MCPServerConfig>(); // key -> config
   private client = new MCPClient();
   private cleanupInterval: NodeJS.Timeout | null = null;
   private schemaCache = new SchemaCache();
   private refreshingServers = new Set<string>(); // Track servers being refreshed
-  private connectingServers = new Map<string, Promise<ConnectionInfo>>(); // Track in-flight connection attempts
+  private connectingServers = new Map<string, Promise<ConnectionInfo>>(); // Track in-flight connection attempts (by key)
 
   // Connection TTL: 5 minutes of inactivity (default)
   private readonly idleTimeoutMs: number;
@@ -52,10 +72,15 @@ export class ConnectionPool {
   /**
    * Get or create a connection to a server
    * Returns the ConnectionInfo with the connection ID
+   * @param serverName - The server name from config
+   * @param config - Server configuration
+   * @param connId - Optional connection instance ID (for multi-instance support)
    */
-  async getConnection(serverName: string, config: MCPServerConfig): Promise<ConnectionInfo> {
+  async getConnection(serverName: string, config: MCPServerConfig, connId?: string): Promise<ConnectionInfo> {
+    const key = getConnectionKey(serverName, connId);
+
     // Check if connection exists and is still valid
-    const existingId = this.serverToId.get(serverName);
+    const existingId = this.keyToId.get(key);
     if (existingId !== undefined) {
       const info = this.connectionInfo.get(existingId);
       if (info && info.status === 'connected') {
@@ -66,26 +91,42 @@ export class ConnectionPool {
     }
 
     // Check if connection is already in progress (prevents race condition)
-    const existingPromise = this.connectingServers.get(serverName);
+    const existingPromise = this.connectingServers.get(key);
     if (existingPromise) {
       return existingPromise;
     }
 
     // Create connection promise and track it
-    const connectionPromise = this.createConnection(serverName, config);
-    this.connectingServers.set(serverName, connectionPromise);
+    const connectionPromise = this.createConnection(serverName, config, connId);
+    this.connectingServers.set(key, connectionPromise);
 
     try {
       return await connectionPromise;
     } finally {
-      this.connectingServers.delete(serverName);
+      this.connectingServers.delete(key);
     }
+  }
+
+  /**
+   * Get or create a new connection instance with auto-assigned ID
+   * Always creates a new instance, even if default connection exists
+   */
+  async getConnectionWithNewId(serverName: string, config: MCPServerConfig): Promise<ConnectionInfo> {
+    // Get next auto ID for this server
+    const nextAutoId = this.serverNextAutoId.get(serverName) || 1;
+    const connId = String(nextAutoId);
+
+    // Increment for next time
+    this.serverNextAutoId.set(serverName, nextAutoId + 1);
+
+    return this.getConnection(serverName, config, connId);
   }
 
   /**
    * Internal method to create a new connection
    */
-  private async createConnection(serverName: string, config: MCPServerConfig): Promise<ConnectionInfo> {
+  private async createConnection(serverName: string, config: MCPServerConfig, connId?: string): Promise<ConnectionInfo> {
+    const key = getConnectionKey(serverName, connId);
     const connection = await this.client.connect(serverName, config);
     const id = this.nextId++;
     const now = Date.now();
@@ -93,12 +134,13 @@ export class ConnectionPool {
     // Log any stderr output from initial connection (but don't clear it so caller can access it)
     const stderr = this.client.getStderr(connection, false);
     if (stderr) {
-      console.error(`[${serverName}] stderr during connection:\n${stderr}`);
+      console.error(`[${key}] stderr during connection:\n${stderr}`);
     }
 
     const info: ConnectionInfo = {
       id,
       server: serverName,
+      connId,
       connection,
       status: 'connected',
       connectedAt: now,
@@ -106,11 +148,11 @@ export class ConnectionPool {
       closedAt: null,
     };
 
-    this.connections.set(serverName, connection);
+    this.connections.set(key, connection);
     this.connectionInfo.set(id, info);
-    this.serverToId.set(serverName, id);
-    this.idToServer.set(id, serverName);
-    this.configs.set(serverName, config);
+    this.keyToId.set(key, id);
+    this.idToKey.set(id, key);
+    this.configs.set(key, config);
 
     // New connection - always kick off async cache refresh check
     this.refreshCacheAsync(serverName, connection);
@@ -171,12 +213,15 @@ export class ConnectionPool {
   }
 
   /**
-   * Disconnect a specific server
+   * Disconnect a specific server connection
    * Returns the ConnectionInfo with updated status
+   * @param serverName - The server name from config
+   * @param connId - Optional connection instance ID
    */
-  async disconnect(serverName: string): Promise<ConnectionInfo | null> {
-    const connection = this.connections.get(serverName);
-    const id = this.serverToId.get(serverName);
+  async disconnect(serverName: string, connId?: string): Promise<ConnectionInfo | null> {
+    const key = getConnectionKey(serverName, connId);
+    const connection = this.connections.get(key);
+    const id = this.keyToId.get(key);
 
     if (connection && id !== undefined) {
       await this.client.disconnect(connection);
@@ -187,10 +232,10 @@ export class ConnectionPool {
         info.closedAt = Date.now();
 
         // Clean up all maps including connectionInfo to prevent memory leak
-        this.connections.delete(serverName);
-        this.serverToId.delete(serverName);
-        this.idToServer.delete(id);
-        this.configs.delete(serverName);
+        this.connections.delete(key);
+        this.keyToId.delete(key);
+        this.idToKey.delete(id);
+        this.configs.delete(key);
         this.connectionInfo.delete(id);
 
         return info;
@@ -204,9 +249,10 @@ export class ConnectionPool {
    * Disconnect by connection ID
    */
   async disconnectById(id: number): Promise<ConnectionInfo | null> {
-    const serverName = this.idToServer.get(id);
-    if (serverName) {
-      return this.disconnect(serverName);
+    const key = this.idToKey.get(id);
+    if (key) {
+      const { server, connId } = parseConnectionKey(key);
+      return this.disconnect(server, connId);
     }
     return null;
   }
@@ -227,7 +273,7 @@ export class ConnectionPool {
    */
   listConnections(): ConnectionInfo[] {
     const result: ConnectionInfo[] = [];
-    for (const id of this.serverToId.values()) {
+    for (const id of this.keyToId.values()) {
       const info = this.connectionInfo.get(id);
       if (info && info.status === 'connected') {
         result.push(info);
@@ -244,17 +290,20 @@ export class ConnectionPool {
   }
 
   /**
-   * Get list of connections for a specific server
+   * Get list of connections for a specific server (all instances)
    */
   listServerConnections(serverName: string): ConnectionInfo[] {
-    const id = this.serverToId.get(serverName);
-    if (id !== undefined) {
-      const info = this.connectionInfo.get(id);
-      if (info) {
-        return [info];
+    const result: ConnectionInfo[] = [];
+    for (const [key, id] of this.keyToId.entries()) {
+      const { server } = parseConnectionKey(key);
+      if (server === serverName) {
+        const info = this.connectionInfo.get(id);
+        if (info && info.status === 'connected') {
+          result.push(info);
+        }
       }
     }
-    return [];
+    return result;
   }
 
   /**
@@ -265,10 +314,11 @@ export class ConnectionPool {
   }
 
   /**
-   * Get connection info by server name
+   * Get connection info by server name and optional connId
    */
-  getConnectionByServer(serverName: string): ConnectionInfo | null {
-    const id = this.serverToId.get(serverName);
+  getConnectionByServer(serverName: string, connId?: string): ConnectionInfo | null {
+    const key = getConnectionKey(serverName, connId);
+    const id = this.keyToId.get(key);
     if (id !== undefined) {
       return this.connectionInfo.get(id) || null;
     }
@@ -278,8 +328,8 @@ export class ConnectionPool {
   /**
    * Get the actual MCPConnection for a server (for internal use)
    */
-  getRawConnection(serverName: string): MCPConnection | null {
-    const info = this.getConnectionByServer(serverName);
+  getRawConnection(serverName: string, connId?: string): MCPConnection | null {
+    const info = this.getConnectionByServer(serverName, connId);
     if (info && info.status === 'connected') {
       // Update last used
       info.lastUsed = Date.now();
@@ -289,19 +339,20 @@ export class ConnectionPool {
   }
 
   /**
-   * Reconnect a specific server
+   * Reconnect a specific server connection
    */
-  async reconnect(serverName: string): Promise<void> {
-    const config = this.configs.get(serverName);
+  async reconnect(serverName: string, connId?: string): Promise<ConnectionInfo> {
+    const key = getConnectionKey(serverName, connId);
+    const config = this.configs.get(key);
     if (!config) {
-      throw new Error(`No configuration found for server: ${serverName}`);
+      throw new Error(`No configuration found for connection: ${key}`);
     }
 
     // Disconnect if connected
-    await this.disconnect(serverName);
+    await this.disconnect(serverName, connId);
 
     // Reconnect
-    await this.getConnection(serverName, config);
+    return this.getConnection(serverName, config, connId);
   }
 
   /**
@@ -309,19 +360,19 @@ export class ConnectionPool {
    */
   private async cleanupStale(): Promise<void> {
     const now = Date.now();
-    const toRemove: string[] = [];
+    const toRemove: Array<{ server: string; connId?: string }> = [];
 
-    for (const [serverName, id] of this.serverToId.entries()) {
+    for (const [key, id] of this.keyToId.entries()) {
       const info = this.connectionInfo.get(id);
       if (info && info.status === 'connected') {
         if (now - info.lastUsed > this.idleTimeoutMs) {
-          toRemove.push(serverName);
+          toRemove.push(parseConnectionKey(key));
         }
       }
     }
 
-    for (const serverName of toRemove) {
-      await this.disconnect(serverName);
+    for (const { server, connId } of toRemove) {
+      await this.disconnect(server, connId);
     }
   }
 
