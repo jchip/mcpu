@@ -118,12 +118,12 @@ export class McpuMcpServer {
 
 Commands: argv=[cmd, ...args], params={}
 - List servers: ["servers", "pattern?"]
-- Call tool: ["call", "connName", "tool"], {arg1:"...", ...} (auto-connects if needed)
+- Call tool: ["call", "server or connName", "tool"], {arg1:"...", ...} (auto-connects server if needed)
 - Get tools summary: ["tools", "server"] (recommended first)
 - Get tool info: ["info", "server", "tool?"]
-- Connect: ["connect", "server"], ["connect", "server", "connId"], ["connect", "server", "--new"]
+- Connect: ["connect", "server", "optional --new or connId"] (with ID, connName will be "server[connId]")
 - Disconnect: ["disconnect", "connName"]
-- Reconnect: ["reconnect", "connName"]
+- Reconnect: ["reconnect", "connName"] (shortcut for disconnect + connect)
 - Set config: ["setConfig", "server"], {extraArgs?:[], env?:{}, requestTimeout?:ms}
 - Batch: ["batch"], {timeout?:ms, resp_mode?:auto|full|summary|refs}, batch={id:{argv,params}}
 - Exec JS: ["exec"], {file?:string, code?:string, timeout?:ms}
