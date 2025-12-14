@@ -1,6 +1,6 @@
 {
   "name": "@mcpu/cli",
-  "version": "0.2.17",
+  "version": "0.2.18",
   "description": "MCP multiplexer with progressive discovery, parallel batch calls, code execution, and up to 90% token reduction",
   "author": "Joel Chen <joel123@gmail.com>",
   "repository": {
