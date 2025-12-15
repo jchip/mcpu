@@ -8,7 +8,7 @@ import { homedir } from 'os';
 
 export interface ServerLogEntry {
   timestamp: string;
-  event: 'server_spawn' | 'server_disconnect' | 'server_error';
+  event: 'server_spawn' | 'server_disconnect' | 'server_error' | 'mcpu_start' | 'mcpu_shutdown';
   server: string;
   connectionId?: string;
   command?: string;
@@ -16,6 +16,10 @@ export interface ServerLogEntry {
   env?: Record<string, string>; // Sanitized
   error?: string;
   success?: boolean;
+  transport?: string;
+  port?: number;
+  endpoint?: string;
+  configCount?: number;
 }
 
 /**
@@ -143,5 +147,45 @@ export async function logServerError(
     error,
     connectionId,
     success: false,
+  });
+}
+
+/**
+ * Log mcpu-mcp startup event
+ */
+export async function logMcpuStart(
+  ppid: number,
+  pid: number,
+  transport: string,
+  port?: number,
+  endpoint?: string,
+  configCount?: number
+): Promise<void> {
+  await writeServerLog('mcpu-mcp', ppid, pid, {
+    timestamp: new Date().toISOString(),
+    event: 'mcpu_start',
+    server: 'mcpu-mcp',
+    transport,
+    port,
+    endpoint,
+    configCount,
+    success: true,
+  });
+}
+
+/**
+ * Log mcpu-mcp shutdown event
+ */
+export async function logMcpuShutdown(
+  ppid: number,
+  pid: number,
+  error?: string
+): Promise<void> {
+  await writeServerLog('mcpu-mcp', ppid, pid, {
+    timestamp: new Date().toISOString(),
+    event: 'mcpu_shutdown',
+    server: 'mcpu-mcp',
+    error,
+    success: !error,
   });
 }

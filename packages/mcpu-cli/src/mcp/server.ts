@@ -19,6 +19,7 @@ import type { MCPServerConfig } from "../types.ts";
 import type { CommandResult } from "../types/result.ts";
 import { formatMcpResponse, autoSaveResponse } from "../formatters.ts";
 import { getErrorMessage } from "../utils/error.ts";
+import { logMcpuStart, logMcpuShutdown } from "../logging.ts";
 
 export type TransportType = "stdio" | "http";
 
@@ -219,6 +220,16 @@ Commands: argv=[cmd, ...args], params={}
       const transport = new StdioServerTransport();
       await this.server.connect(transport);
       this.log("MCP server started (stdio)");
+
+      // Log startup to file
+      await logMcpuStart(
+        process.ppid,
+        process.pid,
+        "stdio",
+        undefined,
+        undefined,
+        this.configs.size
+      );
     }
   }
 
@@ -273,11 +284,21 @@ Commands: argv=[cmd, ...args], params={}
     });
 
     // Start server
-    this.httpServer = app.listen(port, () => {
+    this.httpServer = app.listen(port, async () => {
       this.log(`MCP server started (http://localhost:${port}${endpoint})`);
       // Also log to stderr so user can see the URL
       console.error(
         `[mcpu-mcp] Listening on http://localhost:${port}${endpoint}`
+      );
+
+      // Log startup to file
+      await logMcpuStart(
+        process.ppid,
+        process.pid,
+        "http",
+        port,
+        endpoint,
+        this.configs.size
       );
     });
   }
@@ -287,6 +308,8 @@ Commands: argv=[cmd, ...args], params={}
    */
   async shutdown(): Promise<void> {
     this.log("Shutting down");
+
+    let shutdownError: string | undefined;
 
     // Close HTTP server if running
     if (this.httpServer) {
@@ -299,9 +322,14 @@ Commands: argv=[cmd, ...args], params={}
     try {
       await this.pool.shutdown();
     } catch (error) {
-      this.log("Error during pool shutdown", { error: getErrorMessage(error) });
+      const errorMsg = getErrorMessage(error);
+      shutdownError = errorMsg;
+      this.log("Error during pool shutdown", { error: errorMsg });
     }
 
     this.log("Shutdown complete");
+
+    // Log shutdown to file
+    await logMcpuShutdown(process.ppid, process.pid, shutdownError);
   }
 }
