@@ -9,6 +9,7 @@ import type { MCPServerConfig, StdioConfig } from './types.ts';
 import { isStdioConfig, DEFAULT_REQUEST_TIMEOUT_MS } from './types.ts';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { logServerSpawn, logServerError } from './logging.ts';
+import type pino from 'pino';
 
 /**
  * Recursively remove additionalProperties: false from a JSON schema
@@ -62,6 +63,7 @@ export interface MCPConnection {
   serverName: string;
   connectionId?: string;  // Optional connection ID from daemon
   stderrBuffer?: string[];  // Buffer for stderr output from stdio servers
+  logger?: pino.Logger;  // Optional logger instance
 }
 
 /**
@@ -75,9 +77,7 @@ export class MCPClient {
     serverName: string,
     config: MCPServerConfig,
     connectionId?: string,
-    service?: string,
-    ppid?: number,
-    pid?: number
+    logger?: pino.Logger
   ): Promise<MCPConnection> {
     let transport: Transport;
 
@@ -108,11 +108,9 @@ export class MCPClient {
       ];
 
       // Log server spawn
-      if (service && ppid !== undefined && pid !== undefined) {
-        await logServerSpawn(
-          service,
-          ppid,
-          pid,
+      if (logger) {
+        logServerSpawn(
+          logger,
           serverName,
           config.command,
           mergedArgs,
@@ -142,8 +140,8 @@ export class MCPClient {
       await client.connect(transport);
     } catch (error) {
       // Log connection failure
-      if (service && ppid !== undefined && pid !== undefined) {
-        await logServerError(service, ppid, pid, serverName, String(error), connectionId);
+      if (logger) {
+        logServerError(logger, serverName, String(error), connectionId);
       }
       throw error;
     }
@@ -165,6 +163,7 @@ export class MCPClient {
       serverName,
       connectionId,
       stderrBuffer,
+      logger,
     };
   }
 

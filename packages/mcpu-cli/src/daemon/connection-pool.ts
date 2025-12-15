@@ -1,7 +1,8 @@
 import { MCPClient, type MCPConnection } from '../client.ts';
 import type { MCPServerConfig } from '../types.ts';
 import { SchemaCache } from '../cache.ts';
-import { logServerDisconnect } from '../logging.ts';
+import { createLogger, logServerDisconnect } from '../logging.ts';
+import type pino from 'pino';
 
 /**
  * Form connection key: "server" or "server[id]"
@@ -68,6 +69,7 @@ export class ConnectionPool {
   private readonly service?: string;
   private readonly ppid?: number;
   private readonly pid?: number;
+  private readonly logger?: pino.Logger;
 
   constructor(options: ConnectionPoolOptions = {}) {
     this.autoDisconnect = options.autoDisconnect ?? false;
@@ -75,6 +77,11 @@ export class ConnectionPool {
     this.service = options.service;
     this.ppid = options.ppid;
     this.pid = options.pid;
+
+    // Create logger if service/ppid/pid provided
+    if (this.service && this.ppid !== undefined && this.pid !== undefined) {
+      this.logger = createLogger(this.service, this.ppid, this.pid);
+    }
 
     // Start periodic cleanup of stale connections (only if enabled)
     if (this.autoDisconnect) {
@@ -140,7 +147,7 @@ export class ConnectionPool {
    */
   private async createConnection(serverName: string, config: MCPServerConfig, connId?: string): Promise<ConnectionInfo> {
     const key = getConnectionKey(serverName, connId);
-    const connection = await this.client.connect(serverName, config, key, this.service, this.ppid, this.pid);
+    const connection = await this.client.connect(serverName, config, key, this.logger);
     const id = this.nextId++;
     const now = Date.now();
 
@@ -240,8 +247,8 @@ export class ConnectionPool {
       await this.client.disconnect(connection);
 
       // Log disconnect
-      if (this.service && this.ppid !== undefined && this.pid !== undefined) {
-        await logServerDisconnect(this.service, this.ppid, this.pid, serverName, key);
+      if (this.logger) {
+        logServerDisconnect(this.logger, serverName, key);
       }
 
       const info = this.connectionInfo.get(id);

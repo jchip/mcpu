@@ -19,7 +19,8 @@ import type { MCPServerConfig } from "../types.ts";
 import type { CommandResult } from "../types/result.ts";
 import { formatMcpResponse, autoSaveResponse } from "../formatters.ts";
 import { getErrorMessage } from "../utils/error.ts";
-import { logMcpuStart, logMcpuShutdown } from "../logging.ts";
+import { createLogger, logMcpuStart, logMcpuShutdown } from "../logging.ts";
+import type pino from "pino";
 
 export type TransportType = "stdio" | "http";
 
@@ -41,9 +42,11 @@ export class McpuMcpServer {
   private options: McpuMcpServerOptions;
   private httpServer?: HttpServer;
   private httpTransport?: StreamableHTTPServerTransport;
+  private logger: pino.Logger;
 
   constructor(options: McpuMcpServerOptions = {}) {
     this.options = options;
+    this.logger = createLogger('mcpu-mcp', process.ppid, process.pid);
     this.server = new McpServer({
       name: "mcpu-mcp",
       version: VERSION,
@@ -222,9 +225,8 @@ Commands: argv=[cmd, ...args], params={}
       this.log("MCP server started (stdio)");
 
       // Log startup to file
-      await logMcpuStart(
-        process.ppid,
-        process.pid,
+      logMcpuStart(
+        this.logger,
         "stdio",
         undefined,
         undefined,
@@ -284,7 +286,7 @@ Commands: argv=[cmd, ...args], params={}
     });
 
     // Start server
-    this.httpServer = app.listen(port, async () => {
+    this.httpServer = app.listen(port, () => {
       this.log(`MCP server started (http://localhost:${port}${endpoint})`);
       // Also log to stderr so user can see the URL
       console.error(
@@ -292,9 +294,8 @@ Commands: argv=[cmd, ...args], params={}
       );
 
       // Log startup to file
-      await logMcpuStart(
-        process.ppid,
-        process.pid,
+      logMcpuStart(
+        this.logger,
         "http",
         port,
         endpoint,
@@ -330,6 +331,6 @@ Commands: argv=[cmd, ...args], params={}
     this.log("Shutdown complete");
 
     // Log shutdown to file
-    await logMcpuShutdown(process.ppid, process.pid, shutdownError);
+    logMcpuShutdown(this.logger, shutdownError);
   }
 }

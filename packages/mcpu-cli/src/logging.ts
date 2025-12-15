@@ -1,26 +1,10 @@
 /**
- * Logging for MCP server operations
+ * Logging for MCP server operations using pino
  */
 
-import { appendFile, mkdir } from 'fs/promises';
+import pino from 'pino';
 import { join } from 'path';
 import { homedir } from 'os';
-
-export interface ServerLogEntry {
-  timestamp: string;
-  event: 'server_spawn' | 'server_disconnect' | 'server_error' | 'mcpu_start' | 'mcpu_shutdown';
-  server: string;
-  connectionId?: string;
-  command?: string;
-  args?: string[];
-  env?: Record<string, string>; // Sanitized
-  error?: string;
-  success?: boolean;
-  transport?: string;
-  port?: number;
-  endpoint?: string;
-  configCount?: number;
-}
 
 /**
  * Sanitize environment variables - hide sensitive values
@@ -58,71 +42,63 @@ function getServerLogPath(service: string, ppid: number, pid: number): string {
 }
 
 /**
- * Write server log entry
+ * Create a pino logger for a specific service
  */
-export async function writeServerLog(
-  service: string,
-  ppid: number,
-  pid: number,
-  entry: ServerLogEntry
-): Promise<void> {
-  try {
-    const logPath = getServerLogPath(service, ppid, pid);
-    const logDir = join(logPath, '..');
+export function createLogger(service: string, ppid: number, pid: number) {
+  const logPath = getServerLogPath(service, ppid, pid);
 
-    // Ensure directory exists
-    await mkdir(logDir, { recursive: true });
-
-    // Format as JSON lines
-    const line = JSON.stringify({
-      ...entry,
-      env: sanitizeEnv(entry.env),
-    }) + '\n';
-
-    await appendFile(logPath, line, 'utf-8');
-  } catch (error) {
-    // Don't fail if logging fails
-    console.error('Failed to write server log:', error);
-  }
+  return pino(
+    {
+      level: 'info',
+      // Redact sensitive fields
+      redact: {
+        paths: ['env.*.PASSWORD', 'env.*.SECRET', 'env.*.TOKEN', 'env.*.KEY', 'env.*.*KEY'],
+        censor: '***REDACTED***'
+      },
+      formatters: {
+        level: (label) => {
+          return { level: label };
+        },
+      },
+    },
+    pino.destination({
+      dest: logPath,
+      sync: false, // async for better performance
+      mkdir: true, // auto-create directory
+    })
+  );
 }
 
 /**
  * Log server spawn event
  */
-export async function logServerSpawn(
-  service: string,
-  ppid: number,
-  pid: number,
+export function logServerSpawn(
+  logger: pino.Logger,
   server: string,
   command: string,
   args: string[],
   env?: Record<string, string>,
   connectionId?: string
-): Promise<void> {
-  await writeServerLog(service, ppid, pid, {
-    timestamp: new Date().toISOString(),
+): void {
+  logger.info({
     event: 'server_spawn',
     server,
     command,
     args,
-    env,
+    env: sanitizeEnv(env),
     connectionId,
-    success: true,
   });
 }
 
 /**
  * Log server disconnect event
  */
-export async function logServerDisconnect(
-  service: string,
-  ppid: number,
-  pid: number,
+export function logServerDisconnect(
+  logger: pino.Logger,
   server: string,
   connectionId?: string
-): Promise<void> {
-  await writeServerLog(service, ppid, pid, {
-    timestamp: new Date().toISOString(),
+): void {
+  logger.info({
     event: 'server_disconnect',
     server,
     connectionId,
@@ -132,60 +108,57 @@ export async function logServerDisconnect(
 /**
  * Log server error event
  */
-export async function logServerError(
-  service: string,
-  ppid: number,
-  pid: number,
+export function logServerError(
+  logger: pino.Logger,
   server: string,
   error: string,
   connectionId?: string
-): Promise<void> {
-  await writeServerLog(service, ppid, pid, {
-    timestamp: new Date().toISOString(),
+): void {
+  logger.error({
     event: 'server_error',
     server,
     error,
     connectionId,
-    success: false,
   });
 }
 
 /**
  * Log mcpu-mcp startup event
  */
-export async function logMcpuStart(
-  ppid: number,
-  pid: number,
+export function logMcpuStart(
+  logger: pino.Logger,
   transport: string,
   port?: number,
   endpoint?: string,
   configCount?: number
-): Promise<void> {
-  await writeServerLog('mcpu-mcp', ppid, pid, {
-    timestamp: new Date().toISOString(),
+): void {
+  logger.info({
     event: 'mcpu_start',
     server: 'mcpu-mcp',
     transport,
     port,
     endpoint,
     configCount,
-    success: true,
   });
 }
 
 /**
  * Log mcpu-mcp shutdown event
  */
-export async function logMcpuShutdown(
-  ppid: number,
-  pid: number,
+export function logMcpuShutdown(
+  logger: pino.Logger,
   error?: string
-): Promise<void> {
-  await writeServerLog('mcpu-mcp', ppid, pid, {
-    timestamp: new Date().toISOString(),
-    event: 'mcpu_shutdown',
-    server: 'mcpu-mcp',
-    error,
-    success: !error,
-  });
+): void {
+  if (error) {
+    logger.error({
+      event: 'mcpu_shutdown',
+      server: 'mcpu-mcp',
+      error,
+    });
+  } else {
+    logger.info({
+      event: 'mcpu_shutdown',
+      server: 'mcpu-mcp',
+    });
+  }
 }

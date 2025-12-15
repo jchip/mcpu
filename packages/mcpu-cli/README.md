@@ -529,7 +529,7 @@ mcpu call filesystem read_file --stdin <<< '{"path": "/etc/hosts"}'
 
 ### Log Files:
 
-MCPU automatically logs server operations to help with debugging and monitoring:
+MCPU uses [pino](https://github.com/pinojs/pino) for structured JSON logging:
 
 - `$XDG_DATA_HOME/mcpu/logs/mcpu-mcp-<ppid>-<pid>.log` - MCP server mode logs (defaults to `~/.local/share/mcpu/logs/`)
 - `$XDG_DATA_HOME/mcpu/logs/daemon-<ppid>-<pid>.log` - Daemon mode logs
@@ -544,12 +544,14 @@ MCPU automatically logs server operations to help with debugging and monitoring:
 **Example log entry:**
 ```json
 {
-  "timestamp": "2025-12-15T04:55:45.203Z",
+  "level": "info",
+  "time": 1765783881253,
+  "pid": 12119,
+  "hostname": "machine.local",
   "event": "mcpu_start",
   "server": "mcpu-mcp",
   "transport": "stdio",
-  "configCount": 17,
-  "success": true
+  "configCount": 17
 }
 ```
 
@@ -561,11 +563,17 @@ ls -lh ~/.local/share/mcpu/logs/
 # View a log file (JSON lines format)
 cat ~/.local/share/mcpu/logs/mcpu-mcp-*.log | jq .
 
+# Pretty-print with pino-pretty (if installed)
+cat ~/.local/share/mcpu/logs/mcpu-mcp-*.log | npx pino-pretty
+
 # Tail logs in real-time
-tail -f ~/.local/share/mcpu/logs/mcpu-mcp-*.log
+tail -f ~/.local/share/mcpu/logs/mcpu-mcp-*.log | npx pino-pretty
 
 # Filter by event type
 grep '"event":"server_spawn"' ~/.local/share/mcpu/logs/*.log | jq .
+
+# Filter by log level
+grep '"level":"error"' ~/.local/share/mcpu/logs/*.log | jq .
 ```
 
 ## Global Options
