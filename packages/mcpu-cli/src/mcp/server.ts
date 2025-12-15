@@ -50,6 +50,9 @@ export class McpuMcpServer {
     this.pool = new ConnectionPool({
       autoDisconnect: options.autoDisconnect,
       idleTimeoutMs: options.idleTimeoutMs,
+      service: 'mcpu-mcp',
+      ppid: process.ppid,
+      pid: process.pid,
     });
     this.configs = new Map();
 

@@ -1,6 +1,7 @@
 import { MCPClient, type MCPConnection } from '../client.ts';
 import type { MCPServerConfig } from '../types.ts';
 import { SchemaCache } from '../cache.ts';
+import { logServerDisconnect } from '../logging.ts';
 
 /**
  * Form connection key: "server" or "server[id]"
@@ -36,6 +37,12 @@ export interface ConnectionPoolOptions {
   autoDisconnect?: boolean;
   /** Time in milliseconds before idle connections are closed (default: 5 minutes) */
   idleTimeoutMs?: number;
+  /** Service name for logging (e.g., 'daemon' or 'mcpu-mcp') */
+  service?: string;
+  /** Parent process ID for logging */
+  ppid?: number;
+  /** Process ID for logging */
+  pid?: number;
 }
 
 /**
@@ -58,10 +65,16 @@ export class ConnectionPool {
   // Connection TTL: 5 minutes of inactivity (default)
   private readonly idleTimeoutMs: number;
   private readonly autoDisconnect: boolean;
+  private readonly service?: string;
+  private readonly ppid?: number;
+  private readonly pid?: number;
 
   constructor(options: ConnectionPoolOptions = {}) {
     this.autoDisconnect = options.autoDisconnect ?? false;
     this.idleTimeoutMs = options.idleTimeoutMs ?? 5 * 60 * 1000;
+    this.service = options.service;
+    this.ppid = options.ppid;
+    this.pid = options.pid;
 
     // Start periodic cleanup of stale connections (only if enabled)
     if (this.autoDisconnect) {
@@ -127,7 +140,7 @@ export class ConnectionPool {
    */
   private async createConnection(serverName: string, config: MCPServerConfig, connId?: string): Promise<ConnectionInfo> {
     const key = getConnectionKey(serverName, connId);
-    const connection = await this.client.connect(serverName, config);
+    const connection = await this.client.connect(serverName, config, key, this.service, this.ppid, this.pid);
     const id = this.nextId++;
     const now = Date.now();
 
@@ -225,6 +238,11 @@ export class ConnectionPool {
 
     if (connection && id !== undefined) {
       await this.client.disconnect(connection);
+
+      // Log disconnect
+      if (this.service && this.ppid !== undefined && this.pid !== undefined) {
+        await logServerDisconnect(this.service, this.ppid, this.pid, serverName, key);
+      }
 
       const info = this.connectionInfo.get(id);
       if (info) {

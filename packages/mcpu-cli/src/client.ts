@@ -8,6 +8,7 @@ import type { jsonSchemaValidator, JsonSchemaType } from '@modelcontextprotocol/
 import type { MCPServerConfig, StdioConfig } from './types.ts';
 import { isStdioConfig, DEFAULT_REQUEST_TIMEOUT_MS } from './types.ts';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
+import { logServerSpawn, logServerError } from './logging.ts';
 
 /**
  * Recursively remove additionalProperties: false from a JSON schema
@@ -59,6 +60,7 @@ export interface MCPConnection {
   client: Client;
   transport: Transport;
   serverName: string;
+  connectionId?: string;  // Optional connection ID from daemon
   stderrBuffer?: string[];  // Buffer for stderr output from stdio servers
 }
 
@@ -71,7 +73,11 @@ export class MCPClient {
    */
   async connect(
     serverName: string,
-    config: MCPServerConfig
+    config: MCPServerConfig,
+    connectionId?: string,
+    service?: string,
+    ppid?: number,
+    pid?: number
   ): Promise<MCPConnection> {
     let transport: Transport;
 
@@ -100,6 +106,21 @@ export class MCPClient {
         ...(config.args || []),
         ...(config.extraArgs || []),
       ];
+
+      // Log server spawn
+      if (service && ppid !== undefined && pid !== undefined) {
+        await logServerSpawn(
+          service,
+          ppid,
+          pid,
+          serverName,
+          config.command,
+          mergedArgs,
+          config.env,
+          connectionId
+        );
+      }
+
       transport = new StdioClientTransport({
         command: config.command,
         args: mergedArgs.length > 0 ? mergedArgs : undefined,
@@ -117,7 +138,15 @@ export class MCPClient {
     });
 
     // Connect
-    await client.connect(transport);
+    try {
+      await client.connect(transport);
+    } catch (error) {
+      // Log connection failure
+      if (service && ppid !== undefined && pid !== undefined) {
+        await logServerError(service, ppid, pid, serverName, String(error), connectionId);
+      }
+      throw error;
+    }
 
     // Set up stderr buffering for stdio transport
     const stderrBuffer: string[] = [];
@@ -134,6 +163,7 @@ export class MCPClient {
       client,
       transport,
       serverName,
+      connectionId,
       stderrBuffer,
     };
   }

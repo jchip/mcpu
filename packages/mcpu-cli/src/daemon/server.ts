@@ -120,6 +120,9 @@ export class DaemonServer {
     this.pool = new ConnectionPool({
       autoDisconnect: options.autoDisconnect,
       idleTimeoutMs: options.idleTimeoutMs,
+      service: 'daemon',
+      ppid: options.ppid || 0,
+      pid: process.pid,
     });
     this.configDiscovery = new ConfigDiscovery({
       configFile: options.config,
