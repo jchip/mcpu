@@ -1,3 +1,20 @@
+# 12/15/2025
+
+## Packages
+
+-   `@mcpu/cli@0.2.19` `(0.2.18 => 0.2.19)`
+
+## Commits
+
+-   `packages/mcpu-cli`
+
+    -   MCU-100: Replace custom logging with pino [commit](/commit/fea684f7367c176991b1b1a484d36ffd4e088fc0)
+    -   Add antigravity MCP config support [commit](/commit/94956372ab13e6cc76eabbba7d9d343a952898af)
+    -   Add mcpu-mcp startup and shutdown logging [commit](/commit/d04c3781ab550b934e032ff1fb73cd4e9a4bb238)
+    -   MCU-99: Add per-instance server operation logging [commit](/commit/a396a03b66f4d33477398bc89941901aef6dfa33)
+    -   Update batch docs to reflect per-connection parallelism [commit](/commit/e5d5a1d7f151b40e4a85b36c9a5139d87088850e)
+    -   Improve mux tool description clarity [commit](/commit/9eadf3c01babc799949d1b0114cf22f0b73c9468)
+
 # 12/14/2025
 
 ## Packages
