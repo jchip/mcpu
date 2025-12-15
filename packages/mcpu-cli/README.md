@@ -6,8 +6,10 @@ MCPU is an MCP multiplexer (1:N) that manages all your MCP servers for multiple 
 
 ```
 Claude CLI/Desktop ─┐          ┌-> playwright
-       Gemini CLI ──┼-> mcpu ──┼-> filesystem
-      OpenAI Codex ─┘          └-> memory
+       Gemini CLI ──┤          ├-> filesystem
+      Antigravity ──┼-> mcpu ──┼-> memory
+           Cursor ──┤          ├-> tasks
+      OpenAI Codex ─┘          └-> chroma
 ```
 
 It can be used in two ways:
@@ -184,7 +186,7 @@ async function mcpuMux(options: {
 npm install -g @mcpu/cli
 ```
 
-2. Migrate your existing MCP servers from Claude Desktop, Claude CLI, Gemini CLI, and/or Cursor:
+2. Migrate your existing MCP servers from Claude Desktop, Claude CLI, Gemini CLI, Antigravity, Cursor, and/or Codex:
 
 ```bash
 mcpu setup --dry-run  # Preview changes
@@ -524,6 +526,47 @@ mcpu call filesystem read_file --stdin <<< '{"path": "/etc/hosts"}'
 - `$XDG_DATA_HOME/mcpu/daemon.<ppid>-<pid>.json` - Daemon port/PID info (defaults to `~/.local/share/mcpu/`)
 - `$XDG_DATA_HOME/mcpu/logs/daemon.<ppid>-<pid>.log` - Daemon log file (JSON format, always written)
 - PID files auto-cleaned when daemon stops
+
+### Log Files:
+
+MCPU automatically logs server operations to help with debugging and monitoring:
+
+- `$XDG_DATA_HOME/mcpu/logs/mcpu-mcp-<ppid>-<pid>.log` - MCP server mode logs (defaults to `~/.local/share/mcpu/logs/`)
+- `$XDG_DATA_HOME/mcpu/logs/daemon-<ppid>-<pid>.log` - Daemon mode logs
+
+**Log events:**
+- `mcpu_start` - When mcpu-mcp starts (includes transport, port, config count)
+- `mcpu_shutdown` - When mcpu-mcp shuts down
+- `server_spawn` - When a downstream MCP server is spawned
+- `server_disconnect` - When a downstream MCP server disconnects
+- `server_error` - When a server error occurs
+
+**Example log entry:**
+```json
+{
+  "timestamp": "2025-12-15T04:55:45.203Z",
+  "event": "mcpu_start",
+  "server": "mcpu-mcp",
+  "transport": "stdio",
+  "configCount": 17,
+  "success": true
+}
+```
+
+**Viewing logs:**
+```bash
+# List all logs
+ls -lh ~/.local/share/mcpu/logs/
+
+# View a log file (JSON lines format)
+cat ~/.local/share/mcpu/logs/mcpu-mcp-*.log | jq .
+
+# Tail logs in real-time
+tail -f ~/.local/share/mcpu/logs/mcpu-mcp-*.log
+
+# Filter by event type
+grep '"event":"server_spawn"' ~/.local/share/mcpu/logs/*.log | jq .
+```
 
 ## Global Options
 

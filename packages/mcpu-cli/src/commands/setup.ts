@@ -8,6 +8,7 @@ import { ClaudeSettingsSchema, type MCPServerConfig } from '../types.ts';
 // Gemini CLI constants
 const GEMINI_DIR = '.gemini';
 const GEMINI_SETTINGS_FILE = 'settings.json';
+const ANTIGRAVITY_CONFIG_FILE = 'antigravity/mcp_config.json';
 
 // Cursor constants
 const CURSOR_DIR = '.cursor';
@@ -99,6 +100,7 @@ export interface MigrationPlan {
     desktop?: string;
     cli?: string;
     gemini?: string;
+    antigravity?: string;
     cursor?: string;
     codex?: string;
   };
@@ -165,6 +167,13 @@ export function getGeminiConfigDir(): string {
  */
 export function getGeminiCliConfigPath(): string {
   return join(getGeminiConfigDir(), GEMINI_SETTINGS_FILE);
+}
+
+/**
+ * Get Antigravity MCP config path
+ */
+export function getAntigravityConfigPath(): string {
+  return join(getGeminiConfigDir(), ANTIGRAVITY_CONFIG_FILE);
 }
 
 /**
@@ -406,12 +415,12 @@ export function readProjectConfigs(projectsDir: string): Record<string, Record<s
 }
 
 /**
- * Discover all MCP servers from Claude Desktop, Claude CLI, Gemini CLI, Cursor, and Codex
+ * Discover all MCP servers from Claude Desktop, Claude CLI, Gemini CLI, Antigravity, Cursor, and Codex
  */
-export function discoverServers(): { discovered: DiscoveredServers; sources: { desktop?: string; cli?: string; gemini?: string; cursor?: string; codex?: string } } | null {
+export function discoverServers(): { discovered: DiscoveredServers; sources: { desktop?: string; cli?: string; gemini?: string; antigravity?: string; cursor?: string; codex?: string } } | null {
   const global: Record<string, MCPServerConfig> = {};
   const projects: Record<string, Record<string, MCPServerConfig>> = {};
-  const sources: { desktop?: string; cli?: string; gemini?: string; cursor?: string; codex?: string } = {};
+  const sources: { desktop?: string; cli?: string; gemini?: string; antigravity?: string; cursor?: string; codex?: string } = {};
 
   // Read Claude Desktop config
   const desktopPath = getClaudeDesktopConfigPath();
@@ -455,6 +464,21 @@ export function discoverServers(): { discovered: DiscoveredServers; sources: { d
     if (geminiServers) {
       // Gemini servers (merge, Desktop and Claude CLI win on conflict)
       for (const [name, config] of Object.entries(geminiServers)) {
+        if (!global[name]) {
+          global[name] = config;
+        }
+      }
+    }
+  }
+
+  // Read Antigravity config (same format as Gemini CLI)
+  const antigravityPath = getAntigravityConfigPath();
+  if (existsSync(antigravityPath)) {
+    sources.antigravity = antigravityPath;
+    const antigravityServers = readGeminiCliConfig(antigravityPath);
+    if (antigravityServers) {
+      // Antigravity servers (merge, others win on conflict)
+      for (const [name, config] of Object.entries(antigravityServers)) {
         if (!global[name]) {
           global[name] = config;
         }
@@ -720,6 +744,33 @@ export function updateGeminiCliConfig(configPath: string): void {
 }
 
 /**
+ * Update Antigravity config to use only MCPU
+ */
+export function updateAntigravityConfig(configPath: string): void {
+  if (!existsSync(configPath)) {
+    return;
+  }
+
+  // Create backup
+  const backupPath = `${configPath}.mcpu.bak`;
+  copyFileSync(configPath, backupPath);
+
+  // Read existing config
+  const content = readFileSync(configPath, 'utf-8');
+  const data = JSON.parse(content);
+
+  // Get appropriate MCPU server config (detects global install vs npx)
+  const mcpuConfig = getMcpuServerConfig();
+
+  // Replace mcpServers with just MCPU
+  data.mcpServers = {
+    mcpu: mcpuConfig,
+  };
+
+  writeFileSync(configPath, JSON.stringify(data, null, 2) + '\n');
+}
+
+/**
  * Update Cursor config to use only MCPU
  * Replaces mcpServers with MCPU
  * Automatically detects if mcpu-mcp is globally installed or if running via npx
@@ -823,7 +874,7 @@ export async function executeSetup(options: {
   if (!plan) {
     return {
       success: false,
-      message: 'Could not find any CLI config. Is Claude Desktop, Claude CLI, Gemini CLI, Cursor, or Codex installed?',
+      message: 'Could not find any CLI config. Is Claude Desktop, Claude CLI, Gemini CLI, Antigravity, Cursor, or Codex installed?',
     };
   }
 
@@ -863,6 +914,9 @@ export async function executeSetup(options: {
   }
   if (plan.sources.gemini) {
     updateGeminiCliConfig(plan.sources.gemini);
+  }
+  if (plan.sources.antigravity) {
+    updateAntigravityConfig(plan.sources.antigravity);
   }
   if (plan.sources.cursor) {
     updateCursorConfig(plan.sources.cursor);

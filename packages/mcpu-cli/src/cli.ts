@@ -427,6 +427,9 @@ See AGENTS.md for details about using MCPU to talk to MCP servers.
             if (plan.sources.gemini) {
               console.log(`  Gemini:  ${plan.sources.gemini}`);
             }
+            if (plan.sources.antigravity) {
+              console.log(`  Antigravity: ${plan.sources.antigravity}`);
+            }
             if (plan.sources.cursor) {
               console.log(`  Cursor:  ${plan.sources.cursor}`);
             }
@@ -470,6 +473,9 @@ See AGENTS.md for details about using MCPU to talk to MCP servers.
               if (result.plan.sources.gemini) {
                 console.log(`  Gemini CLI: ${result.plan.sources.gemini}`);
               }
+              if (result.plan.sources.antigravity) {
+                console.log(`  Antigravity: ${result.plan.sources.antigravity}`);
+              }
               if (result.plan.sources.cursor) {
                 console.log(`  Cursor: ${result.plan.sources.cursor}`);
               }
@@ -501,6 +507,9 @@ See AGENTS.md for details about using MCPU to talk to MCP servers.
             }
             if (result.plan.sources.gemini) {
               modifiedConfigs.push(`Gemini CLI: ${result.plan.sources.gemini}`);
+            }
+            if (result.plan.sources.antigravity) {
+              modifiedConfigs.push(`Antigravity: ${result.plan.sources.antigravity}`);
             }
             if (result.plan.sources.cursor) {
               modifiedConfigs.push(`Cursor: ${result.plan.sources.cursor}`);

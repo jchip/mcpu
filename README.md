@@ -6,8 +6,10 @@ MCPU is an MCP multiplexer (1:N) that manages all your MCP servers for multiple 
 
 ```
 Claude CLI/Desktop ─┐          ┌-> playwright
-       Gemini CLI ──┼-> mcpu ──┼-> filesystem
-      OpenAI Codex ─┘          └-> memory
+       Gemini CLI ──┤          ├-> filesystem
+      Antigravity ──┼-> mcpu ──┼-> memory
+           Cursor ──┤          ├-> tasks
+      OpenAI Codex ─┘          └-> chroma
 ```
 
 ## Schema Compression Stats
