@@ -1,4 +1,4 @@
-import chalk from 'chalk';
+import colors from 'ansi-colors';
 import { ConfigDiscovery } from '../config.ts';
 import { MCPClient } from '../client.ts';
 import { SchemaCache } from '../cache.ts';
@@ -42,7 +42,7 @@ function formatProperty(name: string, prop: any, required: boolean): string {
   const desc = prop.description ? ` - ${prop.description}` : '';
   const defaultVal = prop.default !== undefined ? ` (default: ${JSON.stringify(prop.default)})` : '';
 
-  return `  ${chalk.cyan(name)}${requiredMark}  ${chalk.yellow(typeStr)}${desc}${defaultVal}`;
+  return `  ${colors.cyan(name)}${requiredMark}  ${colors.yellow(typeStr)}${desc}${defaultVal}`;
 }
 
 /**
@@ -60,7 +60,7 @@ export async function showCommand(server: string, tools: string[], options: Show
   const config = configs.get(serverName);
 
   if (!config) {
-    console.error(chalk.red(`Server "${serverName}" not found.`));
+    console.error(colors.red(`Server "${serverName}" not found.`));
     console.error(`Available servers: ${Array.from(configs.keys()).join(', ')}`);
     process.exit(1);
   }
@@ -74,13 +74,13 @@ export async function showCommand(server: string, tools: string[], options: Show
     if (!options.noCache) {
       availableTools = await cache.get(serverName);
       if (options.verbose && availableTools) {
-        console.error(chalk.dim(`Using cached tools for ${serverName}`));
+        console.error(colors.dim(`Using cached tools for ${serverName}`));
       }
     }
 
     if (!availableTools) {
       if (options.verbose) {
-        console.error(chalk.dim(`Connecting to ${serverName}...`));
+        console.error(colors.dim(`Connecting to ${serverName}...`));
       }
 
       availableTools = await client.withConnection(serverName, config, async (conn) => {
@@ -96,7 +96,7 @@ export async function showCommand(server: string, tools: string[], options: Show
       // Find the specific tool
       const tool = availableTools.find(t => t.name === toolName);
       if (!tool) {
-        console.error(chalk.red(`Tool "${toolName}" not found on server "${serverName}".`));
+        console.error(colors.red(`Tool "${toolName}" not found on server "${serverName}".`));
         console.error(`Available tools: ${availableTools.map(t => t.name).join(', ')}`);
         process.exit(1);
       }
@@ -125,7 +125,7 @@ export async function showCommand(server: string, tools: string[], options: Show
       } else {
         // Human-readable CLI-style output
         console.log();
-        console.log(chalk.bold.green(toolName));
+        console.log(colors.bold.green(toolName));
         console.log();
 
         if (tool.description) {
@@ -139,7 +139,7 @@ export async function showCommand(server: string, tools: string[], options: Show
           const properties = schema.properties;
           const required = schema?.required || [];
 
-          console.log(chalk.bold('Arguments:'));
+          console.log(colors.bold('Arguments:'));
 
           if (Object.keys(properties).length === 0) {
             console.log('  (no arguments)');
@@ -152,7 +152,7 @@ export async function showCommand(server: string, tools: string[], options: Show
         }
 
         // Show example usage
-        console.log(chalk.bold('Example:'));
+        console.log(colors.bold('Example:'));
         if (schema && schema.properties) {
           const properties = schema.properties;
           const exampleArgs = Object.keys(properties)
@@ -173,7 +173,7 @@ export async function showCommand(server: string, tools: string[], options: Show
       console.log(JSON.stringify(results.length === 1 ? results[0] : results, null, 2));
     }
   } catch (error) {
-    console.error(chalk.red(`Failed to get tool information:`), error);
+    console.error(colors.red(`Failed to get tool information:`), error);
     process.exit(1);
   }
 }

@@ -1,4 +1,4 @@
-import chalk from 'chalk';
+import colors from 'ansi-colors';
 import { ConfigDiscovery } from '../config.ts';
 import { MCPClient } from '../client.ts';
 import { SchemaCache } from '../cache.ts';
@@ -167,7 +167,7 @@ export async function listCommand(options: ListOptions): Promise<void> {
   const cache = new SchemaCache();
 
   if (configs.size === 0) {
-    console.error(chalk.red('No MCP servers configured.'));
+    console.error(colors.red('No MCP servers configured.'));
     console.error('Run `mcpu servers` for configuration help.');
     process.exit(1);
   }
@@ -179,7 +179,7 @@ export async function listCommand(options: ListOptions): Promise<void> {
     for (const serverName of options.servers) {
       const config = configs.get(serverName);
       if (!config) {
-        console.error(chalk.red(`Server "${serverName}" not found.`));
+        console.error(colors.red(`Server "${serverName}" not found.`));
         console.error(`Available servers: ${Array.from(configs.keys()).join(', ')}`);
         process.exit(1);
       }
@@ -215,14 +215,14 @@ async function listServerTools(
     if (!options.noCache) {
       tools = await cache.get(serverName, config.cacheTTL);
       if (options.verbose && tools) {
-        console.error(chalk.dim(`Using cached tools for ${serverName}`));
+        console.error(colors.dim(`Using cached tools for ${serverName}`));
       }
     }
 
     // Fetch from server if not cached
     if (!tools) {
       if (options.verbose) {
-        console.error(chalk.dim(`Connecting to ${serverName}...`));
+        console.error(colors.dim(`Connecting to ${serverName}...`));
       }
 
       tools = await client.withConnection(serverName, config, async (conn) => {
@@ -245,25 +245,25 @@ async function listServerTools(
       }, null, 2));
     } else {
       // Human-readable output
-      console.log(chalk.dim(`${LEGEND_HEADER}\n${TYPES_LINE}\n`));
-      console.log(chalk.bold(`Tools from ${chalk.cyan(serverName)}:\n`));
+      console.log(colors.dim(`${LEGEND_HEADER}\n${TYPES_LINE}\n`));
+      console.log(colors.bold(`Tools from ${colors.cyan(serverName)}:\n`));
 
       if (tools.length === 0) {
-        console.log(chalk.yellow('  No tools available'));
+        console.log(colors.yellow('  No tools available'));
       } else {
         const skipComplexCheck = tools.length <= 3;
         for (const tool of tools) {
           const briefArgs = formatBriefArgs(tool, skipComplexCheck);
           // Only show first line of description
           const description = (tool.description || 'No description').split('\n')[0].trim();
-          console.log(`  - ${chalk.green(tool.name)} - ${description}${chalk.dim(briefArgs)}`);
+          console.log(`  - ${colors.green(tool.name)} - ${description}${colors.dim(briefArgs)}`);
         }
       }
 
-      console.log(chalk.dim(`\nTotal: ${tools.length} tool${tools.length === 1 ? '' : 's'}`));
+      console.log(colors.dim(`\nTotal: ${tools.length} tool${tools.length === 1 ? '' : 's'}`));
     }
   } catch (error) {
-    console.error(chalk.red(`Failed to list tools from ${serverName}:`), error);
+    console.error(colors.red(`Failed to list tools from ${serverName}:`), error);
     process.exit(1);
   }
 }
@@ -287,14 +287,14 @@ async function listAllTools(
       if (!options.noCache) {
         tools = await cache.get(serverName, config.cacheTTL);
         if (options.verbose && tools) {
-          console.error(chalk.dim(`Using cached tools for ${serverName}`));
+          console.error(colors.dim(`Using cached tools for ${serverName}`));
         }
       }
 
       // Fetch from server if not cached
       if (!tools) {
         if (options.verbose) {
-          console.error(chalk.dim(`Connecting to ${serverName}...`));
+          console.error(colors.dim(`Connecting to ${serverName}...`));
         }
 
         tools = await client.withConnection(serverName, config, async (conn) => {
@@ -311,7 +311,7 @@ async function listAllTools(
       }
     } catch (error) {
       if (options.verbose) {
-        console.error(chalk.yellow(`Failed to connect to ${serverName}:`), error);
+        console.error(colors.yellow(`Failed to connect to ${serverName}:`), error);
       }
     }
   }
@@ -329,11 +329,11 @@ async function listAllTools(
     }, null, 2));
   } else {
     // Human-readable output
-    console.log(chalk.bold('\nAll Available Tools:\n'));
-    console.log(chalk.dim('Types: s=string, i=integer, n=number, z=null, b=bool, o=object\n'));
+    console.log(colors.bold('\nAll Available Tools:\n'));
+    console.log(colors.dim('Types: s=string, i=integer, n=number, z=null, b=bool, o=object\n'));
 
     if (allTools.length === 0) {
-      console.log(chalk.yellow('No tools available'));
+      console.log(colors.yellow('No tools available'));
     } else {
       // Group by server
       const toolsByServer = new Map<string, Tool[]>();
@@ -346,13 +346,13 @@ async function listAllTools(
 
       // Display grouped by server
       for (const [server, tools] of toolsByServer.entries()) {
-        console.log(chalk.bold(`MCP server ${chalk.cyan(server)}:`));
+        console.log(colors.bold(`MCP server ${colors.cyan(server)}:`));
         const skipComplexCheck = tools.length <= 3;
         for (const tool of tools) {
           const briefArgs = formatBriefArgs(tool, skipComplexCheck);
           // Only show first line of description
           const description = (tool.description || 'No description').split('\n')[0].trim();
-          console.log(`  - ${chalk.green(tool.name)} - ${description}${chalk.dim(briefArgs)}`);
+          console.log(`  - ${colors.green(tool.name)} - ${description}${colors.dim(briefArgs)}`);
 
           // Estimate tokens for this entry
           totalTokens += estimateTokens(`${tool.name} - ${description}${briefArgs}\n`);
@@ -362,7 +362,7 @@ async function listAllTools(
     }
 
     console.log();
-    console.log(chalk.dim(`Total: ${allTools.length} tools across ${configs.size} servers`));
-    console.log(chalk.dim(`Estimated tokens: ~${totalTokens}`));
+    console.log(colors.dim(`Total: ${allTools.length} tools across ${configs.size} servers`));
+    console.log(colors.dim(`Estimated tokens: ~${totalTokens}`));
   }
 }

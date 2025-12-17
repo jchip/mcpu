@@ -1,4 +1,4 @@
-import chalk from 'chalk';
+import colors from 'ansi-colors';
 import { ConfigDiscovery } from '../config.ts';
 import { MCPClient } from '../client.ts';
 import { isStdioConfig, isUrlConfig } from '../types.ts';
@@ -40,7 +40,7 @@ export async function serversCommand(options: ServersOptions): Promise<void> {
       serverInfos.set(name, info);
     } catch (error) {
       if (options.verbose) {
-        console.error(chalk.yellow(`Failed to connect to ${name}:`), error);
+        console.error(colors.yellow(`Failed to connect to ${name}:`), error);
       }
       serverInfos.set(name, {});
     }
@@ -60,7 +60,7 @@ export async function serversCommand(options: ServersOptions): Promise<void> {
   } else {
     // Human-readable output
     if (configs.size === 0) {
-      console.log(chalk.yellow('No MCP servers configured.'));
+      console.log(colors.yellow('No MCP servers configured.'));
       console.log();
       console.log('Configure servers in one of these locations:');
       console.log('  - .mcpu.local.json (local project config, gitignored)');
@@ -69,21 +69,21 @@ export async function serversCommand(options: ServersOptions): Promise<void> {
       return;
     }
 
-    console.log(chalk.bold(`Configured MCP Servers:\n`));
+    console.log(colors.bold(`Configured MCP Servers:\n`));
 
     for (const [name, config] of configs.entries()) {
       const info = serverInfos.get(name);
 
-      console.log(chalk.cyan(name));
+      console.log(colors.cyan(name));
 
       // Show description if available
       if (info?.description) {
-        console.log(`  ${chalk.dim(info.description)}`);
+        console.log(`  ${colors.dim(info.description)}`);
       }
 
       // Show tool count
       if (info?.toolCount !== undefined) {
-        console.log(`  ${chalk.dim(`${info.toolCount} tool${info.toolCount === 1 ? '' : 's'}`)}`);
+        console.log(`  ${colors.dim(`${info.toolCount} tool${info.toolCount === 1 ? '' : 's'}`)}`);
       }
 
       if (isUrlConfig(config)) {
@@ -101,12 +101,12 @@ export async function serversCommand(options: ServersOptions): Promise<void> {
       // Show tools if requested
       if (options.tools && info?.tools) {
         console.log();
-        console.log(chalk.dim('  Tools:'));
+        console.log(colors.dim('  Tools:'));
         for (const tool of info.tools) {
           if (options.tools === 'names') {
-            console.log(`    ${chalk.green(tool.name)}`);
+            console.log(`    ${colors.green(tool.name)}`);
           } else if (options.tools === 'desc') {
-            console.log(`    ${chalk.green(tool.name)} - ${tool.description || 'No description'}`);
+            console.log(`    ${colors.green(tool.name)} - ${tool.description || 'No description'}`);
           }
         }
       }
@@ -114,6 +114,6 @@ export async function serversCommand(options: ServersOptions): Promise<void> {
       console.log();
     }
 
-    console.log(chalk.dim(`Total: ${configs.size} server${configs.size === 1 ? '' : 's'}`));
+    console.log(colors.dim(`Total: ${configs.size} server${configs.size === 1 ? '' : 's'}`));
   }
 }

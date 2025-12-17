@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 
 import { NixClap } from 'nix-clap';
-import chalk from 'chalk';
+import colors from 'ansi-colors';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { coreExecute } from './core/core.ts';
 import { VERSION } from './version.ts';
 import { addServer, addServerJson, parseEnvFlags, parseHeaderFlags, type Scope } from './commands/mcp-add.ts';
-import { executeSetup, createMigrationPlan } from './commands/setup.ts';
+import { executeSetup, createMigrationPlan, quotePath } from './commands/setup.ts';
 import { formatMcpResponse } from './formatters.ts';
 import type { CommandResult } from './types/result.ts';
 
@@ -403,54 +403,15 @@ See AGENTS.md for details about using MCPU to talk to MCP servers.
           const dryRun = opts['dry-run'] || false;
 
           if (dryRun) {
-            const plan = createMigrationPlan();
-            if (!plan) {
-              console.error('Could not find Claude config. Is Claude Desktop or Claude CLI installed?');
+            // Call executeSetup with dry-run option - it handles all the logic
+            const result = await executeSetup({ dryRun: true, yes: opts.yes, verbose: opts.verbose });
+
+            if (!result.success) {
+              console.error(result.message);
               process.exit(1);
             }
 
-            const serverCount = Object.keys(plan.servers).length;
-            if (serverCount === 0) {
-              console.log('No MCP servers found in any config.');
-              process.exit(0);
-            }
-
-            console.log(chalk.bold('Migration Plan (dry-run)'));
-            console.log();
-            console.log(chalk.bold('Sources:'));
-            if (plan.sources.desktop) {
-              console.log(`  Desktop: ${plan.sources.desktop}`);
-            }
-            if (plan.sources.cli) {
-              console.log(`  CLI:     ${plan.sources.cli}`);
-            }
-            if (plan.sources.gemini) {
-              console.log(`  Gemini:  ${plan.sources.gemini}`);
-            }
-            if (plan.sources.antigravity) {
-              console.log(`  Antigravity: ${plan.sources.antigravity}`);
-            }
-            if (plan.sources.cursor) {
-              console.log(`  Cursor:  ${plan.sources.cursor}`);
-            }
-            console.log(`  Output:  ${plan.mcpuConfigPath}`);
-            console.log();
-            console.log(chalk.bold(`Servers to migrate (${serverCount}):`));
-            for (const [name, config] of Object.entries(plan.servers)) {
-              const type = 'command' in config ? 'stdio' : (config as any).type || 'unknown';
-              console.log(`  ${chalk.green('+')} ${name} (${type})`);
-            }
-
-            if (plan.duplicates.length > 0) {
-              console.log();
-              console.log(chalk.bold('Duplicates resolved:'));
-              for (const dup of plan.duplicates) {
-                console.log(`  ${dup.name}: kept from ${dup.kept}, skipped from ${dup.sources.filter(s => s !== dup.kept).join(', ')}`);
-              }
-            }
-
-            console.log();
-            console.log('Run without --dry-run to apply changes.');
+            console.log(result.message);
             process.exit(0);
           }
 
@@ -461,65 +422,57 @@ See AGENTS.md for details about using MCPU to talk to MCP servers.
             console.error(result.message);
 
             // Show which configs were checked even on failure
-            if (result.plan?.sources) {
+            if (result.plan?.sources && result.plan.sources.length > 0) {
               console.log();
               console.log('Configs checked:');
-              if (result.plan.sources.desktop) {
-                console.log(`  Claude Desktop: ${result.plan.sources.desktop}`);
-              }
-              if (result.plan.sources.cli) {
-                console.log(`  Claude CLI: ${result.plan.sources.cli}`);
-              }
-              if (result.plan.sources.gemini) {
-                console.log(`  Gemini CLI: ${result.plan.sources.gemini}`);
-              }
-              if (result.plan.sources.antigravity) {
-                console.log(`  Antigravity: ${result.plan.sources.antigravity}`);
-              }
-              if (result.plan.sources.cursor) {
-                console.log(`  Cursor: ${result.plan.sources.cursor}`);
-              }
-              if (result.plan.sources.codex) {
-                console.log(`  Codex: ${result.plan.sources.codex}`);
+              for (const profile of result.plan.sources) {
+                console.log(`  ${profile.name}: ${quotePath(profile.configPath)}`);
               }
             }
 
             process.exit(1);
           }
 
-          console.log(chalk.green('✓') + ' ' + result.message);
+          console.log(colors.green('✓') + ' ' + result.message);
           if (result.plan) {
             console.log();
             console.log('Migrated servers:');
             for (const name of Object.keys(result.plan.servers)) {
-              console.log(`  ${chalk.green('+')} ${name}`);
+              console.log(`  ${colors.green('+')} ${name}`);
             }
+
+            // Show note if no servers were found
+            if (result.noServersFound) {
+              console.log(colors.yellow('Note:') + ' No MCP servers were found to migrate, but MCPU is now configured.');
+            }
+
             console.log();
-            console.log(`MCPU config: ${result.plan.mcpuConfigPath}`);
+            console.log(`MCPU config: ${quotePath(result.plan.mcpuConfigPath)}`);
 
-            // Show which configs were modified
-            const modifiedConfigs: string[] = [];
-            if (result.plan.sources.desktop) {
-              modifiedConfigs.push(`Claude Desktop: ${result.plan.sources.desktop}`);
-            }
-            if (result.plan.sources.cli) {
-              modifiedConfigs.push(`Claude CLI: ${result.plan.sources.cli}`);
-            }
-            if (result.plan.sources.gemini) {
-              modifiedConfigs.push(`Gemini CLI: ${result.plan.sources.gemini}`);
-            }
-            if (result.plan.sources.antigravity) {
-              modifiedConfigs.push(`Antigravity: ${result.plan.sources.antigravity}`);
-            }
-            if (result.plan.sources.cursor) {
-              modifiedConfigs.push(`Cursor: ${result.plan.sources.cursor}`);
-            }
-
-            if (modifiedConfigs.length > 0) {
+            // Show which configs were checked
+            if (result.plan.checkedPaths) {
               console.log();
-              console.log('Updated configs (backups created with .mcpu.bak):');
-              for (const cfg of modifiedConfigs) {
-                console.log(`  ${cfg}`);
+              console.log('Checked configs:');
+
+              const foundConfigs: string[] = [];
+              const notFoundConfigs: string[] = [];
+              const sourcePaths = new Set(result.plan.sources.map(p => p.configPath));
+
+              for (const [name, path] of Object.entries(result.plan.checkedPaths)) {
+                const found = sourcePaths.has(path);
+
+                if (found) {
+                  foundConfigs.push(`  ${name}: ${colors.cyan(quotePath(path))} (${colors.green('✓ updated')})`);
+                } else {
+                  notFoundConfigs.push(`  ${name}: ${colors.dim(quotePath(path))} (${colors.dim('not found')})`);
+                }
+              }
+
+              for (const cfg of foundConfigs) {
+                console.log(cfg);
+              }
+              for (const cfg of notFoundConfigs) {
+                console.log(cfg);
               }
             }
           }
@@ -532,13 +485,13 @@ See AGENTS.md for details about using MCPU to talk to MCP servers.
 // Custom help message
 nc.on('pre-help', () => {
   console.log();
-  console.log(chalk.bold('MCPU - Universal MCP gateway for any AI agent'));
+  console.log(colors.bold('MCPU - Universal MCP gateway for any AI agent'));
   console.log();
 });
 
 nc.on('post-help', () => {
   console.log();
-  console.log(chalk.bold('Examples:'));
+  console.log(colors.bold('Examples:'));
   console.log();
   console.log('  # List all configured servers');
   console.log('  $ mcpu servers');
@@ -560,7 +513,7 @@ nc.on('post-help', () => {
   console.log('  # Call a tool with YAML from stdin');
   console.log('  $ mcpu call filesystem read_file --stdin <<< \'path: /etc/hosts\'');
   console.log();
-  console.log(chalk.bold('Config Sources (priority order):'));
+  console.log(colors.bold('Config Sources (priority order):'));
   console.log('  1. --config flag');
   console.log('  2. .config/mcpu/config.local.json (local project config)');
   console.log('  3. $XDG_CONFIG_HOME/mcpu/config.json or ~/.config/mcpu/config.json');

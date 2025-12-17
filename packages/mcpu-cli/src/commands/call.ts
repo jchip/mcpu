@@ -1,4 +1,4 @@
-import chalk from 'chalk';
+import colors from 'ansi-colors';
 import { parse as parseYaml } from 'yaml';
 import { ConfigDiscovery } from '../config.ts';
 import { MCPClient } from '../client.ts';
@@ -41,7 +41,7 @@ function parseArgs(args: string[], schema?: any): Record<string, any> {
 
     const match = arg.match(/^--([^=:]+)(?::([^=]+))?=(.+)$/);
     if (!match) {
-      console.error(chalk.yellow(`Skipping invalid argument: ${arg}`));
+      console.error(colors.yellow(`Skipping invalid argument: ${arg}`));
       continue;
     }
 
@@ -60,7 +60,7 @@ function parseArgs(args: string[], schema?: any): Record<string, any> {
     if (type === 'number' || type === 'integer') {
       convertedValue = Number(value);
       if (isNaN(convertedValue)) {
-        console.error(chalk.red(`Invalid number value for ${key}: ${value}`));
+        console.error(colors.red(`Invalid number value for ${key}: ${value}`));
         process.exit(1);
       }
     } else if (type === 'boolean') {
@@ -116,7 +116,7 @@ export async function callCommand(
   const config = configs.get(serverName);
 
   if (!config) {
-    console.error(chalk.red(`Server "${serverName}" not found.`));
+    console.error(colors.red(`Server "${serverName}" not found.`));
     console.error(`Available servers: ${Array.from(configs.keys()).join(', ')}`);
     process.exit(1);
   }
@@ -130,7 +130,7 @@ export async function callCommand(
 
     if (!tools) {
       if (options.verbose) {
-        console.error(chalk.dim(`Connecting to ${serverName} to get tool schema...`));
+        console.error(colors.dim(`Connecting to ${serverName} to get tool schema...`));
       }
 
       tools = await client.withConnection(serverName, config, async (conn) => {
@@ -142,7 +142,7 @@ export async function callCommand(
 
     const tool = tools.find(t => t.name === toolName);
     if (!tool) {
-      console.error(chalk.red(`Tool "${toolName}" not found on server "${serverName}".`));
+      console.error(colors.red(`Tool "${toolName}" not found on server "${serverName}".`));
       process.exit(1);
     }
 
@@ -155,7 +155,7 @@ export async function callCommand(
       try {
         toolArgs = parseYaml(inputStr);
       } catch (error) {
-        console.error(chalk.red('Failed to parse YAML/JSON from stdin:'), error);
+        console.error(colors.red('Failed to parse YAML/JSON from stdin:'), error);
         process.exit(1);
       }
     } else {
@@ -164,7 +164,7 @@ export async function callCommand(
     }
 
     if (options.verbose) {
-      console.error(chalk.dim(`Calling ${serverName}:${toolName} with args:`), toolArgs);
+      console.error(colors.dim(`Calling ${serverName}:${toolName} with args:`), toolArgs);
     }
 
     // Execute the tool
@@ -186,7 +186,7 @@ export async function callCommand(
       }
     }
   } catch (error) {
-    console.error(chalk.red('Tool execution failed:'));
+    console.error(colors.red('Tool execution failed:'));
     console.error(getErrorMessage(error));
     if (options.verbose && error instanceof Error && error.stack) {
       console.error(error.stack);
