@@ -1,3 +1,15 @@
+# 12/17/2025
+
+## Packages
+
+-   `@mcpu/cli@0.2.20` `(0.2.19 => 0.2.20)`
+
+## Commits
+
+-   `packages/mcpu-cli`
+
+    -   overhaul of setup implementation [commit](/commit/9df2b4b8b7c8457102deed2882cef08fba4cfd81)
+
 # 12/15/2025
 
 ## Packages
