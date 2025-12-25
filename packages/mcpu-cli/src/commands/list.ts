@@ -4,6 +4,7 @@ import { MCPClient } from '../client.ts';
 import { SchemaCache } from '../cache.ts';
 import { abbreviateType, LEGEND_HEADER, TYPES_LINE } from '../formatters.ts';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import type { CollapseOptionalsConfig } from '../types.ts';
 
 export interface ListOptions {
   servers?: string[];
@@ -58,13 +59,18 @@ function formatObjectType(propSchema: any): string {
   return `o{${propsStr}${ellipsis}}`;
 }
 
+interface CollapseContext {
+  config?: CollapseOptionalsConfig;
+  toolCount: number;
+}
+
 /**
  * Extract brief argument summary from tool schema
  * Format: "required_params, optional_params?"
  * @param tool - The tool to format
- * @param skipComplexCheck - If true, always show full params (for servers with few tools)
+ * @param collapse - Collapse context with config and tool count (default: never collapse)
  */
-function formatBriefArgs(tool: Tool, skipComplexCheck = false): string {
+function formatBriefArgs(tool: Tool, collapse?: CollapseContext): string {
   if (!tool.inputSchema || typeof tool.inputSchema !== 'object') {
     return '';
   }
@@ -134,17 +140,33 @@ function formatBriefArgs(tool: Tool, skipComplexCheck = false): string {
   const fullParamsStr = allArgs.join(', ');
   const requiredParamsStr = requiredArgs.join(', ');
 
-  // Check complexity thresholds (skip if server has few tools)
-  const isFullComplex = paramCount > 10 || fullParamsStr.length > 160;
-  const isRequiredComplex = requiredArgs.length > 10 || requiredParamsStr.length > 160;
+  // Check if collapsing is enabled via config
+  // Default: never collapse (show all params)
+  const config = collapse?.config;
+  const toolCount = collapse?.toolCount ?? 0;
 
-  // If full list is too complex, try showing only required params
-  if (isFullComplex && !skipComplexCheck) {
-    if (isRequiredComplex || requiredArgs.length === 0) {
-      // Even required params are too complex, or no required params
-      return ' PARAMS: (use info for details)';
+  // Only collapse if config is set and thresholds are met
+  let shouldCollapse = false;
+  if (config) {
+    const minOptionals = config.minOptionals;
+    const minTools = config.minTools;
+
+    // Both conditions must be met when both are specified
+    // Otherwise just the one that is specified
+    if (minOptionals !== undefined && minTools !== undefined) {
+      shouldCollapse = optionalArgs.length >= minOptionals && toolCount >= minTools;
+    } else if (minOptionals !== undefined) {
+      shouldCollapse = optionalArgs.length >= minOptionals;
+    } else if (minTools !== undefined) {
+      shouldCollapse = toolCount >= minTools;
+    }
+  }
+
+  if (shouldCollapse && optionalArgs.length > 0) {
+    // Collapse: show only required params with optional count indicator
+    if (requiredArgs.length === 0) {
+      return ` PARAMS: (+${optionalArgs.length} optional)`;
     } else {
-      // Show only required params with indicator
       return ` PARAMS: ${requiredParamsStr} (+${optionalArgs.length} optional)`;
     }
   }
@@ -251,9 +273,9 @@ async function listServerTools(
       if (tools.length === 0) {
         console.log(colors.yellow('  No tools available'));
       } else {
-        const skipComplexCheck = tools.length <= 3;
+        // Default: never collapse (no config)
         for (const tool of tools) {
-          const briefArgs = formatBriefArgs(tool, skipComplexCheck);
+          const briefArgs = formatBriefArgs(tool);
           // Only show first line of description
           const description = (tool.description || 'No description').split('\n')[0].trim();
           console.log(`  - ${colors.green(tool.name)} - ${description}${colors.dim(briefArgs)}`);
@@ -347,9 +369,9 @@ async function listAllTools(
       // Display grouped by server
       for (const [server, tools] of toolsByServer.entries()) {
         console.log(colors.bold(`MCP server ${colors.cyan(server)}:`));
-        const skipComplexCheck = tools.length <= 3;
+        // Default: never collapse (no config)
         for (const tool of tools) {
-          const briefArgs = formatBriefArgs(tool, skipComplexCheck);
+          const briefArgs = formatBriefArgs(tool);
           // Only show first line of description
           const description = (tool.description || 'No description').split('\n')[0].trim();
           console.log(`  - ${colors.green(tool.name)} - ${description}${colors.dim(briefArgs)}`);

@@ -3,7 +3,7 @@ import { homedir } from 'os';
 import { join, resolve } from 'path';
 import { existsSync } from 'fs';
 import { ZodError } from 'zod';
-import { ProjectMCPConfigSchema, type MCPServerConfig, isStdioConfig, type StdioConfig, type ServerAutoSaveConfig, type ToolAutoSaveConfig } from './types.ts';
+import { ProjectMCPConfigSchema, type MCPServerConfig, isStdioConfig, type StdioConfig, type ServerAutoSaveConfig, type ToolAutoSaveConfig, type CollapseOptionalsConfig } from './types.ts';
 
 /**
  * Format Zod validation errors into human-readable messages
@@ -117,6 +117,7 @@ export class ConfigDiscovery {
   private globalAutoSave: Partial<ResolvedAutoSaveConfig> = {};
   private resolvedCache: Map<string, ResolvedAutoSaveConfig> = new Map(); // memoize: "server:tool" -> config
   private _execEnabled: boolean = true; // Default: exec is enabled
+  private _collapseOptionals?: CollapseOptionalsConfig; // Config for collapsing optional args (default: never collapse)
   private options: {
     configFile?: string;
     verbose?: boolean;
@@ -194,11 +195,21 @@ export class ConfigDiscovery {
       this._execEnabled = data.execEnabled;
     }
 
+    // Extract collapseOptionals config (if present)
+    if (data.collapseOptionals && typeof data.collapseOptionals === 'object') {
+      const cfg = data.collapseOptionals;
+      this._collapseOptionals = {
+        minOptionals: typeof cfg.minOptionals === 'number' ? cfg.minOptionals : undefined,
+        minTools: typeof cfg.minTools === 'number' ? cfg.minTools : undefined,
+      };
+    }
+
     // MCPU format (direct server configs object)
     // Filter out global config keys before parsing servers
+    const globalKeys = ['autoSaveResponse', 'execEnabled', 'collapseOptionals'];
     const serverData: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(data)) {
-      if (key !== 'autoSaveResponse' && key !== 'execEnabled') {
+      if (!globalKeys.includes(key)) {
         serverData[key] = value;
       }
     }
@@ -267,6 +278,13 @@ export class ConfigDiscovery {
    */
   isExecEnabled(): boolean {
     return this._execEnabled;
+  }
+
+  /**
+   * Get collapseOptionals config (undefined means never collapse)
+   */
+  getCollapseOptionals(): CollapseOptionalsConfig | undefined {
+    return this._collapseOptionals;
   }
 
   /**

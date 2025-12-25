@@ -96,10 +96,19 @@ export const ServerAutoSaveConfigSchema = AutoSaveConfigBaseSchema.extend({
 });
 export type ServerAutoSaveConfig = z.infer<typeof ServerAutoSaveConfigSchema>;
 
+// Config for collapsing optional args in tool summaries
+// By default, optionals are never collapsed. Set this to enable collapsing.
+export const CollapseOptionalsConfigSchema = z.object({
+  minOptionals: z.number().optional(), // Collapse when optionals >= this count
+  minTools: z.number().optional(),     // Only collapse if server has >= this many tools
+});
+export type CollapseOptionalsConfig = z.infer<typeof CollapseOptionalsConfigSchema>;
+
 // Global config schema
 export const GlobalConfigSchema = z.object({
   autoSaveResponse: AutoSaveConfigBaseSchema.optional(),
   execEnabled: z.boolean().optional(), // Enable/disable exec command (default: true)
+  collapseOptionals: CollapseOptionalsConfigSchema.optional(), // Config for collapsing optional args
 }).passthrough(); // Allow server configs at top level
 
 export type GlobalConfig = z.infer<typeof GlobalConfigSchema>;

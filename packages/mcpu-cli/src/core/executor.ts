@@ -7,7 +7,7 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { type ConnectionPool, getConnectionKey, parseConnectionKey } from '../daemon/connection-pool.ts';
 import { ExecutionContext } from './context.ts';
 import { formatToolInfo, abbreviateType, LEGEND_HEADER, TYPES_LINE, collectEnums, formatEnumLegend, extractEnumOrRange, formatParamType } from '../formatters.ts';
-import { isStdioConfig, isUrlConfig, isWebSocketConfig } from '../types.ts';
+import { isStdioConfig, isUrlConfig, isWebSocketConfig, type CollapseOptionalsConfig } from '../types.ts';
 import { fuzzyMatch } from '../utils/fuzzy.ts';
 import { getErrorMessage } from '../utils/error.ts';
 
@@ -37,7 +37,12 @@ function extractDefault(propSchema: any): string | null {
  * @param enumRefs - Optional map of enum values to reference names
  * @param skipComplexCheck - If true, always show full params (for servers with few tools)
  */
-function formatBriefArgs(tool: Tool, description?: string, forceParams?: boolean, enumRefs?: Map<string, string>, skipComplexCheck = false): string {
+interface CollapseContext {
+  config?: CollapseOptionalsConfig;
+  toolCount: number;
+}
+
+function formatBriefArgs(tool: Tool, description?: string, forceParams?: boolean, enumRefs?: Map<string, string>, collapse?: CollapseContext): string {
   if (!tool.inputSchema || typeof tool.inputSchema !== 'object') {
     return '';
   }
@@ -101,17 +106,33 @@ function formatBriefArgs(tool: Tool, description?: string, forceParams?: boolean
   const fullParamsStr = allArgs.join(', ');
   const requiredParamsStr = requiredArgs.join(', ');
 
-  // Check complexity thresholds (skip if server has few tools)
-  const isFullComplex = paramCount > 10 || fullParamsStr.length > 180;
-  const isRequiredComplex = requiredArgs.length > 10 || requiredParamsStr.length > 180;
+  // Check if collapsing is enabled via config
+  // Default: never collapse (show all params)
+  const config = collapse?.config;
+  const toolCount = collapse?.toolCount ?? 0;
 
-  // If full list is too complex, try showing only required params
-  if (isFullComplex && !skipComplexCheck) {
-    if (isRequiredComplex || requiredArgs.length === 0) {
-      // Even required params are too complex, or no required params
-      return ' - ARGS: (use info for details)';
+  // Only collapse if config is set and thresholds are met
+  let shouldCollapse = false;
+  if (config) {
+    const minOptionals = config.minOptionals;
+    const minTools = config.minTools;
+
+    // Both conditions must be met when both are specified
+    // Otherwise just the one that is specified
+    if (minOptionals !== undefined && minTools !== undefined) {
+      shouldCollapse = optionalArgs.length >= minOptionals && toolCount >= minTools;
+    } else if (minOptionals !== undefined) {
+      shouldCollapse = optionalArgs.length >= minOptionals;
+    } else if (minTools !== undefined) {
+      shouldCollapse = toolCount >= minTools;
+    }
+  }
+
+  if (shouldCollapse && optionalArgs.length > 0) {
+    // Collapse: show only required params with optional count indicator
+    if (requiredArgs.length === 0) {
+      return ` - ARGS: (+${optionalArgs.length} optional)`;
     } else {
-      // Show only required params with indicator
       return ` - ARGS: ${requiredParamsStr} (+${optionalArgs.length} optional)`;
     }
   }
@@ -142,7 +163,7 @@ export function hasToolsBeenShown(serverName: string): boolean {
  * Returns empty string if tools already shown for this server
  * Marks server as "tools shown" when returning usage
  */
-function formatToolsForError(tools: Tool[], serverName: string): string {
+function formatToolsForError(tools: Tool[], serverName: string, collapseConfig?: CollapseOptionalsConfig): string {
   if (toolsShownForServer.has(serverName)) {
     return '';
   }
@@ -151,7 +172,7 @@ function formatToolsForError(tools: Tool[], serverName: string): string {
   toolsShownForServer.add(serverName);
 
   const enumRefs = collectEnums(tools);
-  const skipComplexCheck = tools.length <= 3;
+  const collapse: CollapseContext = { config: collapseConfig, toolCount: tools.length };
 
   let output = `\n\nUsage: Available tools on "${serverName}":\n`;
   output += `${TYPES_LINE}\n`;
@@ -165,7 +186,7 @@ function formatToolsForError(tools: Tool[], serverName: string): string {
 
   for (const tool of tools) {
     const description = (tool.description || 'No description').split('\n')[0].trim();
-    const briefArgs = formatBriefArgs(tool, description, true, enumRefs, skipComplexCheck);
+    const briefArgs = formatBriefArgs(tool, description, true, enumRefs, collapse);
     output += `- ${tool.name} - ${description}${briefArgs}\n`;
   }
 
@@ -667,7 +688,8 @@ export async function executeToolsCommand(
             }
           }
 
-          const skipComplexCheck = tools.length <= 3;
+          const collapseConfig = discovery.getCollapseOptionals();
+          const collapse: CollapseContext = { config: collapseConfig, toolCount: tools.length };
           for (const tool of tools) {
             if (args.names) {
               output += `  - ${tool.name}\n`;
@@ -679,7 +701,7 @@ export async function executeToolsCommand(
               // --no-args sets showArgs to false
               // forceArgs=true when user explicitly set --args from CLI
               const forceArgs = args.showArgsSource === 'cli';
-              const briefArgs = args.showArgs === false ? '' : formatBriefArgs(tool, description, forceArgs, enumRefs, skipComplexCheck);
+              const briefArgs = args.showArgs === false ? '' : formatBriefArgs(tool, description, forceArgs, enumRefs, collapse);
               output += `  - ${tool.name} - ${description}${briefArgs}\n`;
             }
           }

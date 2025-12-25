@@ -543,6 +543,101 @@ describe('ConfigDiscovery', () => {
       });
     });
   });
+
+  describe('getCollapseOptionals', () => {
+    it('should return undefined when no config specified', async () => {
+      const configPath = join(testDir, 'test-config.json');
+      const config = {
+        filesystem: { command: 'npx', args: [] },
+      };
+
+      await writeFile(configPath, JSON.stringify(config));
+
+      const discovery = new ConfigDiscovery({ configFile: configPath });
+      await discovery.loadConfigs();
+
+      expect(discovery.getCollapseOptionals()).toBeUndefined();
+    });
+
+    it('should return collapseOptionals config when specified', async () => {
+      const configPath = join(testDir, 'test-config.json');
+      const config = {
+        collapseOptionals: {
+          minOptionals: 5,
+          minTools: 10,
+        },
+        filesystem: { command: 'npx', args: [] },
+      };
+
+      await writeFile(configPath, JSON.stringify(config));
+
+      const discovery = new ConfigDiscovery({ configFile: configPath });
+      await discovery.loadConfigs();
+
+      expect(discovery.getCollapseOptionals()).toEqual({
+        minOptionals: 5,
+        minTools: 10,
+      });
+    });
+
+    it('should allow partial collapseOptionals config (only minOptionals)', async () => {
+      const configPath = join(testDir, 'test-config.json');
+      const config = {
+        collapseOptionals: {
+          minOptionals: 3,
+        },
+        filesystem: { command: 'npx', args: [] },
+      };
+
+      await writeFile(configPath, JSON.stringify(config));
+
+      const discovery = new ConfigDiscovery({ configFile: configPath });
+      await discovery.loadConfigs();
+
+      const result = discovery.getCollapseOptionals();
+      expect(result?.minOptionals).toBe(3);
+      expect(result?.minTools).toBeUndefined();
+    });
+
+    it('should allow partial collapseOptionals config (only minTools)', async () => {
+      const configPath = join(testDir, 'test-config.json');
+      const config = {
+        collapseOptionals: {
+          minTools: 8,
+        },
+        filesystem: { command: 'npx', args: [] },
+      };
+
+      await writeFile(configPath, JSON.stringify(config));
+
+      const discovery = new ConfigDiscovery({ configFile: configPath });
+      await discovery.loadConfigs();
+
+      const result = discovery.getCollapseOptionals();
+      expect(result?.minOptionals).toBeUndefined();
+      expect(result?.minTools).toBe(8);
+    });
+
+    it('should ignore non-numeric values in collapseOptionals config', async () => {
+      const configPath = join(testDir, 'test-config.json');
+      const config = {
+        collapseOptionals: {
+          minOptionals: 'invalid',
+          minTools: 10,
+        },
+        filesystem: { command: 'npx', args: [] },
+      };
+
+      await writeFile(configPath, JSON.stringify(config));
+
+      const discovery = new ConfigDiscovery({ configFile: configPath });
+      await discovery.loadConfigs();
+
+      const result = discovery.getCollapseOptionals();
+      expect(result?.minOptionals).toBeUndefined();
+      expect(result?.minTools).toBe(10);
+    });
+  });
 });
 
 describe('resolveAutoSave', () => {
