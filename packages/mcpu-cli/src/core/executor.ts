@@ -211,7 +211,7 @@ export interface ExecuteOptions {
 export interface ServersCommandArgs {
   pattern?: string;
   tools?: 'names' | 'desc';
-  detailed?: boolean;
+  details?: boolean;  // Show command, env, and other config details
 }
 
 export interface ToolsCommandArgs {
@@ -338,6 +338,7 @@ export async function executeServersCommand(
 
     const allConfigs = await discovery.loadConfigs(ctx.cwd);
     const pool = options.connectionPool;
+    const cache = new SchemaCache();
 
     // Filter configs by pattern if provided
     let configs = allConfigs;
@@ -363,9 +364,15 @@ export async function executeServersCommand(
       );
     }
 
-    // Get server info from active connections only (don't spawn new connections)
-    const serverInfos = new Map<string, { description?: string; toolCount?: number; tools?: Array<{ name: string; description?: string }> }>();
+    // Get server info from active connections and cache
+    interface ServerInfo {
+      connected: boolean;
+      toolNames?: string[];
+      fromCache?: boolean;
+    }
+    const serverInfos = new Map<string, ServerInfo>();
 
+    // First, check active connections
     if (pool) {
       const activeConnections = pool.listConnections();
 
@@ -375,15 +382,9 @@ export async function executeServersCommand(
           if (conn) {
             const client = new MCPClient();
             const tools = await client.listTools(conn);
-            const serverInfo = (conn.client as any)._serverVersion;
-            const description = serverInfo?.name ?
-              `${serverInfo.name}${serverInfo.version ? ` v${serverInfo.version}` : ''}` :
-              undefined;
-
             serverInfos.set(connInfo.server, {
-              description,
-              toolCount: tools.length,
-              tools: args.tools ? tools.map(t => ({ name: t.name, description: t.description })) : undefined
+              connected: true,
+              toolNames: tools.map(t => t.name),
             });
           }
         } catch (error) {
@@ -392,11 +393,36 @@ export async function executeServersCommand(
       }
     }
 
+    // Then, check cache for disconnected servers
+    for (const [name, config] of configs.entries()) {
+      if (!serverInfos.has(name)) {
+        // Not connected - check cache
+        const cachedTools = await cache.get(name, config.cacheTTL);
+        if (cachedTools) {
+          serverInfos.set(name, {
+            connected: false,
+            toolNames: cachedTools.map(t => t.name),
+            fromCache: true,
+          });
+        } else {
+          serverInfos.set(name, {
+            connected: false,
+          });
+        }
+      }
+    }
+
     if (ctx.json || ctx.yaml) {
-      const servers = Array.from(configs.entries()).map(([name, config]) => ({
-        name,
-        ...config,
-      }));
+      const servers = Array.from(configs.entries()).map(([name, config]) => {
+        const info = serverInfos.get(name);
+        return {
+          name,
+          connected: info?.connected ?? false,
+          tools: info?.toolNames,
+          fromCache: info?.fromCache,
+          ...(args.details ? config : {}),
+        };
+      });
 
       const output = formatOutput({
         servers,
@@ -416,109 +442,78 @@ export async function executeServersCommand(
         output += 'Configure servers in one of these locations:\n';
         output += '  - .config/mcpu/config.local.json (local project config, gitignored)\n';
         output += '  - ~/.config/mcpu/config.json (user config)\n';
-      } else if (args.detailed) {
-        // Detailed format - multi-line per server
-        output += 'Configured MCP Servers:\n\n';
-
-        for (const [name, config] of configs.entries()) {
-          const info = serverInfos.get(name);
-
-          output += `${name}\n`;
-
-          if (info?.description) {
-            output += `  Server: ${info.description}\n`;
-          }
-
-          if (info?.toolCount !== undefined) {
-            output += `  Tools: ${info.toolCount}\n`;
-          }
-
-          if (isUrlConfig(config)) {
-            const url = new URL(config.url);
-            const isWs = isWebSocketConfig(config) || url.protocol === 'ws:' || url.protocol === 'wss:';
-            output += `  Type: ${isWs ? 'websocket' : 'http'}\n`;
-            output += `  URL: ${config.url}\n`;
-          } else if (isStdioConfig(config)) {
-            output += `  Type: stdio\n`;
-            output += `  Command: ${config.command}\n`;
-            if (config.args && config.args.length > 0) {
-              output += `  Args: ${config.args.join(' ')}\n`;
-            }
-          }
-
-          if (args.tools && info?.tools) {
-            output += '\n  Tools:\n';
-            for (const tool of info.tools) {
-              if (args.tools === 'names') {
-                output += `    ${tool.name}\n`;
-              } else if (args.tools === 'desc') {
-                output += `    ${tool.name} - ${tool.description || 'No description'}\n`;
-              }
-            }
-          }
-
-          output += '\n';
-        }
-
-        output += `Total: ${configs.size} server${configs.size === 1 ? '' : 's'}\n`;
       } else {
-        // Concise format - grouped by connection status
-        const connected: string[] = [];
-        const disconnected: string[] = [];
+        // Group servers by connection status
+        const connected: Array<{ name: string; config: any; info: ServerInfo }> = [];
+        const disconnected: Array<{ name: string; config: any; info: ServerInfo }> = [];
 
         for (const [name, config] of configs.entries()) {
-          const info = serverInfos.get(name);
-          const hasConnection = info && (info.description || info.toolCount !== undefined);
+          const info = serverInfos.get(name) || { connected: false };
+          if (info.connected) {
+            connected.push({ name, config, info });
+          } else {
+            disconnected.push({ name, config, info });
+          }
+        }
 
-          const parts = [`- ${name}`];
-          parts.push(hasConnection ? 'connected' : 'disconnected');
-
-          // Type info
+        // Format helper for config details
+        const formatDetails = (config: any): string => {
+          let details = '';
           if (isUrlConfig(config)) {
             const url = new URL(config.url);
             const isWs = isWebSocketConfig(config) || url.protocol === 'ws:' || url.protocol === 'wss:';
-            parts.push(`Type: ${isWs ? 'websocket' : 'http'}`);
-            parts.push(`URL: ${config.url}`);
+            details += `  Type: ${isWs ? 'websocket' : 'http'}, URL: ${config.url}\n`;
           } else if (isStdioConfig(config)) {
-            parts.push(`Type: stdio`);
-            if (hasConnection) {
-              // Connected: don't show command
-            } else {
-              // Disconnected: show full command
-              const cmdParts = [config.command, ...(config.args || [])];
-              parts.push(`Command: ${cmdParts.join(' ')}`);
-            }
-
-            // ENV
+            const cmdParts = [config.command, ...(config.args || [])];
+            details += `  Type: stdio, Command: ${cmdParts.join(' ')}\n`;
             if (config.env && Object.keys(config.env).length > 0) {
-              parts.push(`ENV: ${JSON.stringify(config.env)}`);
+              details += `  ENV: ${JSON.stringify(config.env)}\n`;
             }
           }
+          if (config.cacheTTL !== undefined) {
+            details += `  Cache TTL: ${config.cacheTTL} min\n`;
+          }
+          if (config.requestTimeout !== undefined) {
+            details += `  Request Timeout: ${config.requestTimeout} ms\n`;
+          }
+          return details;
+        };
 
-          // Server info (only if connected)
-          if (info?.description) {
-            parts.push(info.description);
+        // Format server entry
+        const formatServer = (name: string, config: any, info: ServerInfo): string => {
+          let line = `- ${name}`;
+
+          // Tool names
+          if (info.toolNames && info.toolNames.length > 0) {
+            const label = info.fromCache ? 'cached' : 'tools';
+            line += ` - ${label}: ${info.toolNames.join(', ')}`;
+          } else if (!info.connected) {
+            line += ' - no cache';
           }
 
-          if (info?.toolCount !== undefined) {
-            parts.push(`Tools: ${info.toolCount}`);
+          line += '\n';
+
+          // Details if requested
+          if (args.details) {
+            line += formatDetails(config);
           }
 
-          if (hasConnection) {
-            connected.push(parts.join(' - '));
-          } else {
-            disconnected.push(parts.join(' - '));
-          }
-        }
+          return line;
+        };
 
         if (connected.length > 0) {
           output += 'connected:\n';
-          output += connected.join('\n') + '\n\n';
+          for (const { name, config, info } of connected) {
+            output += formatServer(name, config, info);
+          }
+          output += '\n';
         }
 
         if (disconnected.length > 0) {
           output += 'disconnected:\n';
-          output += disconnected.join('\n') + '\n';
+          for (const { name, config, info } of disconnected) {
+            output += formatServer(name, config, info);
+          }
         }
 
         output += `\nTotal: ${configs.size} server${configs.size === 1 ? '' : 's'} (${connected.length} connected, ${disconnected.length} disconnected)\n`;

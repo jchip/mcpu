@@ -73,8 +73,8 @@ const nc = new NixClap({
         desc: 'List all configured MCP servers',
         args: '[pattern string]',
         options: {
-          detailed: {
-            desc: 'Show detailed multi-line format',
+          details: {
+            desc: 'Show command, env, and other config details',
           },
           tools: {
             desc: 'List tool names',
