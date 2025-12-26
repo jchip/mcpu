@@ -940,7 +940,6 @@ export async function executeUsageCommand(
 
     // Determine which command to use
     // If tool is specified, use 'info'
-    // Otherwise, use server's usage config (default: 'tools')
     if (args.tool) {
       // Delegate to info command
       return executeInfoCommand(
@@ -950,26 +949,77 @@ export async function executeUsageCommand(
         },
         options
       );
-    } else {
-      const usageMode = config.usage || 'tools';
+    }
 
-      if (usageMode === 'info') {
-        // Delegate to info command (show all tools)
-        return executeInfoCommand(
-          {
-            server: args.server,
-          },
-          options
-        );
-      } else {
-        // Delegate to tools command
-        return executeToolsCommand(
-          {
-            servers: [args.server],
-          },
-          options
-        );
+    // Determine usage mode from config or tool descriptions
+    let usageMode: 'tools' | 'info' = config.usage || 'tools';
+
+    // If no config set, check tool descriptions for MCPU usage hint
+    if (!config.usage) {
+      try {
+        const client = new MCPClient();
+        const cache = new SchemaCache();
+        const pool = options.connectionPool;
+
+        let tools: Tool[] | null = null;
+
+        // Try cache first
+        if (!options.noCache) {
+          tools = await cache.get(args.server, config.cacheTTL);
+        }
+
+        // If not cached, try to get from pool or connect
+        if (!tools) {
+          if (pool) {
+            // Try to get from pool
+            const conn = pool.getRawConnection(args.server);
+            if (conn) {
+              tools = await client.listTools(conn);
+            }
+          }
+
+          // If still no tools, connect temporarily
+          if (!tools) {
+            tools = await client.withConnection(args.server, config, async (conn) => {
+              return await client.listTools(conn);
+            });
+            // Cache for future use
+            await cache.set(args.server, tools);
+          }
+        }
+
+        // Look for MCPU usage hint in tool descriptions
+        if (tools) {
+          for (const tool of tools) {
+            if (tool.description) {
+              const match = tool.description.match(/MCPU usage:\s*(tools|info)/i);
+              if (match) {
+                usageMode = match[1].toLowerCase() as 'tools' | 'info';
+                break;
+              }
+            }
+          }
+        }
+      } catch (error) {
+        // Ignore errors when checking descriptions, fall back to default
       }
+    }
+
+    // Delegate to appropriate command
+    if (usageMode === 'info') {
+      return executeInfoCommand(
+        {
+          server: args.server,
+        },
+        options
+      );
+    } else {
+      return executeToolsCommand(
+        {
+          servers: [args.server],
+        },
+        options
+      );
     }
   } catch (error) {
     return {
