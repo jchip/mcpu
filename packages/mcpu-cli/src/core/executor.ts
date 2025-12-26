@@ -6,7 +6,7 @@ import type { CommandResult } from '../types/result.ts';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { type ConnectionPool, getConnectionKey, parseConnectionKey } from '../daemon/connection-pool.ts';
 import { ExecutionContext } from './context.ts';
-import { formatToolInfo, abbreviateType, LEGEND_HEADER, TYPES_LINE, collectEnums, formatEnumLegend, extractEnumOrRange, formatParamType } from '../formatters.ts';
+import { formatToolInfo, formatToolInfoCompact, abbreviateType, LEGEND_HEADER, TYPES_LINE, collectEnums, formatEnumLegend, extractEnumOrRange, formatParamType } from '../formatters.ts';
 import { isStdioConfig, isUrlConfig, isWebSocketConfig, type CollapseOptionalsConfig } from '../types.ts';
 import { fuzzyMatch } from '../utils/fuzzy.ts';
 import { getErrorMessage } from '../utils/error.ts';
@@ -915,6 +915,114 @@ function parseArgs(args: string[], schema?: any): Record<string, any> {
 }
 
 /**
+ * Execute the 'infoc' command - show tools with full description and compact ARGS
+ */
+async function executeInfoCompactCommand(
+  serverName: string,
+  options: ExecuteOptions
+): Promise<CommandResult> {
+  try {
+    const discovery = new ConfigDiscovery({
+      configFile: options.config,
+      verbose: options.verbose,
+    });
+
+    const configs = await discovery.loadConfigs(options.cwd);
+    const config = configs.get(serverName);
+
+    if (!config) {
+      return {
+        success: false,
+        error: `Server "${serverName}" not found. Available servers: ${Array.from(configs.keys()).join(', ')}`,
+        exitCode: 1,
+      };
+    }
+
+    const client = new MCPClient();
+    const cache = new SchemaCache();
+    const pool = options.connectionPool;
+
+    let availableTools: Tool[] | null = null;
+    let fromCache = false;
+
+    if (!options.noCache) {
+      const cacheResult = await cache.getWithExpiry(serverName, config.cacheTTL);
+      if (cacheResult) {
+        if (cacheResult.expired) {
+          // TTL expired - force sync refresh if we have a pool connection
+          if (pool) {
+            await pool.refreshCacheSync(serverName);
+            availableTools = await cache.get(serverName, config.cacheTTL);
+          }
+          // If no pool or refresh failed, fall through to fetch fresh
+        } else {
+          // Cache valid
+          availableTools = cacheResult.tools;
+          fromCache = true;
+        }
+      }
+    }
+
+    if (!availableTools) {
+      availableTools = await client.withConnection(serverName, config, async (conn) => {
+        return await client.listTools(conn);
+      });
+      await cache.set(serverName, availableTools);
+    }
+
+    const ctx = getContext(options);
+
+    // JSON/YAML output - same as info command
+    if (ctx.json || ctx.yaml) {
+      const outputData = availableTools;
+      const wrappedOutput = fromCache
+        ? { tools: outputData, _meta: { fromCache: true } }
+        : { tools: outputData };
+
+      return {
+        success: true,
+        output: formatOutput(wrappedOutput, ctx),
+        exitCode: 0,
+        meta: fromCache ? { fromCache: true, cachedServers: [serverName] } : undefined,
+      };
+    } else {
+      // Text output: format with legend and compact tool info
+      const enumRefs = collectEnums(availableTools);
+      const enumLegend = formatEnumLegend(enumRefs);
+
+      // Header: # Legend section with types and enums
+      let header = `${LEGEND_HEADER}\n${TYPES_LINE}`;
+      if (enumLegend) {
+        header += '\n' + enumLegend;
+      }
+      header += '\n\n';
+
+      // Server header
+      header += `MCP server ${serverName}:\n`;
+
+      // Body: formatted tools in compact mode
+      const body = availableTools.map(t => formatToolInfoCompact(t, enumRefs)).join('');
+
+      // Footer: cache status
+      const footer = fromCache ? '\n(from cache)\n' : '';
+
+      return {
+        success: true,
+        output: header + body + footer,
+        exitCode: 0,
+        meta: fromCache ? { fromCache: true, cachedServers: [serverName] } : undefined,
+      };
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: getErrorMessage(error),
+      exitCode: 1,
+    };
+  }
+}
+
+/**
  * Execute the 'usage' command - delegates to either 'tools' or 'info' based on arguments
  */
 export async function executeUsageCommand(
@@ -952,7 +1060,7 @@ export async function executeUsageCommand(
     }
 
     // Determine usage mode from config or tool descriptions
-    let usageMode: 'tools' | 'info' = config.usage || 'tools';
+    let usageMode: 'tools' | 'info' | 'infoc' = config.usage || 'tools';
 
     // If no config set, check tool descriptions for MCPU usage hint
     if (!config.usage) {
@@ -992,9 +1100,9 @@ export async function executeUsageCommand(
         if (tools) {
           for (const tool of tools) {
             if (tool.description) {
-              const match = tool.description.match(/MCPU usage:\s*(tools|info)/i);
+              const match = tool.description.match(/MCPU usage:\s*(infoc|tools|info)/i);
               if (match) {
-                usageMode = match[1].toLowerCase() as 'tools' | 'info';
+                usageMode = match[1].toLowerCase() as 'tools' | 'info' | 'infoc';
                 break;
               }
             }
@@ -1013,6 +1121,8 @@ export async function executeUsageCommand(
         },
         options
       );
+    } else if (usageMode === 'infoc') {
+      return executeInfoCompactCommand(args.server, options);
     } else {
       return executeToolsCommand(
         {

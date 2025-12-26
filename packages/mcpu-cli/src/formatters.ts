@@ -304,6 +304,109 @@ export function formatParamType(
 }
 
 /**
+ * Extract default value from description
+ */
+function extractDefault(propSchema: any): string | null {
+  if (propSchema.description) {
+    const defaultMatch = propSchema.description.match(/\(default:?\s*([^)]+)\)/i);
+    if (defaultMatch) {
+      return defaultMatch[1].trim();
+    }
+  }
+  return null;
+}
+
+/**
+ * Format compact ARGS line for a tool
+ * Returns a string like "param1 type1, param2? type2"
+ */
+function formatCompactArgs(tool: Tool, enumRefs?: Map<string, string>): string {
+  if (!tool.inputSchema || typeof tool.inputSchema !== 'object') {
+    return '';
+  }
+
+  const schema = tool.inputSchema as any;
+  const properties = schema.properties || {};
+  const required = new Set(schema.required || []);
+
+  const paramCount = Object.keys(properties).length;
+  if (paramCount === 0) {
+    return '';
+  }
+
+  const requiredArgs: string[] = [];
+  const optionalArgs: string[] = [];
+
+  for (const [name, prop] of Object.entries(properties)) {
+    const propSchema = prop as any;
+
+    // Use formatParamType with depth=1 for compact display
+    let typeStr = formatParamType(propSchema, enumRefs, undefined, 1);
+
+    // Extract default value if present
+    if (propSchema.default === undefined) {
+      const defaultVal = extractDefault(propSchema);
+      if (defaultVal) {
+        typeStr = `${typeStr}=${defaultVal}`;
+      }
+    } else {
+      const defVal = typeof propSchema.default === 'string'
+        ? propSchema.default
+        : JSON.stringify(propSchema.default);
+      typeStr = `${typeStr}=${defVal}`;
+    }
+
+    // Build parameter string
+    const argStr = `${name} ${typeStr}`;
+
+    if (required.has(name)) {
+      requiredArgs.push(argStr);
+    } else {
+      optionalArgs.push(`${name}? ${typeStr}`);
+    }
+  }
+
+  // Build full params string: required first, then optional
+  const allArgs = [...requiredArgs, ...optionalArgs];
+  return allArgs.join(', ');
+}
+
+/**
+ * Format MCP Tool in compact format - full description with ARGS on new line
+ *
+ * Format:
+ * - tool_name - Full description
+ *
+ * ARGS: param1 type1, param2? type2
+ * -> return_type
+ *
+ * @param tool - MCP Tool object from tools/list
+ * @param enumRefs - Optional map of enum values to references (@E1, @E2, etc.)
+ * @returns Compact text representation
+ */
+export function formatToolInfoCompact(tool: Tool, enumRefs?: Map<string, string>): string {
+  const toolAny = tool as any;
+  let output = '';
+
+  // Tool name and description on first line
+  const description = tool.description || 'No description';
+  output += `  - ${tool.name} - ${description}\n`;
+
+  // ARGS on new line with blank line before it
+  const argsStr = formatCompactArgs(tool, enumRefs);
+  if (argsStr) {
+    output += `\nARGS: ${argsStr}\n`;
+  }
+
+  // Output schema (return type) - compact format (depth=1)
+  if (toolAny.outputSchema) {
+    output += `\n-> ${formatParamType(toolAny.outputSchema, enumRefs, undefined, 1)}\n`;
+  }
+
+  return output;
+}
+
+/**
  * Format MCP Tool into concise human-readable text
  *
  * Uses all MCP spec fields:
