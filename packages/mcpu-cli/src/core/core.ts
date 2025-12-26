@@ -110,6 +110,10 @@ function createParserCLI() {
           desc: 'Show detailed information about one or more tools',
           args: '<server string> [tools string..]',
         },
+        usage: {
+          desc: 'Show usage for a server (tools or info based on config)',
+          args: '<server string> [tool string]',
+        },
         call: {
           desc: 'Execute a tool with the given arguments',
           args: '<server string> <tool string> [args string..]',
@@ -287,6 +291,13 @@ export async function coreExecute(options: CoreExecutionOptions): Promise<Comman
         return await executeCommand('info', {
           server: args.server as string,
           tools: args.tools as string[],
+        }, globalOptions);
+      }
+
+      case 'usage': {
+        return await executeCommand('usage', {
+          server: args.server as string,
+          tool: args.tool as string | undefined,
         }, globalOptions);
       }
 

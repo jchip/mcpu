@@ -231,6 +231,11 @@ export interface InfoCommandArgs {
   tools?: string[];
 }
 
+export interface UsageCommandArgs {
+  server: string;
+  tool?: string;
+}
+
 export interface CallCommandArgs {
   server: string;
   tool: string;
@@ -910,6 +915,72 @@ function parseArgs(args: string[], schema?: any): Record<string, any> {
 }
 
 /**
+ * Execute the 'usage' command - delegates to either 'tools' or 'info' based on arguments
+ */
+export async function executeUsageCommand(
+  args: UsageCommandArgs,
+  options: ExecuteOptions
+): Promise<CommandResult> {
+  try {
+    // Load config to check server's usage preference
+    const discovery = new ConfigDiscovery({
+      configFile: options.config,
+      verbose: options.verbose,
+    });
+    const configs = await discovery.loadConfigs(options.cwd);
+    const config = configs.get(args.server);
+
+    if (!config) {
+      return {
+        success: false,
+        error: `Server "${args.server}" not found. Available servers: ${Array.from(configs.keys()).join(', ')}`,
+        exitCode: 1,
+      };
+    }
+
+    // Determine which command to use
+    // If tool is specified, use 'info'
+    // Otherwise, use server's usage config (default: 'tools')
+    if (args.tool) {
+      // Delegate to info command
+      return executeInfoCommand(
+        {
+          server: args.server,
+          tools: [args.tool],
+        },
+        options
+      );
+    } else {
+      const usageMode = config.usage || 'tools';
+
+      if (usageMode === 'info') {
+        // Delegate to info command (show all tools)
+        return executeInfoCommand(
+          {
+            server: args.server,
+          },
+          options
+        );
+      } else {
+        // Delegate to tools command
+        return executeToolsCommand(
+          {
+            servers: [args.server],
+          },
+          options
+        );
+      }
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: getErrorMessage(error),
+      exitCode: 1,
+    };
+  }
+}
+
+/**
  * Execute the 'call' command
  */
 export async function executeCallCommand(
@@ -1505,6 +1576,8 @@ export async function executeCommand(
       return executeToolsCommand(args, options);
     case 'info':
       return executeInfoCommand(args, options);
+    case 'usage':
+      return executeUsageCommand(args, options);
     case 'call':
       return executeCallCommand(args, options);
     case 'connect':

@@ -133,6 +133,20 @@ const nc = new NixClap({
           process.exit(result.exitCode || 0);
         },
       },
+      usage: {
+        desc: 'Show usage for a server (tools or info based on config)',
+        args: '<server string> [tool string]',
+        exec: async () => {
+          const result = await coreExecute({ argv: process.argv.slice(2) });
+          if (result.output) {
+            console.log(result.output);
+          }
+          if (!result.success && result.error) {
+            console.error(result.error);
+          }
+          process.exit(result.exitCode || 0);
+        },
+      },
       call: {
         desc: 'Execute a tool with the given arguments',
         args: '<server string> <tool string> [args string..]',
