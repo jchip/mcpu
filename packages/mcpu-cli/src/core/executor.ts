@@ -485,10 +485,7 @@ export async function executeServersCommand(
 
           // Tool names
           if (info.toolNames && info.toolNames.length > 0) {
-            const label = info.fromCache ? 'cached' : 'tools';
-            line += ` - ${label}: ${info.toolNames.join(', ')}`;
-          } else if (!info.connected) {
-            line += ' - no cache';
+            line += ` - tools: ${info.toolNames.join(' ')}`;
           }
 
           line += '\n';
