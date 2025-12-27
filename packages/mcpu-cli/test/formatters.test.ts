@@ -193,7 +193,8 @@ describe('Formatters', () => {
 
       const result = formatToolInfo(tool);
 
-      expect(result).toContain('# read_file');
+      expect(result).toContain('TOOL: read_file');
+      expect(result).toContain('DESCRIPTION:');
       expect(result).toContain('Read a file from disk');
       expect(result).toContain('ARGS:');
       expect(result).toContain('path: S - File path');
@@ -212,7 +213,7 @@ describe('Formatters', () => {
 
       const result = formatToolInfo(tool);
 
-      expect(result).toContain('# browser_fill_form');
+      expect(result).toContain('TOOL: browser_fill_form');
       expect(result).toContain('(Fill Form)');
     });
 

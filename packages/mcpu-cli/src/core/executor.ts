@@ -159,9 +159,10 @@ export function hasToolsBeenShown(serverName: string): boolean {
 }
 
 /**
- * Format a compact tools list for inclusion in error messages
+ * Format usage information for inclusion in error messages
  * Returns empty string if tools already shown for this server
  * Marks server as "tools shown" when returning usage
+ * Uses the same logic as the usage command to determine format
  */
 function formatToolsForError(tools: Tool[], serverName: string, collapseConfig?: CollapseOptionalsConfig): string {
   if (toolsShownForServer.has(serverName)) {
@@ -171,23 +172,46 @@ function formatToolsForError(tools: Tool[], serverName: string, collapseConfig?:
   // Mark as shown
   toolsShownForServer.add(serverName);
 
-  const enumRefs = collectEnums(tools);
-  const collapse: CollapseContext = { config: collapseConfig, toolCount: tools.length };
-
-  let output = `\n\nUsage: Available tools on "${serverName}":\n`;
-  output += `${TYPES_LINE}\n`;
-
-  // Add enum legend if any
-  if (enumRefs.size > 0) {
-    for (const [enumValue, ref] of enumRefs.entries()) {
-      output += `${ref}: ${enumValue}\n`;
+  // Determine usage mode from tool descriptions (same logic as usage command)
+  let usageMode: 'tools' | 'info' | 'infoc' = 'tools';
+  for (const tool of tools) {
+    if (tool.description) {
+      const match = tool.description.match(/MCPU usage:\s*(infoc|tools|info)/i);
+      if (match) {
+        usageMode = match[1].toLowerCase() as 'tools' | 'info' | 'infoc';
+        break;
+      }
     }
   }
 
-  for (const tool of tools) {
-    const description = (tool.description || 'No description').split('\n')[0].trim();
-    const briefArgs = formatBriefArgs(tool, description, true, enumRefs, collapse);
-    output += `- ${tool.name} - ${description}${briefArgs}\n`;
+  const enumRefs = collectEnums(tools);
+  const enumLegend = formatEnumLegend(enumRefs);
+
+  let output = `\n\n`;
+
+  // Header with legend
+  output += `${LEGEND_HEADER}\n${TYPES_LINE}`;
+  if (enumLegend) {
+    output += '\n' + enumLegend;
+  }
+  output += '\n\n';
+
+  // Server header
+  output += `MCP Server: ${serverName}\n\n`;
+
+  // Format tools based on usage mode
+  if (usageMode === 'info') {
+    output += tools.map(t => formatToolInfo(t, enumRefs)).join('');
+  } else if (usageMode === 'infoc') {
+    output += tools.map(t => formatToolInfoCompact(t, enumRefs)).join('');
+  } else {
+    // tools mode - compact one-line format
+    const collapse: CollapseContext = { config: collapseConfig, toolCount: tools.length };
+    for (const tool of tools) {
+      const description = (tool.description || 'No description').split('\n')[0].trim();
+      const briefArgs = formatBriefArgs(tool, description, true, enumRefs, collapse);
+      output += `- ${tool.name} - ${description}${briefArgs}\n`;
+    }
   }
 
   return output;
@@ -673,7 +697,7 @@ export async function executeToolsCommand(
         }
 
         for (const [server, tools] of toolsByServer.entries()) {
-          output += `MCP server ${server}:\n`;
+          output += `MCP server: ${server}\n`;
 
           // Collect enum references for this server's tools
           const enumRefs = args.names ? new Map() : collectEnums(tools);
@@ -681,7 +705,7 @@ export async function executeToolsCommand(
           // Add enum legend under server header if there are any
           if (!args.names && enumRefs.size > 0) {
             for (const [enumValue, ref] of enumRefs.entries()) {
-              output += `  ${ref}: ${enumValue}\n`;
+              output += `${ref}: ${enumValue}\n`;
             }
           }
 
@@ -689,7 +713,7 @@ export async function executeToolsCommand(
           const collapse: CollapseContext = { config: collapseConfig, toolCount: tools.length };
           for (const tool of tools) {
             if (args.names) {
-              output += `  - ${tool.name}\n`;
+              output += `- ${tool.name}\n`;
             } else {
               // Show first line by default, full description if --full-desc
               const description = args.fullDesc === true
@@ -699,7 +723,7 @@ export async function executeToolsCommand(
               // forceArgs=true when user explicitly set --args from CLI
               const forceArgs = args.showArgsSource === 'cli';
               const briefArgs = args.showArgs === false ? '' : formatBriefArgs(tool, description, forceArgs, enumRefs, collapse);
-              output += `  - ${tool.name} - ${description}${briefArgs}\n`;
+              output += `- ${tool.name} - ${description}${briefArgs}\n`;
             }
           }
           output += '\n';
@@ -839,6 +863,9 @@ export async function executeInfoCommand(
         header += '\n' + enumLegend;
       }
       header += '\n\n';
+
+      // Server header
+      header += `MCP Server: ${args.server}\n\n`;
 
       // Body: formatted tools
       const body = toolsForInfo.map(t => formatToolInfo(t, enumRefs)).join('');
@@ -998,7 +1025,7 @@ async function executeInfoCompactCommand(
       header += '\n\n';
 
       // Server header
-      header += `MCP server ${serverName}:\n`;
+      header += `MCP Server: ${serverName}\n\n`;
 
       // Body: formatted tools in compact mode
       const body = availableTools.map(t => formatToolInfoCompact(t, enumRefs)).join('');

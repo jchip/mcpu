@@ -375,9 +375,12 @@ function formatCompactArgs(tool: Tool, enumRefs?: Map<string, string>): string {
  * Format MCP Tool in compact format - full description with ARGS on new line
  *
  * Format:
- * - tool_name - Full description
+ * TOOL: tool_name
+ * DESCRIPTION:
+ * Full description
  *
  * ARGS: param1 type1, param2? type2
+ *
  * -> return_type
  *
  * @param tool - MCP Tool object from tools/list
@@ -388,9 +391,15 @@ export function formatToolInfoCompact(tool: Tool, enumRefs?: Map<string, string>
   const toolAny = tool as any;
   let output = '';
 
-  // Tool name and description on first line
+  // Separator
+  output += '---\n';
+
+  // Tool name
+  output += `TOOL: ${tool.name}\n`;
+
+  // Description
   const description = tool.description || 'No description';
-  output += `  - ${tool.name} - ${description}\n`;
+  output += `DESCRIPTION:\n${description}\n`;
 
   // ARGS on new line with blank line before it
   const argsStr = formatCompactArgs(tool, enumRefs);
@@ -424,17 +433,19 @@ export function formatToolInfo(tool: Tool, enumRefs?: Map<string, string>): stri
   const toolAny = tool as any;
   let output = '';
 
-  // Header: # tool_name (with title if different)
-  output += `# ${tool.name}\n`;
+  // Separator
+  output += '---\n';
+
+  // Tool name (with title if different)
+  output += `TOOL: ${tool.name}`;
   if (toolAny.title && toolAny.title !== tool.name) {
-    output += `(${toolAny.title})\n`;
+    output += ` (${toolAny.title})`;
   }
   output += '\n';
 
   // Description
-  if (tool.description) {
-    output += `${tool.description}\n\n`;
-  }
+  const description = tool.description || 'No description';
+  output += `DESCRIPTION:\n${description}\n\n`;
 
   // Annotations (important behavioral hints)
   if (toolAny.annotations) {
