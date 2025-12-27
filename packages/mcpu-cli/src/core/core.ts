@@ -92,7 +92,7 @@ function createParserCLI() {
           },
         },
         tools: {
-          desc: 'List tools from all servers or specific servers',
+          desc: 'List tools from all servers (compact one-line format)',
           args: '[servers string..]',
           options: {
             names: {
@@ -107,11 +107,11 @@ function createParserCLI() {
           },
         },
         info: {
-          desc: 'Show detailed information about one or more tools',
+          desc: 'Show detailed information about specific tools',
           args: '<server string> [tools string..]',
         },
         usage: {
-          desc: 'Show usage for a server (tools or info based on config)',
+          desc: 'Show usage for a server (recommended - auto-selects tools/info/infoc format)',
           args: '<server string> [tool string]',
         },
         call: {
