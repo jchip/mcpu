@@ -6,7 +6,8 @@
   "homepage": "",
   "license": "UNLICENSED",
   "scripts": {
-    "bootstrap": "fynpo"
+    "bootstrap": "fynpo",
+    "build": "fynpo run build"
   },
   "author": "",
   "files": [

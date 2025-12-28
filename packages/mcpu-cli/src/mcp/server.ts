@@ -62,6 +62,7 @@ export class McpuMcpServer {
       service: 'mcpu-mcp',
       ppid: process.ppid,
       pid: process.pid,
+      roots: this.roots, // Pass initial roots (empty array initially)
     });
     this.configs = new Map();
 
@@ -133,6 +134,9 @@ export class McpuMcpServer {
         }
         return uri;
       });
+
+      // Update ConnectionPool with new roots so they're forwarded to managed servers
+      this.pool.updateRoots(this.roots);
 
       // Use first root as default projectDir if not already set
       if (!this.projectDir && this.roots.length > 0) {

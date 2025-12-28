@@ -72,12 +72,14 @@ export interface MCPConnection {
 export class MCPClient {
   /**
    * Connect to an MCP server and get its tools
+   * @param roots - Optional roots to forward to the managed server
    */
   async connect(
     serverName: string,
     config: MCPServerConfig,
     connectionId?: string,
-    logger?: pino.Logger
+    logger?: pino.Logger,
+    roots?: string[]
   ): Promise<MCPConnection> {
     let transport: Transport;
 
@@ -131,9 +133,26 @@ export class MCPClient {
       name: `mcpu-${serverName}`,
       version: '0.1.0',
     }, {
-      capabilities: {},
+      capabilities: roots ? {
+        roots: {
+          listChanged: true
+        }
+      } : {},
       jsonSchemaValidator: new RelaxedAjvJsonSchemaValidator(),
     });
+
+    // If roots are provided, implement the roots/list handler
+    if (roots) {
+      const { ListRootsRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
+      client.setRequestHandler(ListRootsRequestSchema, async () => {
+        return {
+          roots: roots.map(path => ({
+            uri: path.startsWith('file://') ? path : `file://${path}`,
+            name: path.split('/').pop() || path
+          }))
+        };
+      });
+    }
 
     // Connect
     try {

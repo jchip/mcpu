@@ -44,6 +44,8 @@ export interface ConnectionPoolOptions {
   ppid?: number;
   /** Process ID for logging */
   pid?: number;
+  /** Roots to forward to managed MCP servers */
+  roots?: string[];
 }
 
 /**
@@ -70,6 +72,7 @@ export class ConnectionPool {
   private readonly ppid?: number;
   private readonly pid?: number;
   private readonly logger?: pino.Logger;
+  private roots?: string[]; // Roots to forward to managed servers
 
   constructor(options: ConnectionPoolOptions = {}) {
     this.autoDisconnect = options.autoDisconnect ?? false;
@@ -77,6 +80,7 @@ export class ConnectionPool {
     this.service = options.service;
     this.ppid = options.ppid;
     this.pid = options.pid;
+    this.roots = options.roots;
 
     // Create logger if service/ppid/pid provided
     if (this.service && this.ppid !== undefined && this.pid !== undefined) {
@@ -147,7 +151,7 @@ export class ConnectionPool {
    */
   private async createConnection(serverName: string, config: MCPServerConfig, connId?: string): Promise<ConnectionInfo> {
     const key = getConnectionKey(serverName, connId);
-    const connection = await this.client.connect(serverName, config, key, this.logger);
+    const connection = await this.client.connect(serverName, config, key, this.logger, this.roots);
     const id = this.nextId++;
     const now = Date.now();
 
@@ -421,6 +425,21 @@ export class ConnectionPool {
       clearInterval(this.cleanupInterval);
       this.cleanupInterval = null;
     }
+  }
+
+  /**
+   * Update roots that will be forwarded to managed servers
+   * This should be called when roots change from the MCP client
+   */
+  updateRoots(roots: string[]): void {
+    this.roots = roots;
+  }
+
+  /**
+   * Get current roots
+   */
+  getRoots(): string[] | undefined {
+    return this.roots;
   }
 
   /**
