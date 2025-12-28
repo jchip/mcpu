@@ -8,6 +8,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { RootsListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
 import express from "express";
 import type { Server as HttpServer } from "node:http";
 import { z } from "zod";
@@ -91,26 +92,7 @@ export class McpuMcpServer {
       if (clientCapabilities?.roots) {
         this.log("Client supports roots, fetching...");
         try {
-          const rootsResult = await this.server.server.listRoots();
-          if (rootsResult.roots && rootsResult.roots.length > 0) {
-            // Convert file:// URIs to file paths
-            this.roots = rootsResult.roots.map((root: any) => {
-              const uri = root.uri;
-              if (uri.startsWith('file://')) {
-                // Remove file:// prefix and decode URI components
-                return decodeURIComponent(uri.substring(7));
-              }
-              return uri;
-            });
-
-            // Use first root as default projectDir if not already set
-            if (!this.projectDir && this.roots.length > 0) {
-              this.projectDir = this.roots[0];
-              this.log(`Set default projectDir from roots: ${this.projectDir}`);
-            }
-
-            this.log(`Captured ${this.roots.length} roots from client`, { roots: this.roots });
-          }
+          await this.updateRootsFromClient();
         } catch (error) {
           // Client might not support roots or error occurred
           this.log(`Failed to fetch roots: ${getErrorMessage(error)}`);
@@ -120,7 +102,46 @@ export class McpuMcpServer {
       }
     };
 
+    // Handle roots/list_changed notifications
+    this.server.server.setNotificationHandler(
+      RootsListChangedNotificationSchema,
+      async () => {
+        this.log("Roots changed notification received");
+        try {
+          await this.updateRootsFromClient();
+        } catch (error) {
+          this.log(`Failed to update roots: ${getErrorMessage(error)}`);
+        }
+      }
+    );
+
     this.log("Initialize handler setup complete");
+  }
+
+  /**
+   * Fetch and update roots from the MCP client
+   */
+  private async updateRootsFromClient(): Promise<void> {
+    const rootsResult = await this.server.server.listRoots();
+    if (rootsResult.roots && rootsResult.roots.length > 0) {
+      // Convert file:// URIs to file paths
+      this.roots = rootsResult.roots.map((root: any) => {
+        const uri = root.uri;
+        if (uri.startsWith('file://')) {
+          // Remove file:// prefix and decode URI components
+          return decodeURIComponent(uri.substring(7));
+        }
+        return uri;
+      });
+
+      // Use first root as default projectDir if not already set
+      if (!this.projectDir && this.roots.length > 0) {
+        this.projectDir = this.roots[0];
+        this.log(`Set default projectDir from roots: ${this.projectDir}`);
+      }
+
+      this.log(`Captured ${this.roots.length} roots from client`, { roots: this.roots });
+    }
   }
 
   /**

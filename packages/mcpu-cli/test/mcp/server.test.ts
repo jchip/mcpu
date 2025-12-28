@@ -4,11 +4,26 @@ import { McpuMcpServer } from '../../src/mcp/server.js';
 // Mock the MCP SDK
 const mockTool = vi.fn();
 const mockConnect = vi.fn();
+const mockListRoots = vi.fn();
+const mockGetClientCapabilities = vi.fn();
+const mockSetNotificationHandler = vi.fn();
+let mockOninitialized: (() => Promise<void>) | undefined;
 
 vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
   McpServer: vi.fn().mockImplementation(() => ({
     tool: mockTool,
     connect: mockConnect,
+    server: {
+      listRoots: mockListRoots,
+      getClientCapabilities: mockGetClientCapabilities,
+      setNotificationHandler: mockSetNotificationHandler,
+      get oninitialized() {
+        return mockOninitialized;
+      },
+      set oninitialized(handler: (() => Promise<void>) | undefined) {
+        mockOninitialized = handler;
+      },
+    },
   })),
 }));
 
@@ -114,10 +129,11 @@ describe('McpuMcpServer', () => {
         argv: ['servers'],
         params: undefined,
         batch: undefined,
-        setConfig: undefined,
-        cwd: undefined,
+        cwd: process.cwd(),
+        projectDir: undefined,
         connectionPool: expect.any(Object),
         configs: expect.any(Map),
+        configDiscovery: undefined,
       });
 
       expect(result).toEqual({
@@ -142,10 +158,11 @@ describe('McpuMcpServer', () => {
         argv: ['call', 'playwright', 'browser_navigate'],
         params: { url: 'https://example.com' },
         batch: undefined,
-        setConfig: undefined,
-        cwd: undefined,
+        cwd: process.cwd(),
+        projectDir: undefined,
         connectionPool: expect.any(Object),
         configs: expect.any(Map),
+        configDiscovery: undefined,
       });
 
       expect(result.isError).toBe(false);
@@ -167,9 +184,11 @@ describe('McpuMcpServer', () => {
         argv: ['setConfig', 'playwright'],
         params: { extraArgs: ['--isolated'] },
         batch: undefined,
-        cwd: undefined,
+        cwd: process.cwd(),
+        projectDir: undefined,
         connectionPool: expect.any(Object),
         configs: expect.any(Map),
+        configDiscovery: undefined,
       });
 
       expect(result.isError).toBe(false);
@@ -191,10 +210,11 @@ describe('McpuMcpServer', () => {
         argv: ['servers'],
         params: undefined,
         batch: undefined,
-        setConfig: undefined,
         cwd: '/custom/path',
+        projectDir: undefined,
         connectionPool: expect.any(Object),
         configs: expect.any(Map),
+        configDiscovery: undefined,
       });
 
       expect(result.isError).toBe(false);
@@ -298,6 +318,226 @@ describe('McpuMcpServer', () => {
       await server.shutdown();
 
       expect(pool.shutdown).toHaveBeenCalled();
+    });
+  });
+
+  describe('roots support', () => {
+    let toolHandler: Function;
+
+    beforeEach(() => {
+      // Extract the tool handler from the mock call
+      toolHandler = mockTool.mock.calls[0][3];
+    });
+
+    it('should register notification handler for roots/list_changed', () => {
+      expect(mockSetNotificationHandler).toHaveBeenCalled();
+    });
+
+    it('should capture roots from client on initialization', async () => {
+      mockGetClientCapabilities.mockReturnValue({ roots: true });
+      mockListRoots.mockResolvedValue({
+        roots: [
+          { uri: 'file:///Users/test/project' },
+          { uri: 'file:///Users/test/workspace' },
+        ],
+      });
+
+      // Trigger oninitialized
+      if (mockOninitialized) {
+        await mockOninitialized();
+      }
+
+      expect(mockGetClientCapabilities).toHaveBeenCalled();
+      expect(mockListRoots).toHaveBeenCalled();
+    });
+
+    it('should use first root as default projectDir', async () => {
+      mockGetClientCapabilities.mockReturnValue({ roots: true });
+      mockListRoots.mockResolvedValue({
+        roots: [{ uri: 'file:///Users/test/project' }],
+      });
+      mockCoreExecute.mockResolvedValue({
+        success: true,
+        output: 'Success',
+        exitCode: 0,
+      });
+
+      // Trigger oninitialized to set projectDir
+      if (mockOninitialized) {
+        await mockOninitialized();
+      }
+
+      // Execute a command without explicit projectDir
+      await toolHandler({
+        argv: ['servers'],
+      });
+
+      // Should use the root as projectDir
+      expect(mockCoreExecute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectDir: '/Users/test/project',
+        })
+      );
+    });
+
+    it('should decode URI-encoded roots', async () => {
+      mockGetClientCapabilities.mockReturnValue({ roots: true });
+      mockListRoots.mockResolvedValue({
+        roots: [{ uri: 'file:///Users/test/my%20project' }],
+      });
+      mockCoreExecute.mockResolvedValue({
+        success: true,
+        output: 'Success',
+        exitCode: 0,
+      });
+
+      // Trigger oninitialized
+      if (mockOninitialized) {
+        await mockOninitialized();
+      }
+
+      // Execute a command
+      await toolHandler({
+        argv: ['servers'],
+      });
+
+      // Should decode the URI
+      expect(mockCoreExecute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectDir: '/Users/test/my project',
+        })
+      );
+    });
+
+    it('should allow explicit projectDir to override roots', async () => {
+      mockGetClientCapabilities.mockReturnValue({ roots: true });
+      mockListRoots.mockResolvedValue({
+        roots: [{ uri: 'file:///Users/test/root-project' }],
+      });
+      mockCoreExecute.mockResolvedValue({
+        success: true,
+        output: 'Success',
+        exitCode: 0,
+      });
+
+      // Trigger oninitialized
+      if (mockOninitialized) {
+        await mockOninitialized();
+      }
+
+      // Execute a command with explicit projectDir
+      await toolHandler({
+        argv: ['servers'],
+        projectDir: '/custom/project',
+      });
+
+      // Should use explicit projectDir, not the root
+      expect(mockCoreExecute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectDir: '/custom/project',
+        })
+      );
+    });
+
+    it('should handle client without roots capability', async () => {
+      mockGetClientCapabilities.mockReturnValue({});
+      mockCoreExecute.mockResolvedValue({
+        success: true,
+        output: 'Success',
+        exitCode: 0,
+      });
+
+      // Trigger oninitialized
+      if (mockOninitialized) {
+        await mockOninitialized();
+      }
+
+      // Execute a command
+      await toolHandler({
+        argv: ['servers'],
+      });
+
+      // listRoots should not be called
+      expect(mockListRoots).not.toHaveBeenCalled();
+
+      // Should use process cwd as projectDir
+      expect(mockCoreExecute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectDir: undefined,
+        })
+      );
+    });
+
+    it('should handle roots/list_changed notification', async () => {
+      // Get the notification handler that was registered
+      const notificationHandlerCall = mockSetNotificationHandler.mock.calls[0];
+      const notificationHandler = notificationHandlerCall[1];
+
+      // Setup new roots
+      mockListRoots.mockResolvedValue({
+        roots: [{ uri: 'file:///Users/test/new-project' }],
+      });
+      mockCoreExecute.mockResolvedValue({
+        success: true,
+        output: 'Success',
+        exitCode: 0,
+      });
+
+      // Trigger the notification handler
+      await notificationHandler();
+
+      // Execute a command
+      await toolHandler({
+        argv: ['servers'],
+      });
+
+      // Should use the updated root
+      expect(mockCoreExecute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectDir: '/Users/test/new-project',
+        })
+      );
+    });
+
+    it('should use process cwd as fallback for cwd parameter', async () => {
+      mockCoreExecute.mockResolvedValue({
+        success: true,
+        output: 'Success',
+        exitCode: 0,
+      });
+
+      // Execute a command without explicit cwd
+      await toolHandler({
+        argv: ['servers'],
+      });
+
+      // Should use process cwd
+      expect(mockCoreExecute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cwd: process.cwd(),
+        })
+      );
+    });
+
+    it('should allow explicit cwd to override default', async () => {
+      mockCoreExecute.mockResolvedValue({
+        success: true,
+        output: 'Success',
+        exitCode: 0,
+      });
+
+      // Execute a command with explicit cwd
+      await toolHandler({
+        argv: ['servers'],
+        cwd: '/custom/cwd',
+      });
+
+      // Should use explicit cwd
+      expect(mockCoreExecute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cwd: '/custom/cwd',
+        })
+      );
     });
   });
 });
