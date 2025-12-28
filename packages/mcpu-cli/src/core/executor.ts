@@ -1278,14 +1278,15 @@ export async function executeCallCommand(
       toolArgs = parseArgs(args.args, tool.inputSchema);
     }
 
-    // Inject context values (cwd, projectDir) if configured
+    // Inject context values (cwd, projectDir, workspaceDir) if configured
+    const globalConfig = options.configDiscovery ? options.configDiscovery.getGlobalConfig() : {};
     const contextValues: ContextValues = {
       cwd: options.cwd,
       projectDir: options.projectDir,
+      workspaceDir: globalConfig.workspaceDir,
     };
 
     // Resolve context config (merge global + server config)
-    const globalConfig = options.configDiscovery ? options.configDiscovery.getGlobalConfig() : {};
     const contextConfig = resolveContextConfig(globalConfig, config);
 
     // Apply context injection

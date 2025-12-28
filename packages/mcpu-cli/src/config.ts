@@ -120,6 +120,7 @@ export class ConfigDiscovery {
   private _collapseOptionals?: CollapseOptionalsConfig; // Config for collapsing optional args (default: never collapse)
   private _autoDetectContext?: boolean; // Global default for auto-detection
   private _contextKeywords?: ContextKeywords; // Global default keywords for auto-detection
+  private _workspaceDir?: string; // Workspace root directory
   private options: {
     configFile?: string;
     verbose?: boolean;
@@ -216,12 +217,18 @@ export class ConfigDiscovery {
       this._contextKeywords = {
         cwd: Array.isArray(data.contextKeywords.cwd) ? data.contextKeywords.cwd : undefined,
         projectDir: Array.isArray(data.contextKeywords.projectDir) ? data.contextKeywords.projectDir : undefined,
+        workspaceDir: Array.isArray(data.contextKeywords.workspaceDir) ? data.contextKeywords.workspaceDir : undefined,
       };
+    }
+
+    // Extract workspaceDir config (if present)
+    if (typeof data.workspaceDir === 'string') {
+      this._workspaceDir = data.workspaceDir;
     }
 
     // MCPU format (direct server configs object)
     // Filter out global config keys before parsing servers
-    const globalKeys = ['autoSaveResponse', 'execEnabled', 'collapseOptionals', 'autoDetectContext', 'contextKeywords'];
+    const globalKeys = ['autoSaveResponse', 'execEnabled', 'collapseOptionals', 'autoDetectContext', 'contextKeywords', 'workspaceDir'];
     const serverData: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(data)) {
       if (!globalKeys.includes(key)) {
@@ -308,10 +315,12 @@ export class ConfigDiscovery {
   getGlobalConfig(): {
     autoDetectContext?: boolean;
     contextKeywords?: ContextKeywords;
+    workspaceDir?: string;
   } {
     return {
       autoDetectContext: this._autoDetectContext,
       contextKeywords: this._contextKeywords,
+      workspaceDir: this._workspaceDir,
     };
   }
 

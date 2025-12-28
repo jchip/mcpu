@@ -8,7 +8,7 @@ export const DEFAULT_REQUEST_TIMEOUT_MS = 180000;
 const ArgsPassThruSchema = z.record(
   z.object({
     path: z.string(), // Dot-notation path to inject value (e.g., "cwd" or "params.workingDir")
-    value: z.enum(['$cwd', '$projectDir']), // Variable to inject
+    value: z.enum(['$cwd', '$projectDir', '$workspaceDir']), // Variable to inject
   })
 );
 
@@ -16,6 +16,7 @@ const ArgsPassThruSchema = z.record(
 const ContextKeywordsSchema = z.object({
   cwd: z.array(z.string()).optional(),
   projectDir: z.array(z.string()).optional(),
+  workspaceDir: z.array(z.string()).optional(),
 });
 
 // Common config fields shared by all transport types
@@ -133,6 +134,7 @@ export const GlobalConfigSchema = z.object({
   collapseOptionals: CollapseOptionalsConfigSchema.optional(), // Config for collapsing optional args
   autoDetectContext: z.boolean().optional(), // Global default for auto-detection (default: true)
   contextKeywords: ContextKeywordsSchema.optional(), // Global default keywords for auto-detection
+  workspaceDir: z.string().optional(), // Workspace root directory
 }).passthrough(); // Allow server configs at top level
 
 export type GlobalConfig = z.infer<typeof GlobalConfigSchema>;

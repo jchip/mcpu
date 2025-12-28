@@ -25,12 +25,20 @@ const DEFAULT_PROJECT_DIR_KEYWORDS = [
   'rootpath',
 ];
 
+const DEFAULT_WORKSPACE_DIR_KEYWORDS = [
+  'workspacedir',
+  'workspacedirectory',
+  'workspacepath',
+  'workspaceroot',
+];
+
 /**
  * Context values available for injection
  */
 export interface ContextValues {
   cwd?: string;
   projectDir?: string;
+  workspaceDir?: string;
 }
 
 /**
@@ -69,11 +77,17 @@ export function resolveContextConfig(
     globalConfig.contextKeywords?.projectDir ??
     DEFAULT_PROJECT_DIR_KEYWORDS;
 
+  const workspaceDirKeywords =
+    serverConfig.contextKeywords?.workspaceDir ??
+    globalConfig.contextKeywords?.workspaceDir ??
+    DEFAULT_WORKSPACE_DIR_KEYWORDS;
+
   return {
     autoDetectContext,
     contextKeywords: {
       cwd: cwdKeywords,
       projectDir: projectDirKeywords,
+      workspaceDir: workspaceDirKeywords,
     },
     argsPassThru: serverConfig.argsPassThru,
   };
@@ -94,8 +108,8 @@ function matchesKeyword(paramName: string, keywords: string[]): boolean {
 export function autoDetectContextParams(
   tool: Tool,
   config: ResolvedContextConfig
-): Map<string, '$cwd' | '$projectDir'> {
-  const detectedParams = new Map<string, '$cwd' | '$projectDir'>();
+): Map<string, '$cwd' | '$projectDir' | '$workspaceDir'> {
+  const detectedParams = new Map<string, '$cwd' | '$projectDir' | '$workspaceDir'>();
 
   if (!config.autoDetectContext) {
     return detectedParams;
@@ -124,6 +138,12 @@ export function autoDetectContextParams(
     // Check for projectDir keywords
     if (matchesKeyword(paramName, config.contextKeywords.projectDir)) {
       detectedParams.set(paramName, '$projectDir');
+      continue;
+    }
+
+    // Check for workspaceDir keywords
+    if (matchesKeyword(paramName, config.contextKeywords.workspaceDir)) {
+      detectedParams.set(paramName, '$workspaceDir');
     }
   }
 
@@ -164,10 +184,22 @@ export function injectContext(
   // Build injection map from explicit config + auto-detection
   const injectionMap = new Map<string, string>(); // path -> contextValue
 
+  // Helper to resolve variable value
+  const resolveValue = (varName: '$cwd' | '$projectDir' | '$workspaceDir'): string | undefined => {
+    switch (varName) {
+      case '$cwd':
+        return contextValues.cwd;
+      case '$projectDir':
+        return contextValues.projectDir;
+      case '$workspaceDir':
+        return contextValues.workspaceDir;
+    }
+  };
+
   // 1. Auto-detection (lower priority)
   const autoDetected = autoDetectContextParams(tool, config);
   for (const [paramName, varName] of autoDetected.entries()) {
-    const value = varName === '$cwd' ? contextValues.cwd : contextValues.projectDir;
+    const value = resolveValue(varName);
     if (value !== undefined) {
       injectionMap.set(paramName, value);
     }
@@ -178,7 +210,7 @@ export function injectContext(
     // Check for exact tool name match
     if (tool.name in config.argsPassThru) {
       const passThru = config.argsPassThru[tool.name];
-      const value = passThru.value === '$cwd' ? contextValues.cwd : contextValues.projectDir;
+      const value = resolveValue(passThru.value);
       if (value !== undefined) {
         injectionMap.set(passThru.path, value);
       }
@@ -187,7 +219,7 @@ export function injectContext(
     // Check for wildcard match
     if ('*' in config.argsPassThru) {
       const passThru = config.argsPassThru['*'];
-      const value = passThru.value === '$cwd' ? contextValues.cwd : contextValues.projectDir;
+      const value = resolveValue(passThru.value);
       if (value !== undefined) {
         injectionMap.set(passThru.path, value);
       }
