@@ -3,7 +3,7 @@ import { homedir } from 'os';
 import { join, resolve } from 'path';
 import { existsSync } from 'fs';
 import { ZodError } from 'zod';
-import { ProjectMCPConfigSchema, type MCPServerConfig, isStdioConfig, type StdioConfig, type ServerAutoSaveConfig, type ToolAutoSaveConfig, type CollapseOptionalsConfig } from './types.ts';
+import { ProjectMCPConfigSchema, type MCPServerConfig, isStdioConfig, type StdioConfig, type ServerAutoSaveConfig, type ToolAutoSaveConfig, type CollapseOptionalsConfig, type ContextKeywords } from './types.ts';
 
 /**
  * Format Zod validation errors into human-readable messages
@@ -118,6 +118,8 @@ export class ConfigDiscovery {
   private resolvedCache: Map<string, ResolvedAutoSaveConfig> = new Map(); // memoize: "server:tool" -> config
   private _execEnabled: boolean = true; // Default: exec is enabled
   private _collapseOptionals?: CollapseOptionalsConfig; // Config for collapsing optional args (default: never collapse)
+  private _autoDetectContext?: boolean; // Global default for auto-detection
+  private _contextKeywords?: ContextKeywords; // Global default keywords for auto-detection
   private options: {
     configFile?: string;
     verbose?: boolean;
@@ -204,9 +206,22 @@ export class ConfigDiscovery {
       };
     }
 
+    // Extract autoDetectContext config (if present)
+    if (typeof data.autoDetectContext === 'boolean') {
+      this._autoDetectContext = data.autoDetectContext;
+    }
+
+    // Extract contextKeywords config (if present)
+    if (data.contextKeywords && typeof data.contextKeywords === 'object') {
+      this._contextKeywords = {
+        cwd: Array.isArray(data.contextKeywords.cwd) ? data.contextKeywords.cwd : undefined,
+        projectDir: Array.isArray(data.contextKeywords.projectDir) ? data.contextKeywords.projectDir : undefined,
+      };
+    }
+
     // MCPU format (direct server configs object)
     // Filter out global config keys before parsing servers
-    const globalKeys = ['autoSaveResponse', 'execEnabled', 'collapseOptionals'];
+    const globalKeys = ['autoSaveResponse', 'execEnabled', 'collapseOptionals', 'autoDetectContext', 'contextKeywords'];
     const serverData: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(data)) {
       if (!globalKeys.includes(key)) {
@@ -285,6 +300,19 @@ export class ConfigDiscovery {
    */
   getCollapseOptionals(): CollapseOptionalsConfig | undefined {
     return this._collapseOptionals;
+  }
+
+  /**
+   * Get global config for context injection
+   */
+  getGlobalConfig(): {
+    autoDetectContext?: boolean;
+    contextKeywords?: ContextKeywords;
+  } {
+    return {
+      autoDetectContext: this._autoDetectContext,
+      contextKeywords: this._contextKeywords,
+    };
   }
 
   /**

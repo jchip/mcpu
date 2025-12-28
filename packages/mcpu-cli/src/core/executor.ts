@@ -10,6 +10,7 @@ import { formatToolInfo, formatToolInfoCompact, abbreviateType, LEGEND_HEADER, T
 import { isStdioConfig, isUrlConfig, isWebSocketConfig, type CollapseOptionalsConfig } from '../types.ts';
 import { fuzzyMatch } from '../utils/fuzzy.ts';
 import { getErrorMessage } from '../utils/error.ts';
+import { resolveContextConfig, injectContext, type ContextValues } from '../utils/context-injection.ts';
 
 /**
  * Core command executor - shared logic for CLI and daemon
@@ -227,6 +228,7 @@ export interface ExecuteOptions {
   stdin?: boolean;
   connectionPool?: ConnectionPool;  // Optional connection pool for persistent connections
   cwd?: string;  // Client's working directory for resolving paths
+  projectDir?: string;  // Project directory from MCP client
   context?: ExecutionContext;  // Execution context (preferred over individual options)
   configs?: Map<string, any>;  // Runtime config map from daemon (mutable)
   configDiscovery?: ConfigDiscovery;  // Config discovery instance
@@ -1275,6 +1277,19 @@ export async function executeCallCommand(
     } else {
       toolArgs = parseArgs(args.args, tool.inputSchema);
     }
+
+    // Inject context values (cwd, projectDir) if configured
+    const contextValues: ContextValues = {
+      cwd: options.cwd,
+      projectDir: options.projectDir,
+    };
+
+    // Resolve context config (merge global + server config)
+    const globalConfig = options.configDiscovery ? options.configDiscovery.getGlobalConfig() : {};
+    const contextConfig = resolveContextConfig(globalConfig, config);
+
+    // Apply context injection
+    toolArgs = injectContext(tool, toolArgs, contextValues, contextConfig);
 
     // Execute the tool - use persistent connection if pool is available
     const { connection, isPersistent } = await getConnection(serverName, config, client, options.connectionPool, connId);

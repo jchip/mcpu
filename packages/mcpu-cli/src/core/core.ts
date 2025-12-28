@@ -21,6 +21,7 @@ export interface CoreExecutionOptions {
   params?: any;
   batch?: Record<string, { argv: string[]; params?: Record<string, unknown> }>;  // For batch command
   cwd?: string;
+  projectDir?: string;
   connectionPool?: ConnectionPool;
   configs?: Map<string, any>;  // Runtime config map from daemon
   configDiscovery?: ConfigDiscovery;  // Config discovery instance
@@ -179,7 +180,7 @@ function createParserCLI() {
  * Core execution - parse and execute command
  */
 export async function coreExecute(options: CoreExecutionOptions): Promise<CommandResult> {
-  const { argv, params, batch, cwd, connectionPool, configs, configDiscovery } = options;
+  const { argv, params, batch, cwd, projectDir, connectionPool, configs, configDiscovery } = options;
 
   try {
     // Parse command line with custom output/exit handlers
@@ -236,6 +237,7 @@ export async function coreExecute(options: CoreExecutionOptions): Promise<Comman
       verbose: opts.verbose as boolean | undefined,
       noCache: opts.cache === false ? true : undefined,
       cwd,
+      projectDir,
       connectionPool,
       configs,
       configDiscovery,

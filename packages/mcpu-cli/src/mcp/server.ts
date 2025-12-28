@@ -43,10 +43,13 @@ export class McpuMcpServer {
   private httpServer?: HttpServer;
   private httpTransport?: StreamableHTTPServerTransport;
   private logger: pino.Logger;
+  private projectDir: string | undefined; // Project directory from MCP client
+  private cwd: string; // Current working directory
 
   constructor(options: McpuMcpServerOptions = {}) {
     this.options = options;
     this.logger = createLogger('mcpu-mcp', process.ppid, process.pid);
+    this.cwd = process.cwd(); // Initialize to process cwd
     this.server = new McpServer({
       name: "mcpu-mcp",
       version: VERSION,
@@ -60,6 +63,7 @@ export class McpuMcpServer {
     });
     this.configs = new Map();
 
+    this.setupInitializeHandler();
     this.registerTools();
   }
 
@@ -71,6 +75,17 @@ export class McpuMcpServer {
       const output = data ? `${message} ${JSON.stringify(data)}` : message;
       console.error(`[mcpu-mcp] ${output}`);
     }
+  }
+
+  /**
+   * Setup handler to capture roots from MCP initialize request
+   */
+  private setupInitializeHandler(): void {
+    // For now, we rely on the cwd and projectDir parameters passed in tool calls
+    // The MCP SDK handles initialization internally
+    // Future: May hook into MCP protocol's roots/workspace info if SDK exposes it
+
+    this.log("Initialize handler setup complete");
   }
 
   /**
@@ -147,8 +162,9 @@ Commands: argv=[cmd, ...args], params={}
         params: z.record(z.any()).optional(),
         batch: z.record(z.any()).optional(),
         cwd: z.string().optional(),
+        projectDir: z.string().optional(),
       },
-      async ({ argv, params, batch, cwd }) => {
+      async ({ argv, params, batch, cwd, projectDir }) => {
         this.log("Executing command", { argv, params, batch, cwd });
 
         try {
@@ -162,6 +178,7 @@ Commands: argv=[cmd, ...args], params={}
                 >
               | undefined,
             cwd,
+            projectDir,
             connectionPool: this.pool,
             configs: this.configs,
             configDiscovery: this.configDiscovery,

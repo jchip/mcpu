@@ -16,6 +16,7 @@ vi.mock('../../src/config.js', () => ({
         ['anotherServer', { command: 'another-command', args: [] }],
       ])
     ),
+    getGlobalConfig: vi.fn().mockReturnValue({}),
     getAutoSaveConfig: vi.fn().mockReturnValue({
       enabled: false,
       thresholdSize: 10240,

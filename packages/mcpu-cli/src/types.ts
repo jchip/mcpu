@@ -4,12 +4,29 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 // Default request timeout: 3 minutes (in milliseconds)
 export const DEFAULT_REQUEST_TIMEOUT_MS = 180000;
 
+// Args passthrough config for injecting context values
+const ArgsPassThruSchema = z.record(
+  z.object({
+    path: z.string(), // Dot-notation path to inject value (e.g., "cwd" or "params.workingDir")
+    value: z.enum(['$cwd', '$projectDir']), // Variable to inject
+  })
+);
+
+// Context keywords for auto-detection
+const ContextKeywordsSchema = z.object({
+  cwd: z.array(z.string()).optional(),
+  projectDir: z.array(z.string()).optional(),
+});
+
 // Common config fields shared by all transport types
 const CommonConfigSchema = z.object({
   enabled: z.boolean().optional(), // Set to false to disable server without removing config
   cacheTTL: z.number().optional(), // Cache TTL in minutes (default: 60)
   requestTimeout: z.number().optional(), // Request timeout in ms (default: 180000 = 3 min)
   usage: z.enum(['tools', 'info', 'infoc']).optional(), // Default command for 'usage' (default: 'tools')
+  argsPassThru: ArgsPassThruSchema.optional(), // Inject context values into tool args
+  autoDetectContext: z.boolean().optional(), // Enable auto-detection of context params (default: true)
+  contextKeywords: ContextKeywordsSchema.optional(), // Custom keywords for auto-detection
 });
 
 // MCP Server Configuration Schema (stdio)
@@ -43,6 +60,10 @@ export const MCPServerConfigSchema = z.union([
 ]);
 
 export type MCPServerConfig = z.infer<typeof MCPServerConfigSchema>;
+
+// Export argsPassThru and context types
+export type ArgsPassThruConfig = z.infer<typeof ArgsPassThruSchema>;
+export type ContextKeywords = z.infer<typeof ContextKeywordsSchema>;
 
 // Type for stdio config
 export type StdioConfig = z.infer<typeof StdioConfigSchema>;
@@ -110,6 +131,8 @@ export const GlobalConfigSchema = z.object({
   autoSaveResponse: AutoSaveConfigBaseSchema.optional(),
   execEnabled: z.boolean().optional(), // Enable/disable exec command (default: true)
   collapseOptionals: CollapseOptionalsConfigSchema.optional(), // Config for collapsing optional args
+  autoDetectContext: z.boolean().optional(), // Global default for auto-detection (default: true)
+  contextKeywords: ContextKeywordsSchema.optional(), // Global default keywords for auto-detection
 }).passthrough(); // Allow server configs at top level
 
 export type GlobalConfig = z.infer<typeof GlobalConfigSchema>;
