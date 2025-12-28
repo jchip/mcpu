@@ -120,7 +120,8 @@ export class ConfigDiscovery {
   private _collapseOptionals?: CollapseOptionalsConfig; // Config for collapsing optional args (default: never collapse)
   private _autoDetectContext?: boolean; // Global default for auto-detection
   private _contextKeywords?: ContextKeywords; // Global default keywords for auto-detection
-  private _workspaceDir?: string; // Workspace root directory
+  private _workspaceDir?: string; // Workspace root directory (fixed path)
+  private _autoDetectWorkspaceDir?: boolean; // Auto-detect workspace dir from projectDir
   private options: {
     configFile?: string;
     verbose?: boolean;
@@ -226,9 +227,14 @@ export class ConfigDiscovery {
       this._workspaceDir = data.workspaceDir;
     }
 
+    // Extract autoDetectWorkspaceDir config (if present)
+    if (typeof data.autoDetectWorkspaceDir === 'boolean') {
+      this._autoDetectWorkspaceDir = data.autoDetectWorkspaceDir;
+    }
+
     // MCPU format (direct server configs object)
     // Filter out global config keys before parsing servers
-    const globalKeys = ['autoSaveResponse', 'execEnabled', 'collapseOptionals', 'autoDetectContext', 'contextKeywords', 'workspaceDir'];
+    const globalKeys = ['autoSaveResponse', 'execEnabled', 'collapseOptionals', 'autoDetectContext', 'contextKeywords', 'workspaceDir', 'autoDetectWorkspaceDir'];
     const serverData: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(data)) {
       if (!globalKeys.includes(key)) {
@@ -316,11 +322,13 @@ export class ConfigDiscovery {
     autoDetectContext?: boolean;
     contextKeywords?: ContextKeywords;
     workspaceDir?: string;
+    autoDetectWorkspaceDir?: boolean;
   } {
     return {
       autoDetectContext: this._autoDetectContext,
       contextKeywords: this._contextKeywords,
       workspaceDir: this._workspaceDir,
+      autoDetectWorkspaceDir: this._autoDetectWorkspaceDir,
     };
   }
 

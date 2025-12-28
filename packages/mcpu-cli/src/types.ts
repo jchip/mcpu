@@ -134,7 +134,8 @@ export const GlobalConfigSchema = z.object({
   collapseOptionals: CollapseOptionalsConfigSchema.optional(), // Config for collapsing optional args
   autoDetectContext: z.boolean().optional(), // Global default for auto-detection (default: true)
   contextKeywords: ContextKeywordsSchema.optional(), // Global default keywords for auto-detection
-  workspaceDir: z.string().optional(), // Workspace root directory
+  workspaceDir: z.string().optional(), // Workspace root directory (fixed path)
+  autoDetectWorkspaceDir: z.boolean().optional(), // Auto-detect workspace dir from projectDir (default: false)
 }).passthrough(); // Allow server configs at top level
 
 export type GlobalConfig = z.infer<typeof GlobalConfigSchema>;

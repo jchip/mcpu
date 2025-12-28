@@ -1280,10 +1280,18 @@ export async function executeCallCommand(
 
     // Inject context values (cwd, projectDir, workspaceDir) if configured
     const globalConfig = options.configDiscovery ? options.configDiscovery.getGlobalConfig() : {};
+
+    // Determine workspaceDir: use configured value, or auto-detect if enabled
+    let workspaceDir = globalConfig.workspaceDir;
+    if (!workspaceDir && globalConfig.autoDetectWorkspaceDir) {
+      const { autoDetectWorkspaceDir } = await import('../utils/workspace-detection.ts');
+      workspaceDir = autoDetectWorkspaceDir(options.projectDir);
+    }
+
     const contextValues: ContextValues = {
       cwd: options.cwd,
       projectDir: options.projectDir,
-      workspaceDir: globalConfig.workspaceDir,
+      workspaceDir,
     };
 
     // Resolve context config (merge global + server config)
