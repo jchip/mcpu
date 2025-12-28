@@ -190,6 +190,7 @@ export class McpuMcpServer {
    * Register the mux tool
    */
   private registerTools(): void {
+
     // Tool description with examples for clarity
     // connName = "server" (default) or "server[connId]" (named instance)
     const toolDescription = `Route commands to MCP servers.
@@ -221,6 +222,49 @@ Commands: argv=[cmd, ...args], params={}
         projectDir: z.string().optional(),
       },
       async ({ argv, params, batch, cwd, projectDir }) => {
+        // Handle status command internally
+        if (argv[0] === "status") {
+          const status = {
+            version: VERSION,
+            transport: this.options.transport || "stdio",
+            process: {
+              pid: process.pid,
+              ppid: process.ppid,
+              cwd: process.cwd(),
+              uptime: Math.round(process.uptime()),
+            },
+            roots: {
+              captured: this.roots,
+              count: this.roots.length,
+              defaultProjectDir: this.projectDir,
+            },
+            effectiveDefaults: {
+              cwd: cwd || this.cwd,
+              projectDir: projectDir || this.projectDir,
+            },
+            config: {
+              configFile: this.options.config,
+              serversConfigured: this.configs.size,
+              serverNames: Array.from(this.configs.keys()),
+              autoDisconnect: this.options.autoDisconnect,
+              idleTimeoutMs: this.options.idleTimeoutMs,
+            },
+            connections: {
+              active: this.pool.listConnections().length,
+              list: this.pool.listConnections(),
+            },
+          };
+
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(status, null, 2),
+              },
+            ],
+          };
+        }
+
         // Use stored projectDir from roots if not explicitly provided
         const effectiveProjectDir = projectDir || this.projectDir;
         const effectiveCwd = cwd || this.cwd;
