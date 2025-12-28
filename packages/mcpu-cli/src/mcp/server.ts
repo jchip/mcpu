@@ -43,8 +43,9 @@ export class McpuMcpServer {
   private httpServer?: HttpServer;
   private httpTransport?: StreamableHTTPServerTransport;
   private logger: pino.Logger;
-  private projectDir: string | undefined; // Project directory from MCP client
+  private projectDir: string | undefined; // Project directory from MCP client or roots
   private cwd: string; // Current working directory
+  private roots: string[] = []; // Roots from MCP client (file:// URIs converted to paths)
 
   constructor(options: McpuMcpServerOptions = {}) {
     this.options = options;
@@ -81,9 +82,43 @@ export class McpuMcpServer {
    * Setup handler to capture roots from MCP initialize request
    */
   private setupInitializeHandler(): void {
-    // For now, we rely on the cwd and projectDir parameters passed in tool calls
-    // The MCP SDK handles initialization internally
-    // Future: May hook into MCP protocol's roots/workspace info if SDK exposes it
+    // Hook into the initialized event to fetch roots from the client
+    this.server.server.oninitialized = async () => {
+      this.log("Client initialized");
+
+      // Check if client supports roots
+      const clientCapabilities = this.server.server.getClientCapabilities();
+      if (clientCapabilities?.roots) {
+        this.log("Client supports roots, fetching...");
+        try {
+          const rootsResult = await this.server.server.listRoots();
+          if (rootsResult.roots && rootsResult.roots.length > 0) {
+            // Convert file:// URIs to file paths
+            this.roots = rootsResult.roots.map((root: any) => {
+              const uri = root.uri;
+              if (uri.startsWith('file://')) {
+                // Remove file:// prefix and decode URI components
+                return decodeURIComponent(uri.substring(7));
+              }
+              return uri;
+            });
+
+            // Use first root as default projectDir if not already set
+            if (!this.projectDir && this.roots.length > 0) {
+              this.projectDir = this.roots[0];
+              this.log(`Set default projectDir from roots: ${this.projectDir}`);
+            }
+
+            this.log(`Captured ${this.roots.length} roots from client`, { roots: this.roots });
+          }
+        } catch (error) {
+          // Client might not support roots or error occurred
+          this.log(`Failed to fetch roots: ${getErrorMessage(error)}`);
+        }
+      } else {
+        this.log("Client does not support roots capability");
+      }
+    };
 
     this.log("Initialize handler setup complete");
   }
@@ -165,7 +200,18 @@ Commands: argv=[cmd, ...args], params={}
         projectDir: z.string().optional(),
       },
       async ({ argv, params, batch, cwd, projectDir }) => {
-        this.log("Executing command", { argv, params, batch, cwd });
+        // Use stored projectDir from roots if not explicitly provided
+        const effectiveProjectDir = projectDir || this.projectDir;
+        const effectiveCwd = cwd || this.cwd;
+
+        this.log("Executing command", {
+          argv,
+          params,
+          batch,
+          cwd: effectiveCwd,
+          projectDir: effectiveProjectDir,
+          fromRoots: !projectDir && !!this.projectDir
+        });
 
         try {
           const rawResult = await coreExecute({
@@ -177,15 +223,15 @@ Commands: argv=[cmd, ...args], params={}
                   { argv: string[]; params?: Record<string, unknown> }
                 >
               | undefined,
-            cwd,
-            projectDir,
+            cwd: effectiveCwd,
+            projectDir: effectiveProjectDir,
             connectionPool: this.pool,
             configs: this.configs,
             configDiscovery: this.configDiscovery,
           });
 
           // Format raw result from call commands
-          const result = await this.formatRawResult(rawResult, cwd);
+          const result = await this.formatRawResult(rawResult, effectiveCwd);
 
           this.log("Command result", {
             success: result.success,
