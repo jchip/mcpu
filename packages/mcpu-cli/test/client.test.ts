@@ -86,6 +86,39 @@ describe('MCPClient', () => {
       expect(connection.serverName).toBe('github');
     });
 
+    it('should inherit all parent env vars and merge with config env', async () => {
+      // Get the StdioClientTransport constructor mock
+      const { StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js');
+
+      const config: MCPServerConfig = {
+        command: 'test-server',
+        args: ['--foo'],
+        env: {
+          CUSTOM_VAR: 'custom-value',
+          PATH: '/custom/path', // Override parent PATH
+        },
+      };
+
+      await client.connect('test', config);
+
+      // Verify StdioClientTransport was called with merged env
+      expect(StdioClientTransport).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: 'test-server',
+          args: ['--foo'],
+          env: expect.objectContaining({
+            // Should inherit parent env
+            HOME: process.env.HOME,
+            USER: process.env.USER,
+            // Should include custom env
+            CUSTOM_VAR: 'custom-value',
+            // Should override parent env
+            PATH: '/custom/path',
+          }),
+        })
+      );
+    });
+
     it('should handle servers without args', async () => {
       const config: MCPServerConfig = {
         command: 'node',

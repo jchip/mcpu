@@ -124,7 +124,10 @@ export class MCPClient {
       transport = new StdioClientTransport({
         command: config.command,
         args: mergedArgs.length > 0 ? mergedArgs : undefined,
-        env: config.env,
+        env: {
+          ...process.env,      // Inherit all parent env vars (transparent passthrough)
+          ...(config.env || {}), // Override with custom env from config
+        },
         stderr: 'pipe',  // Capture stderr for buffering
       });
     }
