@@ -202,8 +202,9 @@ export class McpuMcpServer {
 Commands: argv=[cmd, ...args], params={}
 - List servers: ["servers", "pattern?"]
 - Call tool: ["call", "server or connName", "tool"], {arg1:"...", ...} (auto-connects server if needed)
-- Get tools summary: ["tools", "server"] (recommended first)
+- Get usage: ["usage", "server"] (recommended first)
 - Get tool info: ["info", "server", "tool?"]
+- Get tools compact summary: ["tools", "server"]
 - Connect: ["connect", "server", "optional --new or connId"] (with ID, connName will be "server[connId]")
 - Disconnect: ["disconnect", "connName"]
 - Reconnect: ["reconnect", "connName"] (shortcut for disconnect + connect)
@@ -255,7 +256,7 @@ Commands: argv=[cmd, ...args], params={}
             },
             connections: {
               active: this.pool.listConnections().length,
-              list: this.pool.listConnections(),
+              list: this.pool.listConnections().map(({ connection, ...info }) => info),
             },
           };
 
