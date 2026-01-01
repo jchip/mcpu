@@ -1,3 +1,31 @@
+# 12/31/2025
+
+## Packages
+
+-   `@mcpu/cli@0.2.21` `(0.2.20 => 0.2.21)`
+
+## Commits
+
+-   `packages/mcpu-cli`
+
+    -   MCU-106: inherit all parent env vars for transparent passthrough [commit](/commit/75a88de3ab211dec03cdb798b012ceb50cd7ecc6)
+    -   fix status circular object [commit](/commit/8c6aca3385fb2e6f2ea9f8d1a44581274f762bd4)
+    -   MCU-105: Forward roots/workspace context to managed MCP servers [commit](/commit/378d690f39642098445ad8ef131bf005a3d5927f)
+    -   MCU-103: Add hidden status command to mux tool [commit](/commit/e365d5eb19a17dc906ee70bb56f82e575284ab88)
+    -   MCU-103: Add roots/list_changed notification handler and tests [commit](/commit/f5c6b47f75a304439e637fb703338e921e4572fb)
+    -   MCU-104: Add autoDetectWorkspaceDir config option [commit](/commit/0d5e89fbd76f1b06b2c656a613600d5f3a91b03f)
+    -   MCU-103: Capture and use MCP roots from client initialization [commit](/commit/baae06405be21b27352187572e678a381d6b5939)
+    -   MCU-102: Add workspaceDir config option [commit](/commit/ab87a961ac5c27ca35edd1cb3a47a7f138c2c42e)
+    -   MCU-101: Add context injection (cwd/projectDir) with auto-detection [commit](/commit/d985c629694c6824248e0250c31ef275f9fd4201)
+    -   Update command descriptions to recommend usage over tools/info [commit](/commit/26e661c5f72689d57b2385b2fdb80b61a3cc976a)
+    -   MCU-100: Add infoc usage mode with compact tool info format [commit](/commit/6647331f87028ea98aa9d34f68a820484d7218b1)
+    -   Add infoc usage mode with compact tool info format [commit](/commit/4d20bbfba0cb0ca01e7ae07906fb455050d04969)
+    -   Check tool descriptions for MCPU usage hint in usage command [commit](/commit/2c3d4dfd23db5a3f43724e6a65e372946945200d)
+    -   Add usage command that delegates to tools or info [commit](/commit/0a3aca27f3e4f989034a6e2ecd89f625ff38ccf6)
+    -   MCX-15: Remove no cache clutter from servers command output [commit](/commit/858160d2beba422ccae47995c1bd555110581491)
+    -   Simplify servers command output, add --details flag [commit](/commit/e4f88e0b33d5c4733840ef5524690c9f90fb46fe)
+    -   Add collapseOptionals config to control tool summary arg collapsing [commit](/commit/73d3b105383f99c8a609cd41dd994e8c7e2e42bf)
+
 # 12/17/2025
 
 ## Packages
