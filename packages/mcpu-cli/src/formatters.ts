@@ -394,12 +394,11 @@ export function formatToolInfoCompact(tool: Tool, enumRefs?: Map<string, string>
   // Separator
   output += '---\n';
 
-  // Tool name
+  // Tool name and description
   output += `TOOL: ${tool.name}\n`;
-
-  // Description
-  const description = tool.description || 'No description';
-  output += `DESCRIPTION:\n${description}\n`;
+  if (tool.description) {
+    output += `${tool.description}\n`;
+  }
 
   // ARGS on new line with blank line before it
   const argsStr = formatCompactArgs(tool, enumRefs);
@@ -443,9 +442,10 @@ export function formatToolInfo(tool: Tool, enumRefs?: Map<string, string>): stri
   }
   output += '\n';
 
-  // Description
-  const description = tool.description || 'No description';
-  output += `DESCRIPTION:\n${description}\n\n`;
+  // Description inline (skip if empty)
+  if (tool.description) {
+    output += `${tool.description}\n\n`;
+  }
 
   // Annotations (important behavioral hints)
   if (toolAny.annotations) {
