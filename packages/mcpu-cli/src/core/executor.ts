@@ -198,7 +198,7 @@ function formatToolsForError(tools: Tool[], serverName: string, collapseConfig?:
   output += '\n\n';
 
   // Server header
-  output += `MCP Server: ${serverName}\n\n`;
+  output += `# MCP Server: ${serverName}\n\n`;
 
   // Format tools based on usage mode
   if (usageMode === 'info') {
@@ -867,7 +867,7 @@ export async function executeInfoCommand(
       header += '\n\n';
 
       // Server header
-      header += `MCP Server: ${args.server}\n\n`;
+      header += `# MCP Server: ${args.server}\n\n`;
 
       // Body: formatted tools
       const body = toolsForInfo.map(t => formatToolInfo(t, enumRefs)).join('');
@@ -1027,7 +1027,7 @@ async function executeInfoCompactCommand(
       header += '\n\n';
 
       // Server header
-      header += `MCP Server: ${serverName}\n\n`;
+      header += `# MCP Server: ${serverName}\n\n`;
 
       // Body: formatted tools in compact mode
       const body = availableTools.map(t => formatToolInfoCompact(t, enumRefs)).join('');

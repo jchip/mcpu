@@ -395,7 +395,7 @@ export function formatToolInfoCompact(tool: Tool, enumRefs?: Map<string, string>
   output += '---\n';
 
   // Tool name and description
-  output += `TOOL: ${tool.name}\n`;
+  output += `## TOOL: ${tool.name}\n`;
   if (tool.description) {
     output += `${tool.description}\n`;
   }
@@ -403,12 +403,12 @@ export function formatToolInfoCompact(tool: Tool, enumRefs?: Map<string, string>
   // ARGS on new line with blank line before it
   const argsStr = formatCompactArgs(tool, enumRefs);
   if (argsStr) {
-    output += `\nARGS: ${argsStr}\n`;
+    output += `\n## ARGS\n${argsStr}\n`;
   }
 
   // Output schema (return type) - compact format (depth=1)
   if (toolAny.outputSchema) {
-    output += `\n-> ${formatParamType(toolAny.outputSchema, enumRefs, undefined, 1)}\n`;
+    output += `\n## ->\n${formatParamType(toolAny.outputSchema, enumRefs, undefined, 1)}\n`;
   }
 
   return output;
@@ -436,7 +436,7 @@ export function formatToolInfo(tool: Tool, enumRefs?: Map<string, string>): stri
   output += '---\n';
 
   // Tool name (with title if different)
-  output += `TOOL: ${tool.name}`;
+  output += `## TOOL: ${tool.name}`;
   if (toolAny.title && toolAny.title !== tool.name) {
     output += ` (${toolAny.title})`;
   }
@@ -466,7 +466,7 @@ export function formatToolInfo(tool: Tool, enumRefs?: Map<string, string>): stri
     const properties = schema.properties;
     const required = schema?.required || [];
 
-    output += 'ARGS:\n';
+    output += '## ARGS\n';
 
     if (Object.keys(properties).length === 0) {
       output += '  (none)\n';
@@ -524,7 +524,7 @@ export function formatToolInfo(tool: Tool, enumRefs?: Map<string, string>): stri
 
   // Output schema (if specified) - simplified return type (depth=1)
   if (toolAny.outputSchema) {
-    output += `-> ${formatParamType(toolAny.outputSchema, enumRefs, undefined, 1)}\n\n`;
+    output += `## ->\n${formatParamType(toolAny.outputSchema, enumRefs, undefined, 1)}\n\n`;
   }
 
   return output;
