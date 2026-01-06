@@ -7,3 +7,4 @@ dist*
 .fynpo
 *.tgz
 coverage
+.local
