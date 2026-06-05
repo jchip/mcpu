@@ -137,7 +137,10 @@ export function discoverServers(): { discovered: DiscoveredServers; sources: AIA
     }
   }
 
-  if (Object.keys(global).length === 0 && Object.keys(projects).length === 0) {
+  // Only bail if no config files were found at all. If a config exists but
+  // has no MCP servers yet (e.g. a fresh .claude.json with no mcpServers
+  // section), we still want to return it as a source so setup can add MCPU.
+  if (sources.length === 0) {
     return null;
   }
 
