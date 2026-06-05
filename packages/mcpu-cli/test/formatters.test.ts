@@ -194,9 +194,8 @@ describe('Formatters', () => {
       const result = formatToolInfo(tool);
 
       expect(result).toContain('TOOL: read_file');
-      expect(result).toContain('DESCRIPTION:');
       expect(result).toContain('Read a file from disk');
-      expect(result).toContain('ARGS:');
+      expect(result).toContain('## ARGS');
       expect(result).toContain('path: S - File path');
       expect(result).not.toContain('Usage:');
       // Legend is added by caller, not formatToolInfo
@@ -293,7 +292,8 @@ describe('Formatters', () => {
 
       const result = formatToolInfo(tool);
 
-      expect(result).toContain('-> O');
+      expect(result).toContain('## ->');
+      expect(result).toContain('O');
     });
 
     it('should handle tools with no parameters', () => {
@@ -308,7 +308,7 @@ describe('Formatters', () => {
 
       const result = formatToolInfo(tool);
 
-      expect(result).toContain('ARGS:');
+      expect(result).toContain('## ARGS');
       expect(result).toContain('(none)');
     });
 

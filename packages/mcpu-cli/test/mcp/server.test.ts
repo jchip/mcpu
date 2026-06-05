@@ -44,6 +44,7 @@ vi.mock('../../src/daemon/connection-pool.js', () => ({
     disconnect: vi.fn(),
     shutdown: vi.fn(),
     listConnections: vi.fn().mockReturnValue([]),
+    updateRoots: vi.fn(),
   })),
   getConnectionKey: (serverName: string, connId?: string) => connId ? `${serverName}[${connId}]` : serverName,
   parseConnectionKey: (key: string) => {
